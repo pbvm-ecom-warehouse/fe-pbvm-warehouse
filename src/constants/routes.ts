@@ -1,0 +1,29 @@
+import {
+  Boxes,
+  ClipboardCheck,
+  Factory,
+  FileBarChart2,
+  Home,
+  PackageOpen,
+  Repeat2,
+  Settings,
+  ShoppingCart,
+  SlidersHorizontal,
+  Truck,
+  Warehouse,
+} from "lucide-react";
+
+export const dashboardRoutes = [
+  { href: "/dashboard", label: "Tổng quan", icon: Home },
+  { href: "/warehouses", label: "Kho", icon: Warehouse },
+  { href: "/products", label: "Sản phẩm", icon: PackageOpen },
+  { href: "/inventory", label: "Tồn kho", icon: Boxes },
+  { href: "/purchases", label: "Nhập hàng", icon: ShoppingCart },
+  { href: "/transfers", label: "Chuyển kho", icon: Truck },
+  { href: "/adjustments", label: "Kiểm kê", icon: SlidersHorizontal },
+  { href: "/suppliers", label: "Nhà cung cấp", icon: Factory },
+  { href: "/cup-conversions", label: "Convert ly", icon: Repeat2 },
+  { href: "/reports", label: "Báo cáo", icon: FileBarChart2 },
+  { href: "/settings", label: "Cài đặt", icon: Settings },
+  { href: "/login", label: "Đăng nhập", icon: ClipboardCheck },
+] as const;

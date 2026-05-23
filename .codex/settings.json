@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "beforeFinalize": [
+      {
+        "name": "warehouse-verify",
+        "command": "pnpm lint && pnpm typecheck"
+      }
+    ]
+  }
+}
