@@ -8,6 +8,7 @@ import {
   setAuthTokens,
   type AuthTokens,
 } from "@/lib/auth-token";
+import { getApiBaseUrl, type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
 import { env } from "@/lib/env";
 
 type RetryRequestConfig = InternalAxiosRequestConfig & {
@@ -20,7 +21,7 @@ type RefreshResponse = {
 };
 
 export const apiClient = axios.create({
-  baseURL: env.NEXT_PUBLIC_WMS_API_URL,
+  baseURL: getApiBaseUrl(env.NEXT_PUBLIC_WMS_API_URL),
   timeout: 15_000,
   headers: {
     "Content-Type": "application/json",
@@ -29,7 +30,7 @@ export const apiClient = axios.create({
 });
 
 const refreshClient = axios.create({
-  baseURL: env.NEXT_PUBLIC_WMS_API_URL,
+  baseURL: getApiBaseUrl(env.NEXT_PUBLIC_WMS_API_URL),
   timeout: 15_000,
   headers: {
     "Content-Type": "application/json",
@@ -47,11 +48,14 @@ async function refreshAccessToken() {
   }
 
   refreshPromise ??= refreshClient
-    .post<RefreshResponse>("/auth/refresh-token", { refreshToken })
+    .post<ApiEnvelope<RefreshResponse> | RefreshResponse>("/auth/refresh", {
+      refreshToken,
+    })
     .then((response) => {
+      const data = unwrapApiData(response.data);
       const tokens = {
-        accessToken: response.data.accessToken,
-        refreshToken: response.data.refreshToken ?? refreshToken,
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken ?? refreshToken,
       };
 
       setAuthTokens(tokens);

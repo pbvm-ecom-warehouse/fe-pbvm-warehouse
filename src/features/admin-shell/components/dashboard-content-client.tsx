@@ -49,15 +49,18 @@ export function DashboardContentClient() {
   const stockMovements = movementsQuery.data?.data ?? [];
   const inventoryValueSeries = valueSeriesQuery.data?.data ?? [];
   const totalAvailableQty = ledgerRows.reduce(
-    (total, row) => total + calculateAvailableQty(row.quantity, row.reservedQty),
+    (total, row) =>
+      total + calculateAvailableQty(row.quantity, row.reserved ?? row.reservedQty ?? 0),
     0,
   );
   const reservedQty = ledgerRows.reduce(
-    (total, row) => total + row.reservedQty,
+    (total, row) => total + (row.reserved ?? row.reservedQty ?? 0),
     0,
   );
   const lowStockCount = ledgerRows.filter(
-    (row) => calculateAvailableQty(row.quantity, row.reservedQty) <= row.reorderPoint,
+    (row) =>
+      calculateAvailableQty(row.quantity, row.reserved ?? row.reservedQty ?? 0) <=
+      row.reorderPoint,
   ).length;
   const hasApiError =
     ledgerQuery.isError || movementsQuery.isError || valueSeriesQuery.isError;

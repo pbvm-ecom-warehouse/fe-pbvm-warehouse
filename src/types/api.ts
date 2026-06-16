@@ -24,6 +24,31 @@ export type Warehouse = TenantScoped & {
   isActive: boolean;
 };
 
+export type WarehouseShelf = {
+  id: string;
+  warehouseId: string;
+  warehouseCode: string;
+  zoneCode: string;
+  zoneName: string;
+  rackCode: string;
+  rackName: string;
+  code: string;
+  barcode: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  isStaging?: boolean;
+};
+
+export type PutawaySuggestion = {
+  shelf: WarehouseShelf;
+  capacity: number;
+  reason: string;
+  advisory: boolean;
+  pathLabel: string;
+};
+
 export type Product = TenantScoped & {
   id: string;
   sku: string;
@@ -39,7 +64,8 @@ export type StockLedgerRow = {
   productSku: string;
   productName: string;
   quantity: number;
-  reservedQty: number;
+  reserved?: number;
+  reservedQty?: number;
   reorderPoint: number;
 };
 
@@ -62,7 +88,12 @@ export type InventoryValuePoint = {
 
 export type ApiListResponse<T> = {
   data: T[];
-  total: number;
-  page: number;
-  pageSize: number;
+  meta: {
+    pagination: {
+      page: number;
+      pageSize: number;
+      total: number;
+      totalPages?: number;
+    };
+  };
 };

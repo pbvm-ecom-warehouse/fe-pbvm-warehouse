@@ -48,9 +48,10 @@ export function InventoryTable({ rows }: { rows: StockLedgerRow[] }) {
         ) : null}
 
         {rows.map((row) => {
-          const availableQty = row.quantity - row.reservedQty;
+          const reservedQty = row.reserved ?? row.reservedQty ?? 0;
+          const availableQty = row.quantity - reservedQty;
           const status = statusCopy(
-            getStockStatus(row.quantity, row.reservedQty, row.reorderPoint),
+            getStockStatus(row.quantity, reservedQty, row.reorderPoint),
           );
 
           return (
@@ -63,7 +64,7 @@ export function InventoryTable({ rows }: { rows: StockLedgerRow[] }) {
               </TableCell>
               <TableCell>{row.warehouseName}</TableCell>
               <TableCell className="text-right">{row.quantity}</TableCell>
-              <TableCell className="text-right">{row.reservedQty}</TableCell>
+              <TableCell className="text-right">{reservedQty}</TableCell>
               <TableCell className="text-right font-medium">
                 {Math.max(availableQty, 0)}
               </TableCell>
