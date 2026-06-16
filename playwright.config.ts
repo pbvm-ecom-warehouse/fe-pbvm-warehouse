@@ -8,7 +8,7 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    command: "pnpm dev --port 3101",
+    command: "pnpm dev",
     url: "http://localhost:3101",
     reuseExistingServer: !process.env.CI,
   },

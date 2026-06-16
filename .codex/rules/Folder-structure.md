@@ -15,3 +15,5 @@
 - Pages should not call raw endpoints directly.
 - Stock-domain helpers stay pure and unit-tested.
 - Shared admin layout belongs to `features/admin-shell` and `components/layout`.
+- Warehouse shelf/path UI belongs under `src/features/warehouse-navigation`.
+- Use SVG or React Konva for indoor diagrams; reserve MapLibre/Turf for real geospatial maps.

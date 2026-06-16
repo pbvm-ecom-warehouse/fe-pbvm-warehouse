@@ -5,7 +5,9 @@
 - Avoid hidden side effects in UI action handlers.
 - Use typed service contracts for all admin API interactions.
 - Keep domain naming consistent with backend terms:
-  - quantity
-  - reserved_qty
-  - available_qty
-  - movement ref_id/ref_type
+  - `onHand`
+  - `reserved`
+  - `availableQty`
+  - movement `refId`/`refType`
+- Put-away suggestion UI must label results as advisory, not exact 3D bin-packing.
+- Barcode scan confirmation and override/audit path stay visible for receiver workflows.
