@@ -1,32 +1,37 @@
 import { z } from "zod";
 
-export const cupConversionSchema = z
+export const printJobSchema = z
   .object({
-    sourceProductId: z.string().min(1, "Chọn SKU ly chưa in"),
-    targetProductId: z.string().min(1, "Chọn SKU ly đã in"),
+    orderId: z.string().min(1, "Thiếu tham chiếu đơn hàng"),
+    inputItemId: z.string().min(1, "Chọn SKU ly trắng"),
+    outputItemId: z.string().min(1, "Chọn SKU ly đã in"),
     warehouseId: z.string().min(1, "Chọn kho xử lý"),
     quantity: z.coerce.number().int().positive("Số lượng phải lớn hơn 0"),
     availableQty: z.coerce.number().int().nonnegative(),
-    printCampaignId: z.string().min(1, "Nhập mã chiến dịch in"),
-    designFileUrl: z.string().url("URL thiết kế chưa hợp lệ"),
+    designId: z.string().min(1, "Thiếu designId cho ly in custom"),
+    designFile: z.string().min(1, "Thiếu designFile snapshot"),
     printCostPerUnit: z.coerce.number().nonnegative("Chi phí in không được âm"),
+    note: z.string().trim().max(240, "Ghi chú quá dài").optional(),
   })
   .superRefine((value, context) => {
-    if (value.sourceProductId === value.targetProductId) {
+    if (value.inputItemId === value.outputItemId) {
       context.addIssue({
         code: "custom",
-        message: "SKU nguồn và SKU đích phải khác nhau",
-        path: ["targetProductId"],
+        message: "SKU ly trắng và SKU ly in phải khác nhau",
+        path: ["outputItemId"],
       });
     }
 
     if (value.quantity > value.availableQty) {
       context.addIssue({
         code: "custom",
-        message: "Không đủ tồn khả dụng để convert",
+        message: "Không đủ tồn ly trắng khả dụng để mở lệnh in",
         path: ["quantity"],
       });
     }
   });
 
-export type CupConversionInput = z.infer<typeof cupConversionSchema>;
+export const cupConversionSchema = printJobSchema;
+
+export type PrintJobInput = z.infer<typeof printJobSchema>;
+export type CupConversionInput = PrintJobInput;

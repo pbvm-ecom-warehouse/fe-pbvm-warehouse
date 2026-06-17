@@ -11,6 +11,8 @@ export const StockValueChart = dynamic<StockValueChartClientProps>(
     ),
   {
     ssr: false,
-    loading: () => <div className="h-72 w-full rounded-lg bg-muted/50" />,
+    loading: () => (
+      <div className="h-72 w-full animate-pulse rounded-lg border border-dashed bg-muted/40" />
+    ),
   },
 );

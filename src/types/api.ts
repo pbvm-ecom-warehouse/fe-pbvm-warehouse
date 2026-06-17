@@ -11,6 +11,8 @@ export type MoveType =
   | "TRANSFER_IN"
   | "ADJUST_PLUS"
   | "ADJUST_MINUS"
+  | "PRINT_CONSUME"
+  | "PRINT_OUTPUT"
   | "CONVERT_OUT"
   | "CONVERT_IN";
 
@@ -32,12 +34,17 @@ export type WarehouseShelf = {
   zoneName: string;
   rackCode: string;
   rackName: string;
+  level: number;
   code: string;
   barcode: string;
   x: number;
   y: number;
   width: number;
   height: number;
+  innerDepth?: number;
+  innerWidth?: number;
+  innerHeight?: number;
+  fillFactor?: number;
   isStaging?: boolean;
 };
 

@@ -29,6 +29,8 @@ const moveTypeLabels: Record<MoveType, string> = {
   TRANSFER_IN: "Nhận chuyển",
   ADJUST_PLUS: "Kiểm kê thừa",
   ADJUST_MINUS: "Kiểm kê thiếu",
+  PRINT_CONSUME: "Tiêu thụ ly trắng để in",
+  PRINT_OUTPUT: "Nhập ly in cho đơn",
   CONVERT_OUT: "Xuất đi in",
   CONVERT_IN: "Nhập ly in",
 };

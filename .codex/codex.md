@@ -22,11 +22,13 @@ This file defines repo-specific rules that override shared `@WDP/.codex` when ne
 
 - Root `@WDP/.codex` is the baseline.
 - API source of truth: `be-wms-ecom` source and `/api/wms/docs`.
+- Workflow source of truth for print/order boundaries: `docs/warehouse/workflow.md`, `docs/warehouse/use-cases.md`, `docs/overview/main-flow.md`, `docs/overview/data-ownership.md`, `docs/db/04-in-ly.md`.
 - WMS API prefix: `/api/wms`.
 - Success envelope: `{ data, meta }`; pagination is `meta.pagination`.
 - Refresh endpoint: `/auth/refresh`.
 - Put-away suggestion is backend-owned advisory logic; frontend renders shelf/path/capacity/reason and barcode confirmation.
 - Do not build 3D warehouse bin packing. Ecommerce owns 3D cup design.
+- WMS does not read Ecommerce DB directly; cross-app boundaries are events plus stable payload fields such as `sku`, `orderId`, `designId`, and `designFile`.
 
 ## Rule Set
 
