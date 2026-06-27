@@ -23,14 +23,13 @@ export function getStockStatus(
 }
 
 const moveTypeLabels: Record<MoveType, string> = {
-  INBOUND: "Nhập kho",
-  OUTBOUND: "Xuất bán",
-  TRANSFER_OUT: "Chuyển đi",
-  TRANSFER_IN: "Nhận chuyển",
-  ADJUST_PLUS: "Kiểm kê thừa",
-  ADJUST_MINUS: "Kiểm kê thiếu",
-  CONVERT_OUT: "Xuất đi in",
-  CONVERT_IN: "Nhập ly in",
+  RECEIVE: "Nhập kho",
+  PUTAWAY: "Xếp hàng lên kệ",
+  ISSUE: "Xuất kho",
+  ADJUST: "Điều chỉnh kiểm kê",
+  SCRAP: "Hủy hàng",
+  PRINT_CONSUME: "Tiêu thụ ly trắng để in",
+  PRINT_OUTPUT: "Nhập ly in cho đơn",
 };
 
 export function getMoveTypeLabel(moveType: MoveType) {

@@ -97,7 +97,7 @@ export function DashboardContentClient() {
             Tổng quan vận hành kho
           </h1>
           <p className="text-sm text-muted-foreground">
-            Theo dõi tồn kho khả dụng, phiếu nhập, chuyển kho và convert ly.
+            Theo dõi tồn kho khả dụng, phiếu nhập, xuất kho và convert ly.
           </p>
         </div>
         <div className="rounded-lg border bg-background px-3 py-2 text-sm">

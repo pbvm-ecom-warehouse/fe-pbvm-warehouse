@@ -5,12 +5,12 @@ import {
   FileBarChart2,
   Home,
   MapPinned,
+  PackageCheck,
   PackageOpen,
   Repeat2,
   Settings,
   ShoppingCart,
   SlidersHorizontal,
-  Truck,
   Warehouse,
 } from "lucide-react";
 
@@ -21,7 +21,7 @@ export const dashboardRoutes = [
   { href: "/inventory", label: "Tồn kho", icon: Boxes },
   { href: "/warehouse-navigation", label: "Điều hướng kệ", icon: MapPinned },
   { href: "/purchases", label: "Nhập hàng", icon: ShoppingCart },
-  { href: "/transfers", label: "Chuyển kho", icon: Truck },
+  { href: "/goods-issues", label: "Xuất kho", icon: PackageCheck },
   { href: "/adjustments", label: "Kiểm kê", icon: SlidersHorizontal },
   { href: "/suppliers", label: "Nhà cung cấp", icon: Factory },
   { href: "/cup-conversions", label: "Convert ly", icon: Repeat2 },
