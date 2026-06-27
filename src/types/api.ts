@@ -5,16 +5,13 @@ export type TenantScoped = {
 export type WarehouseType = "CENTRAL" | "BRANCH";
 
 export type MoveType =
-  | "INBOUND"
-  | "OUTBOUND"
-  | "TRANSFER_OUT"
-  | "TRANSFER_IN"
-  | "ADJUST_PLUS"
-  | "ADJUST_MINUS"
-  | "CONVERT_OUT"
-  | "CONVERT_IN";
-
-export type TransferStatus = "PENDING" | "IN_TRANSIT" | "COMPLETED";
+  | "RECEIVE"
+  | "PUTAWAY"
+  | "ISSUE"
+  | "ADJUST"
+  | "SCRAP"
+  | "PRINT_CONSUME"
+  | "PRINT_OUTPUT";
 
 export type Warehouse = TenantScoped & {
   id: string;
