@@ -8,7 +8,7 @@ This file defines repo-specific rules that override shared `@WDP/.codex` when ne
 
 - Internal operations dashboard
 - Inventory and stock movement views
-- Purchase and transfer workflows
+- Purchase and goods issue workflows
 - Put-away suggestion and shelf navigation views
 - Cup conversion and audit trails
 
@@ -27,6 +27,7 @@ This file defines repo-specific rules that override shared `@WDP/.codex` when ne
 - Success envelope: `{ data, meta }`; pagination is `meta.pagination`.
 - Refresh endpoint: `/auth/refresh`.
 - Put-away suggestion is backend-owned advisory logic; frontend renders shelf/path/capacity/reason and barcode confirmation.
+- WMS v1 operates one central warehouse; do not expose transfer workflows unless product/backend explicitly reintroduce multi-warehouse scope.
 - Do not build 3D warehouse bin packing. Ecommerce owns 3D cup design.
 - WMS does not read Ecommerce DB directly; cross-app boundaries are events plus stable payload fields such as `sku`, `orderId`, `designId`, and `designFile`.
 

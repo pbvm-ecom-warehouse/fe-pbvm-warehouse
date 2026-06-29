@@ -155,6 +155,8 @@ test("manager sees management dashboard and inventory route", async ({ page }) =
   await expect(
     page.getByRole("heading", { name: /Bảng điều phối quản lý/i }),
   ).toBeVisible();
+  await expect(page.getByRole("link", { name: /Xuất kho/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Chuyển kho/i })).toHaveCount(0);
 
   await page.goto("/inventory");
   await expect(

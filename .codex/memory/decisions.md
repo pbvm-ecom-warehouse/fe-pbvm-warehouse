@@ -56,7 +56,7 @@
   - V1 WMS has one central warehouse. `/transfers` is inconsistent with docs and should be hidden/removed unless product/backend explicitly reintroduces transfer scope.
 - 2026-06-27: Transfers retired from WMS FE v1 and Goods Issue route added:
   - Source route `src/app/(dashboard)/transfers/page.tsx` was deleted; `src/app/(dashboard)/goods-issues/page.tsx` is the replacement shell.
-  - Sidebar now exposes `/goods-issues` as `Xuất kho`; `/transfers` is kept only in RBAC retired-route deny-list and tests.
+  - Sidebar now exposes `/goods-issues` as `Xuất kho`; `/transfers` is absent from route config and kept only in RBAC retired-route deny-list/tests.
   - `goods-issues` access/action roles are `ADMIN`, `MANAGER`, `PICKER`; PICKER mobile drawer should show `Xuất kho` and no `Chuyển kho`.
   - Transfer helper/status type was removed; inventory movement types now align to docs: `RECEIVE`, `PUTAWAY`, `ISSUE`, `ADJUST`, `SCRAP`, `PRINT_CONSUME`, `PRINT_OUTPUT`.
   - Dashboard/module copy no longer references transfer-in/out; receiver sees GRN/put-away, picker sees Goods Issue/barcode confirmation.
