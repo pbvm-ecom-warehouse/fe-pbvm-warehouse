@@ -12,14 +12,26 @@ import type { StockLedgerRow } from "@/types/api";
 
 function statusCopy(status: ReturnType<typeof getStockStatus>) {
   if (status === "out") {
-    return { label: "Hết hàng", variant: "destructive" as const };
+    return {
+      className: "bg-rose-50 text-rose-700",
+      label: "Hết hàng",
+      variant: "destructive" as const,
+    };
   }
 
   if (status === "low") {
-    return { label: "Sắp hết", variant: "secondary" as const };
+    return {
+      className: "bg-amber-50 text-amber-700",
+      label: "Sắp hết",
+      variant: "secondary" as const,
+    };
   }
 
-  return { label: "Ổn định", variant: "outline" as const };
+  return {
+    className: "bg-teal-50 text-teal-700",
+    label: "Ổn định",
+    variant: "outline" as const,
+  };
 }
 
 export function InventoryTable({ rows }: { rows: StockLedgerRow[] }) {
@@ -57,19 +69,27 @@ export function InventoryTable({ rows }: { rows: StockLedgerRow[] }) {
           return (
             <TableRow key={row.id}>
               <TableCell>
-                <div className="font-medium">{row.productSku}</div>
+                <div className="font-mono font-semibold text-primary">
+                  {row.productSku}
+                </div>
                 <div className="text-xs text-muted-foreground">
                   {row.productName}
                 </div>
               </TableCell>
-              <TableCell>{row.warehouseName}</TableCell>
-              <TableCell className="text-right">{row.quantity}</TableCell>
-              <TableCell className="text-right">{reservedQty}</TableCell>
-              <TableCell className="text-right font-medium">
+              <TableCell className="font-medium">{row.warehouseName}</TableCell>
+              <TableCell className="font-mono text-right font-semibold">
+                {row.quantity}
+              </TableCell>
+              <TableCell className="font-mono text-right font-semibold text-amber-700">
+                {reservedQty}
+              </TableCell>
+              <TableCell className="font-mono text-right font-bold text-foreground">
                 {Math.max(availableQty, 0)}
               </TableCell>
               <TableCell>
-                <Badge variant={status.variant}>{status.label}</Badge>
+                <Badge className={status.className} variant={status.variant}>
+                  {status.label}
+                </Badge>
               </TableCell>
             </TableRow>
           );

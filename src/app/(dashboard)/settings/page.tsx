@@ -1,5 +1,5 @@
-import { ModulePage } from "@/features/admin-shell/components/module-page";
+import { SettingsClient } from "@/features/settings/components/settings-client";
 
 export default function SettingsPage() {
-  return <ModulePage moduleKey="settings" />;
+  return <SettingsClient />;
 }

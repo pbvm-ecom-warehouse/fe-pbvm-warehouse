@@ -7,7 +7,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "PBVM WMS Admin",
   description:
-    "Warehouse management dashboard for multi-warehouse distribution",
+    "Warehouse management dashboard for stock, put-away, and print jobs",
 };
 
 export default function RootLayout({

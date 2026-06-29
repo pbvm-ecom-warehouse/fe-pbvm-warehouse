@@ -1,5 +1,5 @@
-import { ModulePage } from "@/features/admin-shell/components/module-page";
+import { redirect } from "next/navigation";
 
 export default function CupConversionsPage() {
-  return <ModulePage moduleKey="cup-conversions" />;
+  redirect("/print-jobs");
 }

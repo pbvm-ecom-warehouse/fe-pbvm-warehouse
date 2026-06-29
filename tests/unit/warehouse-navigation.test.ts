@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  GATE_ROUTE_POINT,
   buildNavigationPath,
+  buildRouteToShelf,
+  describeShelfGranularity,
   fallbackPutawaySuggestions,
+  getRackFootprints,
+  normalizeShelfBoxPlacement,
   selectSuggestedShelf,
 } from "@/features/warehouse-navigation/utils/putaway-navigation";
 
@@ -35,5 +40,118 @@ describe("warehouse put-away navigation", () => {
       "Rack A1",
       "A1-S02",
     ]);
+    expect(suggestion!.shelf.level).toBe(2);
+  });
+
+  it("documents shelf as the smallest barcode location for current model", () => {
+    const suggestion = selectSuggestedShelf(
+      fallbackPutawaySuggestions({
+        sku: "CUP-BLANK-500",
+        quantity: 80,
+        warehouseId: "central",
+      }),
+    );
+
+    expect(describeShelfGranularity(suggestion!.shelf)).toMatch(/barcode location nhỏ nhất/i);
+  });
+
+  it("builds a fallback route from gate to the shelf center", () => {
+    const suggestion = selectSuggestedShelf(
+      fallbackPutawaySuggestions({
+        sku: "CUP-BLANK-500",
+        quantity: 80,
+        warehouseId: "central",
+      }),
+    );
+
+    const route = buildRouteToShelf(suggestion!.shelf);
+
+    expect(route.from).toEqual(GATE_ROUTE_POINT);
+    expect(route.to.code).toBe("A1-S02");
+    expect(route.to.x).toBe(suggestion!.shelf.x + suggestion!.shelf.width / 2);
+    expect(route.to.y).toBe(suggestion!.shelf.y + suggestion!.shelf.height / 2);
+    expect(route.waypoints.map((point) => point.code)).toEqual([
+      "GATE-01",
+      "AISLE-A1",
+      "A1-S02",
+    ]);
+  });
+
+  it("calculates rack footprints from shelf coordinates", () => {
+    const footprints = getRackFootprints(
+      fallbackPutawaySuggestions({
+        sku: "CUP-BLANK-500",
+        quantity: 1,
+        warehouseId: "central",
+      }).map((suggestion) => suggestion.shelf),
+    );
+
+    const rackA1 = footprints.find((footprint) => footprint.rackCode === "A1");
+
+    expect(rackA1).toMatchObject({
+      rackCode: "A1",
+      rackName: "Rack A1",
+      zoneCode: "A",
+      shelfCount: 3,
+      x: 72,
+      width: 132,
+    });
+    expect(rackA1?.height).toBe(154);
+    expect(rackA1?.center).toEqual({ x: 138, y: 183 });
+  });
+
+  it("normalizes API shelf box placement for the rack viewer", () => {
+    const placement = normalizeShelfBoxPlacement(
+      {
+        id: "stock-1",
+        sku: "CUP-BLANK-500",
+        itemName: "Ly trắng 500ml",
+        quantity: 24,
+        unit: "cái",
+        dimensions: { depthCm: 18 },
+        placement: {
+          x: 8,
+          y: 12,
+          z: 4,
+          width: 36,
+          height: 28,
+          depth: 14,
+          rotationDeg: 3,
+          label: "LOT-A",
+        },
+      },
+      0,
+    );
+
+    expect(placement).toMatchObject({
+      depth: 14,
+      estimated: false,
+      height: 28,
+      label: "LOT-A",
+      rotationDeg: 3,
+      width: 36,
+      x: 8,
+      y: 12,
+      z: 4,
+    });
+  });
+
+  it("auto-layouts shelf boxes when API placement is missing", () => {
+    const placement = normalizeShelfBoxPlacement(
+      {
+        id: "stock-2",
+        sku: "CUP-BLANK-500",
+        itemName: "Ly trắng 500ml",
+        quantity: 12,
+        unit: "cái",
+        placement: null,
+      },
+      4,
+    );
+
+    expect(placement.estimated).toBe(true);
+    expect(placement.label).toBe("CUP-BLANK-500");
+    expect(placement.x + placement.width).toBeLessThanOrEqual(100);
+    expect(placement.y + placement.height).toBeLessThanOrEqual(100);
   });
 });

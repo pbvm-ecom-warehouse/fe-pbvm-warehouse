@@ -1,34 +1,35 @@
 import { describe, expect, it } from "vitest";
 
-import { cupConversionSchema } from "@/features/cup-conversion/schemas/cup-conversion.schema";
+import { printJobSchema } from "@/features/cup-conversion/schemas/cup-conversion.schema";
 
-describe("cup conversion schema", () => {
+describe("print job schema", () => {
   const validInput = {
-    sourceProductId: "cup-plain",
-    targetProductId: "cup-printed",
+    orderId: "order-2026-06-17-01",
+    inputItemId: "cup-blank",
+    outputItemId: "cup-printed",
     warehouseId: "warehouse-1",
     quantity: 1000,
     availableQty: 1200,
-    printCampaignId: "PRINT-SUMMER-26",
-    designFileUrl: "https://assets.example/design.pdf",
+    designId: "design_tea_house",
+    designFile: "snapshot://design_tea_house",
     printCostPerUnit: 320,
   };
 
-  it("accepts a valid plain-cup to printed-cup conversion", () => {
-    expect(cupConversionSchema.safeParse(validInput).success).toBe(true);
+  it("accepts a valid custom-print job request", () => {
+    expect(printJobSchema.safeParse(validInput).success).toBe(true);
   });
 
-  it("rejects conversion when source and target SKU are the same", () => {
-    const result = cupConversionSchema.safeParse({
+  it("rejects a print job when input and output SKU are the same", () => {
+    const result = printJobSchema.safeParse({
       ...validInput,
-      targetProductId: "cup-plain",
+      outputItemId: "cup-blank",
     });
 
     expect(result.success).toBe(false);
   });
 
-  it("rejects conversion above available stock", () => {
-    const result = cupConversionSchema.safeParse({
+  it("rejects a print job above available blank stock", () => {
+    const result = printJobSchema.safeParse({
       ...validInput,
       quantity: 1500,
     });

@@ -1,5 +1,5 @@
-import { ModulePage } from "@/features/admin-shell/components/module-page";
+import { WarehouseLayoutEditor } from "@/features/warehouse-layout/components/warehouse-layout-editor";
 
 export default function WarehousesPage() {
-  return <ModulePage moduleKey="warehouses" />;
+  return <WarehouseLayoutEditor />;
 }
