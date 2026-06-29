@@ -35,12 +35,18 @@ import {
 } from "@/lib/rbac";
 import { useAuthStore } from "@/stores/auth-store";
 
-import { login, logout } from "../services/auth.service";
+import { changePassword, login, logout } from "../services/auth.service";
+import { changePasswordSchema } from "../schemas/change-password.schema";
 import { loginSchema } from "../schemas/login.schema";
 
 const defaultCredentials = {
   password: "",
   username: "",
+};
+
+const defaultPasswordChange = {
+  oldPassword: "",
+  newPassword: "",
 };
 
 function buildLocalRoleUser(role: WmsRole) {
@@ -60,8 +66,11 @@ export function LoginPageClient() {
   const setUser = useAuthStore((state) => state.setUser);
   const user = useSessionUser();
   const [credentials, setCredentials] = useState(defaultCredentials);
+  const [passwordChange, setPasswordChange] = useState(defaultPasswordChange);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isSwitchingRole, setIsSwitchingRole] = useState<WmsRole | null>(null);
+  const [needsPasswordChange, setNeedsPasswordChange] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const currentRoles = useMemo(() => user?.roles ?? [], [user?.roles]);
@@ -84,7 +93,13 @@ export function LoginPageClient() {
       toast.success("Đăng nhập WMS thành công");
 
       if (result.mustChangePassword) {
-        toast.message("Tài khoản này đang bật cờ đổi mật khẩu sau đăng nhập.");
+        setPasswordChange({
+          oldPassword: parsed.data.password,
+          newPassword: "",
+        });
+        setNeedsPasswordChange(true);
+        toast.message("Tài khoản cần đổi mật khẩu trước khi vào dashboard.");
+        return;
       }
 
       router.replace("/dashboard");
@@ -98,6 +113,46 @@ export function LoginPageClient() {
       }
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleChangePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setErrorMessage(null);
+
+    const parsed = changePasswordSchema.safeParse(passwordChange);
+
+    if (!parsed.success) {
+      setErrorMessage(
+        parsed.error.issues[0]?.message ?? "Thông tin đổi mật khẩu chưa hợp lệ",
+      );
+      return;
+    }
+
+    setIsChangingPassword(true);
+
+    try {
+      const result = await changePassword(parsed.data);
+
+      if (result.mustChangePassword) {
+        setErrorMessage("Backend vẫn yêu cầu đổi mật khẩu. Hãy thử mật khẩu mới khác.");
+        return;
+      }
+
+      toast.success("Đã đổi mật khẩu WMS");
+      setNeedsPasswordChange(false);
+      setPasswordChange(defaultPasswordChange);
+      router.replace("/dashboard");
+    } catch (error) {
+      if (isAxiosError(error)) {
+        const apiMessage =
+          (error.response?.data as { message?: string } | undefined)?.message;
+        setErrorMessage(apiMessage ?? "Không đổi được mật khẩu.");
+      } else {
+        setErrorMessage("Không thể kết nối WMS API.");
+      }
+    } finally {
+      setIsChangingPassword(false);
     }
   }
 
@@ -124,6 +179,71 @@ export function LoginPageClient() {
           <CardContent className="flex items-center justify-center gap-3 py-12 text-sm text-muted-foreground">
             <LoaderCircle className="size-4 animate-spin" />
             Đang khởi tạo phiên WMS...
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
+
+  if (user && needsPasswordChange) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-background px-4 py-10">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-2xl">
+              <ShieldCheck className="size-5 text-primary" />
+              Đổi mật khẩu tạm
+            </CardTitle>
+            <CardDescription>
+              Backend yêu cầu đổi mật khẩu trước khi vào dashboard.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" noValidate onSubmit={handleChangePassword}>
+              <div className="space-y-2">
+                <Label htmlFor="oldPassword">Mật khẩu hiện tại</Label>
+                <Input
+                  autoComplete="current-password"
+                  id="oldPassword"
+                  type="password"
+                  value={passwordChange.oldPassword}
+                  onChange={(event) =>
+                    setPasswordChange((current) => ({
+                      ...current,
+                      oldPassword: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="newPassword">Mật khẩu mới</Label>
+                <Input
+                  autoComplete="new-password"
+                  id="newPassword"
+                  type="password"
+                  value={passwordChange.newPassword}
+                  onChange={(event) =>
+                    setPasswordChange((current) => ({
+                      ...current,
+                      newPassword: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+              {errorMessage ? (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                  {errorMessage}
+                </div>
+              ) : null}
+              <Button className="h-10 w-full" disabled={isChangingPassword} type="submit">
+                {isChangingPassword ? (
+                  <LoaderCircle data-icon="inline-start" className="animate-spin" />
+                ) : (
+                  <ShieldCheck data-icon="inline-start" />
+                )}
+                Cập nhật mật khẩu
+              </Button>
+            </form>
           </CardContent>
         </Card>
       </main>

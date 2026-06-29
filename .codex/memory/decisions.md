@@ -14,3 +14,50 @@
 - 2026-06-17: WMS FE login follows the backend/docs contract `username + password`; do not fall back to an implicit admin session when no authenticated user exists.
 - 2026-06-17: The canonical WMS UI surface for cup printing is `print-jobs`; keep `/cup-conversions` only as a compatibility redirect while copy, RBAC, and tests use `print-jobs`.
 - 2026-06-17: Warehouse navigation renders `Zone -> Rack -> Shelf(level)` with shelf as the smallest barcode location; adding zone/rack/shelf is structure master-data work, not a put-away confirmation action.
+- 2026-06-22: Warehouse layout implementation compact:
+  - The canonical warehouse view is an architectural top-down SVG floor plan. Do not restore the fake isometric/CSS-3D map.
+  - Layout units are meters. Zones and racks are rectangles with rotation `0|90`; MAIN aisles must be wider than RACK aisles.
+  - `/warehouses` is the layout editor. Admin can add, move, resize, rotate, undo/redo, save draft, and publish; Manager and operations roles are read-only.
+  - `/warehouse-navigation` reads the published layout only. AI route guidance starts from fixed indoor point `GATE-01`; browser GPS is not used.
+  - AI suggestions highlight route/target but do not auto-open the rack. Clicking a rack opens its technical front elevation and fetches shelf contents per level.
+  - Shelf content placement comes from the API. Missing placement uses frontend auto-layout and must be labeled as relative, never exact bin-packing.
+  - Barcode confirmation, advisory/fallback labels, and override/audit behavior remain visible throughout map and rack flows.
+- 2026-06-22: Warehouse layout backend contract:
+  - Backend module: `be-wms-ecom/apps/wms/src/warehouse-layouts`; registered by the WMS app module.
+  - Mongo collection: `warehouse_layouts`, unique by `warehouseId + status`.
+  - Endpoints: `GET /warehouses/:warehouseId/layout?status=draft|published`, `PUT /warehouses/:warehouseId/layout/draft`, `POST /warehouses/:warehouseId/layout/publish`.
+  - Draft writes use `baseRevision`; publish uses `draftRevision`. Stale revisions are rejected.
+  - Backend publish validation enforces canvas boundaries, rack-in-zone containment, unique codes, no rack overlap, no aisle/rack overlap, gate/main-aisle presence, and MAIN width greater than RACK width.
+- 2026-06-22: Bulk rack configuration behavior:
+  - Newly created racks default to `bayCount: 1`; existing and published rack data is not migrated.
+  - Admin selects a source rack and uses the one-shot bulk configuration action.
+  - Scope defaults to the source zone and can switch to the whole warehouse.
+  - Copy `widthM`, `depthM`, `levelCount`, `bayCount`, and `rotation`.
+  - Preserve each target rack's `id`, `code`, `name`, `zoneId`, coordinates, and `accessPoint`.
+  - Regenerate target `shelfCodes` from that rack's own code and the copied level count.
+  - The complete bulk operation is one editor history entry; a selection-only click must not create an empty Undo entry.
+  - Bulk changes do not auto-reposition racks. Existing validation reports overlap/out-of-zone errors and blocks publish.
+- 2026-06-22: Implementation ownership and verification:
+  - Shared floor-plan utilities: `src/features/warehouse-layout/utils/warehouse-layout.ts`.
+  - Editor/Inspector/dialog: `src/features/warehouse-layout/components/`.
+  - Navigation scene and rack elevation: `src/features/warehouse-navigation/components/`.
+  - Backend build and Jest passed `33/33` after the layout module was added.
+  - Frontend lint, typecheck, production build, Vitest `37/37`, and Playwright `6/6` passed.
+  - Frontend runs on `http://localhost:3101`.
+  - Both frontend and backend warehouse-layout changes are currently uncommitted. Preserve the dirty worktrees; do not revert unrelated files.
+- 2026-06-27: WMS public API connection and docs audit compact:
+  - Shared/root compact note: `@WDP/.codex/memory/2026-06-27-wms-fe-api-compact.md`.
+  - Login must remain normal WMS staff login (`username + password`); no Google button, no Firebase SDK, no call to `/auth/google-login`.
+  - Wired services: `/auth/login`, `/auth/me`, `/auth/refresh`, `/auth/logout`, `/auth/change-password`, `/auth/bootstrap-admin`, `/auth/users`, `/auth/users/:id/roles`, `/auth/users/:id/lock`, `/auth/users/:id/unlock`, `/auth/users/:id/reset-password`, `/health`, and root `/`.
+  - Settings page is real for ADMIN health/user actions and MANAGER status-only view. Do not build user list until backend adds `GET /auth/users`.
+  - Dashboard inventory/report services intentionally return empty fallback only for missing backend endpoints `404/501`; never fallback auth errors.
+  - Verification after this work: `pnpm lint`, `pnpm typecheck`, `pnpm test` (53 tests), and `pnpm test:e2e` (8 tests) passed.
+  - Docs audit: FE is correct for Auth/Settings but not for the full WMS business workflow. Most business routes still use generic `ModulePage` placeholders.
+  - V1 WMS has one central warehouse. `/transfers` is inconsistent with docs and should be hidden/removed unless product/backend explicitly reintroduces transfer scope.
+- 2026-06-27: Transfers retired from WMS FE v1 and Goods Issue route added:
+  - Source route `src/app/(dashboard)/transfers/page.tsx` was deleted; `src/app/(dashboard)/goods-issues/page.tsx` is the replacement shell.
+  - Sidebar now exposes `/goods-issues` as `Xuất kho`; `/transfers` is kept only in RBAC retired-route deny-list and tests.
+  - `goods-issues` access/action roles are `ADMIN`, `MANAGER`, `PICKER`; PICKER mobile drawer should show `Xuất kho` and no `Chuyển kho`.
+  - Transfer helper/status type was removed; inventory movement types now align to docs: `RECEIVE`, `PUTAWAY`, `ISSUE`, `ADJUST`, `SCRAP`, `PRINT_CONSUME`, `PRINT_OUTPUT`.
+  - Dashboard/module copy no longer references transfer-in/out; receiver sees GRN/put-away, picker sees Goods Issue/barcode confirmation.
+  - Verification after this route cleanup: targeted RBAC/inventory Vitest passed, `pnpm typecheck`, `pnpm lint`, full `pnpm test` (`54/54`), and Playwright smoke (`8/8`) passed.

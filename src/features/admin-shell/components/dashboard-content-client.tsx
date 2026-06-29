@@ -20,7 +20,6 @@ import {
   ScanLine,
   ShieldCheck,
   TrendingUp,
-  Truck,
   Warehouse,
   type LucideIcon,
 } from "lucide-react";
@@ -81,11 +80,11 @@ type DashboardStats = {
   ledgerCount: number;
   lowStockCount: number;
   outboundCount: number;
+  putawayCount: number;
   printMovementCount: number;
   reservedQty: number;
+  scrapCount: number;
   totalAvailableQty: number;
-  transferInCount: number;
-  transferOutCount: number;
 };
 
 const roleAccentClass: Record<MetricTone, string> = {
@@ -107,17 +106,17 @@ const rolePanelCopy: Record<
   },
   MANAGER: {
     title: "Bảng điều phối quản lý",
-    description: "Tập trung PO, transfer, phê duyệt và báo cáo tồn kho.",
+    description: "Tập trung PO, goods issue, phê duyệt và báo cáo tồn kho.",
     warehouseCopy: "Central warehouse",
   },
   RECEIVER: {
     title: "Receiver workspace",
-    description: "Nhận hàng, put-away, transfer-in và xác nhận bằng barcode.",
+    description: "Nhận hàng, put-away và xác nhận bằng barcode.",
     warehouseCopy: "Inbound warehouse",
   },
   PICKER: {
     title: "Picker workspace",
-    description: "Soạn hàng, xuất kho, transfer-out và lấy đúng vị trí shelf.",
+    description: "Soạn hàng, xuất kho và lấy đúng vị trí shelf.",
     warehouseCopy: "Pick face",
   },
   PRINTER: {
@@ -301,7 +300,7 @@ function StockStatusCard({ rows }: { rows: StockLedgerRow[] }) {
 }
 
 function movementTone(moveType: MoveType) {
-  if (moveType === "INBOUND" || moveType === "TRANSFER_IN" || moveType === "ADJUST_PLUS") {
+  if (moveType === "RECEIVE" || moveType === "PUTAWAY") {
     return {
       icon: ArrowDownToLine,
       className: "bg-teal-50 text-teal-600",
@@ -310,11 +309,9 @@ function movementTone(moveType: MoveType) {
   }
 
   if (
-    moveType === "TRANSFER_OUT" ||
     moveType === "PRINT_CONSUME" ||
     moveType === "PRINT_OUTPUT" ||
-    moveType === "CONVERT_OUT" ||
-    moveType === "CONVERT_IN"
+    moveType === "ADJUST"
   ) {
     return {
       icon: Repeat2,
@@ -610,27 +607,23 @@ function buildStats(rows: StockLedgerRow[], movements: StockMovement[]) {
 
   return {
     cupRowsCount,
-    inboundCount: movements.filter((movement) => movement.moveType === "INBOUND")
+    inboundCount: movements.filter((movement) => movement.moveType === "RECEIVE")
       .length,
     ledgerCount: rows.length,
     lowStockCount,
-    outboundCount: movements.filter((movement) => movement.moveType === "OUTBOUND")
+    outboundCount: movements.filter((movement) => movement.moveType === "ISSUE")
+      .length,
+    putawayCount: movements.filter((movement) => movement.moveType === "PUTAWAY")
       .length,
     printMovementCount: movements.filter(
       (movement) =>
         movement.moveType === "PRINT_CONSUME" ||
-        movement.moveType === "PRINT_OUTPUT" ||
-        movement.moveType === "CONVERT_IN" ||
-        movement.moveType === "CONVERT_OUT",
+        movement.moveType === "PRINT_OUTPUT",
     ).length,
     reservedQty,
+    scrapCount: movements.filter((movement) => movement.moveType === "SCRAP")
+      .length,
     totalAvailableQty,
-    transferInCount: movements.filter(
-      (movement) => movement.moveType === "TRANSFER_IN",
-    ).length,
-    transferOutCount: movements.filter(
-      (movement) => movement.moveType === "TRANSFER_OUT",
-    ).length,
   };
 }
 
@@ -697,10 +690,10 @@ function buildRoleMetrics(role: WmsRole, stats: DashboardStats): DashboardMetric
         tone: "primary",
       },
       {
-        label: "Transfer-in",
-        value: formatNumber(stats.transferInCount),
-        detail: "Nhận tại kho đích theo.",
-        icon: Truck,
+        label: "Put-away moves",
+        value: formatNumber(stats.putawayCount),
+        detail: "Chuyển hàng từ staging vào shelf thật.",
+        icon: MapPinned,
         tone: "amber",
       },
     ];
@@ -723,10 +716,10 @@ function buildRoleMetrics(role: WmsRole, stats: DashboardStats): DashboardMetric
         tone: "rose",
       },
       {
-        label: "Transfer-out",
-        value: formatNumber(stats.transferOutCount),
-        detail: "Xuất tại kho nguồn.",
-        icon: Truck,
+        label: "Barcode confirms",
+        value: formatNumber(stats.outboundCount),
+        detail: "Quét SKU + shelf trước khi confirm.",
+        icon: ScanLine,
         tone: "amber",
       },
     ];
@@ -801,10 +794,10 @@ function buildRoleTasks(role: WmsRole, stats: DashboardStats): WorkTask[] {
         tone: "primary",
       },
       {
-        label: "Nhận chuyển kho",
-        count: formatNumber(stats.transferInCount),
-        description: "Đóng vòng transfer tại kho đích.",
-        icon: Truck,
+        label: "Xác nhận put-away",
+        count: formatNumber(stats.putawayCount),
+        description: "Quét SKU + shelf để chuyển hàng khỏi staging.",
+        icon: ScanLine,
         tone: "amber",
       },
     ];
@@ -822,15 +815,15 @@ function buildRoleTasks(role: WmsRole, stats: DashboardStats): WorkTask[] {
       {
         label: "Xuất kho",
         count: formatNumber(stats.outboundCount),
-        description: "Xác nhận OUTBOUND sau khi đóng gói.",
+        description: "Xác nhận ISSUE sau khi đóng gói.",
         icon: ArrowUpFromLine,
         tone: "rose",
       },
       {
-        label: "Transfer-out",
-        count: formatNumber(stats.transferOutCount),
-        description: "Chuẩn bị hàng rời kho nguồn.",
-        icon: Truck,
+        label: "Quét vị trí",
+        count: formatNumber(stats.outboundCount),
+        description: "Đối chiếu shelf barcode trước khi xuất.",
+        icon: ScanLine,
         tone: "amber",
       },
     ];
@@ -889,10 +882,10 @@ function buildRoleTasks(role: WmsRole, stats: DashboardStats): WorkTask[] {
 
 function movementForRole(role: WmsRole, movements: StockMovement[]) {
   const moveTypesByRole: Partial<Record<WmsRole, MoveType[]>> = {
-    RECEIVER: ["INBOUND", "TRANSFER_IN"],
-    PICKER: ["OUTBOUND", "TRANSFER_OUT"],
-    PRINTER: ["PRINT_CONSUME", "PRINT_OUTPUT", "CONVERT_OUT", "CONVERT_IN"],
-    COUNTER: ["ADJUST_PLUS", "ADJUST_MINUS"],
+    RECEIVER: ["RECEIVE", "PUTAWAY"],
+    PICKER: ["ISSUE"],
+    PRINTER: ["PRINT_CONSUME", "PRINT_OUTPUT"],
+    COUNTER: ["ADJUST", "SCRAP"],
   };
   const moveTypes = moveTypesByRole[role];
 

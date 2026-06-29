@@ -7,7 +7,7 @@ export const env = createEnv({
     NEXT_PUBLIC_WMS_API_URL: z
       .string()
       .url()
-      .default("http://localhost:3001/api/wms"),
+      .default("https://api-ecom-wms.hoaiphuong.io.vn/api/wms"),
     NEXT_PUBLIC_DEFAULT_TENANT_ID: z.string().default("demo-tenant"),
   },
   runtimeEnv: {

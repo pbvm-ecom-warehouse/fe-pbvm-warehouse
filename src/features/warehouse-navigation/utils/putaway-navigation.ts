@@ -1,4 +1,10 @@
-import type { PutawaySuggestion, WarehouseShelf } from "@/types/api";
+import type {
+  PutawaySuggestion,
+  ShelfContentItem,
+  WarehouseRoute,
+  WarehouseRoutePoint,
+  WarehouseShelf,
+} from "@/types/api";
 
 export type PutawaySuggestionInput = {
   sku: string;
@@ -14,6 +20,44 @@ export type RackGroup = {
   warehouseCode: string;
   zoneCode: string;
   zoneName: string;
+};
+
+export type RackFootprint = {
+  id: string;
+  rackCode: string;
+  rackName: string;
+  warehouseCode: string;
+  zoneCode: string;
+  zoneName: string;
+  shelfCount: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  center: {
+    x: number;
+    y: number;
+  };
+  shelves: WarehouseShelf[];
+};
+
+export type VisualShelfBoxPlacement = {
+  x: number;
+  y: number;
+  z: number;
+  width: number;
+  height: number;
+  depth: number;
+  rotationDeg: number;
+  label: string;
+  estimated: boolean;
+};
+
+export const GATE_ROUTE_POINT: WarehouseRoutePoint = {
+  code: "GATE-01",
+  label: "Cổng vào",
+  x: 34,
+  y: 318,
 };
 
 export const fallbackShelves: WarehouseShelf[] = [
@@ -165,8 +209,52 @@ const shelfCapacityByCode: Record<string, number> = {
   "B2-S01": 260,
 };
 
+function clampPercent(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
 export function buildNavigationPath(shelf: WarehouseShelf) {
   return [shelf.warehouseCode, shelf.zoneName, shelf.rackName, shelf.code];
+}
+
+export function getShelfCenter(shelf: WarehouseShelf): WarehouseRoutePoint {
+  return {
+    code: shelf.code,
+    label: shelf.code,
+    x: shelf.x + shelf.width / 2,
+    y: shelf.y + shelf.height / 2,
+  };
+}
+
+export function buildRouteToShelf(shelf: WarehouseShelf): WarehouseRoute {
+  const target = getShelfCenter(shelf);
+  const aislePoint: WarehouseRoutePoint = {
+    code: `AISLE-${shelf.rackCode}`,
+    label: `Lối ${shelf.rackName}`,
+    x: target.x,
+    y: Math.max(GATE_ROUTE_POINT.y - 34, target.y + shelf.height),
+  };
+
+  return {
+    from: GATE_ROUTE_POINT,
+    to: target,
+    waypoints: [GATE_ROUTE_POINT, aislePoint, target],
+    distanceMeters: Math.max(
+      1,
+      Math.round(
+        (Math.abs(GATE_ROUTE_POINT.x - aislePoint.x) +
+          Math.abs(GATE_ROUTE_POINT.y - aislePoint.y) +
+          Math.abs(aislePoint.x - target.x) +
+          Math.abs(aislePoint.y - target.y)) /
+          8,
+      ),
+    ),
+    instructions: [
+      `Bắt đầu tại ${GATE_ROUTE_POINT.label}`,
+      `Đi theo lối ${shelf.rackName}`,
+      `Dừng tại shelf ${shelf.code}`,
+    ],
+  };
 }
 
 export function getShelfDimensionsLabel(shelf: WarehouseShelf) {
@@ -253,12 +341,89 @@ export function groupShelvesByRack(
     );
 }
 
+export function getRackFootprints(shelves: WarehouseShelf[]) {
+  return groupShelvesByRack(shelves).map((group): RackFootprint => {
+    const left = Math.min(...group.shelves.map((shelf) => shelf.x));
+    const top = Math.min(...group.shelves.map((shelf) => shelf.y));
+    const right = Math.max(
+      ...group.shelves.map((shelf) => shelf.x + shelf.width),
+    );
+    const bottom = Math.max(
+      ...group.shelves.map((shelf) => shelf.y + shelf.height),
+    );
+    const width = right - left;
+    const height = bottom - top;
+
+    return {
+      id: group.id,
+      rackCode: group.rackCode,
+      rackName: group.rackName,
+      warehouseCode: group.warehouseCode,
+      zoneCode: group.zoneCode,
+      zoneName: group.zoneName,
+      shelfCount: group.shelves.length,
+      x: left,
+      y: top,
+      width,
+      height,
+      center: {
+        x: left + width / 2,
+        y: top + height / 2,
+      },
+      shelves: group.shelves,
+    };
+  });
+}
+
 export function describeShelfGranularity(shelf: WarehouseShelf) {
   if (shelf.isStaging) {
     return "Shelf staging chỉ là vị trí tạm sau GRN, không phải đích .";
   }
 
   return "Hiện shelf là barcode location nhỏ nhất";
+}
+
+export function normalizeShelfBoxPlacement(
+  item: ShelfContentItem,
+  index: number,
+): VisualShelfBoxPlacement {
+  if (item.placement) {
+    const x = clampPercent(item.placement.x, 0, 96);
+    const y = clampPercent(item.placement.y, 0, 92);
+    const width = clampPercent(item.placement.width, 4, 100 - x);
+    const height = clampPercent(item.placement.height, 6, 100 - y);
+
+    return {
+      x,
+      y,
+      z: item.placement.z ?? 0,
+      width,
+      height,
+      depth: clampPercent(item.placement.depth ?? item.dimensions?.depthCm ?? 12, 4, 28),
+      rotationDeg: item.placement.rotationDeg ?? 0,
+      label: item.placement.label ?? item.sku,
+      estimated: false,
+    };
+  }
+
+  const column = index % 3;
+  const row = Math.floor(index / 3);
+  const width = 26;
+  const height = 24;
+  const x = 5 + column * 31;
+  const y = 10 + row * 30;
+
+  return {
+    x: clampPercent(x, 0, 100 - width),
+    y: clampPercent(y, 0, 100 - height),
+    z: 0,
+    width,
+    height,
+    depth: clampPercent(item.dimensions?.depthCm ?? 10, 4, 24),
+    rotationDeg: 0,
+    label: item.sku,
+    estimated: true,
+  };
 }
 
 export function fallbackPutawaySuggestions({
@@ -281,6 +446,7 @@ export function fallbackPutawaySuggestions({
           : "best-fit theo sức chứa còn lại của shelf",
         advisory: true,
         pathLabel: buildNavigationPath(shelf).join(" / "),
+        route: buildRouteToShelf(shelf),
       };
     })
     .filter((suggestion) => suggestion.capacity >= quantity)

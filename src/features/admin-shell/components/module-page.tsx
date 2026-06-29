@@ -50,7 +50,7 @@ const moduleSummaries = {
     columns: ["SKU", "Tên sản phẩm", "Nhóm"],
     roleNotes: {
       ADMIN: "Admin quản lý SKU nền cho toàn hệ thống.",
-      MANAGER: "Manager theo dõi SKU phục vụ PO, transfer và báo cáo.",
+      MANAGER: "Manager theo dõi SKU phục vụ PO, xuất kho và báo cáo.",
       PRINTER: "Printer tập trung CUP_BLANK và CUP_PRINTED phục vụ lệnh in.",
     },
   },
@@ -64,7 +64,7 @@ const moduleSummaries = {
     roleNotes: {
       ADMIN: "Admin xem toàn bộ quantity, reserved_qty và available_qty.",
       MANAGER: "Manager dùng ledger để điều phối và duyệt adjustment.",
-      RECEIVER: "Receiver đối chiếu tồn sau GRN, put-away và transfer-in.",
+      RECEIVER: "Receiver đối chiếu tồn sau GRN và put-away.",
       PICKER: "Picker xem vị trí và available trước khi xuất kho.",
       PRINTER: "Printer kiểm tra tồn CUP_BLANK và CUP_PRINTED quanh Print Job.",
       COUNTER: "Counter dùng ledger làm baseline kiểm đếm thực tế.",
@@ -83,25 +83,24 @@ const moduleSummaries = {
       RECEIVER: "Receiver tạo/xác nhận GRN và chuyển hàng sang put-away.",
     },
   },
-  transfers: {
-    title: "Chuyển kho",
-    description: "",
-    action: "Tạo phiếu",
-    highlights: ["TRANSFER_OUT", "TRANSFER_IN", "IN_TRANSIT"],
-    tableTitle: "Phiếu chuyển kho",
-    columns: ["Mã phiếu", "Từ kho", "Đến kho"],
+  "goods-issues": {
+    title: "Xuất kho",
+    description: "Soạn hàng, quét SKU + shelf và xác nhận Goods Issue.",
+    action: "Tạo phiếu xuất",
+    highlights: ["Goods Issue", "FEFO", "Barcode confirm"],
+    tableTitle: "Phiếu xuất kho",
+    columns: ["Mã phiếu", "Order ref", "Trạng thái"],
     roleNotes: {
-      ADMIN: "Admin có toàn quyền với transfer liên kho.",
-      MANAGER: "Manager tạo, xác nhận và duyệt transfer.",
-      PICKER: "Picker xử lý transfer-out tại kho nguồn.",
-      RECEIVER: "Receiver xử lý transfer-in tại kho đích.",
+      ADMIN: "Admin có toàn quyền theo dõi và xử lý phiếu xuất.",
+      MANAGER: "Manager tạo phiếu xuất và theo dõi goods.issued.",
+      PICKER: "Picker quét SKU + shelf, lấy hàng theo FEFO và xác nhận xuất kho.",
     },
   },
   adjustments: {
     title: "Kiểm kê",
     description: "Điều chỉnh thừa thiếu qua stock movement.",
     action: "Tạo điều chỉnh",
-    highlights: ["ADJUST_PLUS", "ADJUST_MINUS", "Ref audit"],
+    highlights: ["Stock Count", "ADJUST", "SCRAP"],
     tableTitle: "Phiếu điều chỉnh",
     columns: ["Mã phiếu", "Kho", "Loại"],
     roleNotes: {
@@ -169,10 +168,9 @@ const roleActionLabels: Partial<Record<ModuleKey, Partial<Record<WmsRole, string
     RECEIVER: "Xác nhận GRN",
     MANAGER: "Tạo PO",
   },
-  transfers: {
-    PICKER: "Xử lý transfer-out",
-    RECEIVER: "Nhận transfer-in",
-    MANAGER: "Tạo phiếu",
+  "goods-issues": {
+    PICKER: "Xác nhận xuất kho",
+    MANAGER: "Tạo phiếu xuất",
   },
   adjustments: {
     COUNTER: "Nhập kết quả đếm",

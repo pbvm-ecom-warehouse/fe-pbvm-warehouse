@@ -22,7 +22,7 @@ export const ROLE_DESCRIPTIONS: Record<WmsRole, string> = {
   ADMIN: "Toàn quyền vận hành WMS",
   MANAGER: "Điều phối, tạo lệnh và duyệt",
   RECEIVER: "Nhận hàng, put-away và hoàn hàng",
-  PICKER: "Soạn hàng, xuất kho và transfer out",
+  PICKER: "Soạn hàng, xuất kho và lấy đúng vị trí shelf",
   PRINTER: "Vận hành in ly và xác nhận output",
   COUNTER: "Kiểm đếm và ghi nhận chênh lệch",
 };
@@ -48,6 +48,7 @@ const LEGACY_ROLE_MAP: Record<string, readonly WmsRole[]> = {
 };
 
 const ALL_STAFF_ROLES = WMS_ROLES;
+const RETIRED_ROUTES = new Set<string>(["/transfers"]);
 
 export const ROUTE_ACCESS_BY_HREF = {
   "/dashboard": ALL_STAFF_ROLES,
@@ -56,7 +57,7 @@ export const ROUTE_ACCESS_BY_HREF = {
   "/inventory": ALL_STAFF_ROLES,
   "/warehouse-navigation": ["ADMIN", "MANAGER", "RECEIVER", "PICKER"],
   "/purchases": ["ADMIN", "MANAGER", "RECEIVER"],
-  "/transfers": ["ADMIN", "MANAGER", "RECEIVER", "PICKER"],
+  "/goods-issues": ["ADMIN", "MANAGER", "PICKER"],
   "/adjustments": ["ADMIN", "MANAGER", "COUNTER"],
   "/suppliers": ["ADMIN", "MANAGER", "RECEIVER"],
   "/print-jobs": ["ADMIN", "MANAGER", "PRINTER"],
@@ -71,7 +72,7 @@ export const MODULE_PRIMARY_ACTION_ROLES = {
   products: ["ADMIN", "MANAGER"],
   inventory: ALL_STAFF_ROLES,
   purchases: ["ADMIN", "MANAGER", "RECEIVER"],
-  transfers: ["ADMIN", "MANAGER", "RECEIVER", "PICKER"],
+  "goods-issues": ["ADMIN", "MANAGER", "PICKER"],
   adjustments: ["ADMIN", "MANAGER", "COUNTER"],
   suppliers: ["ADMIN", "MANAGER"],
   reports: ["ADMIN", "MANAGER"],
@@ -148,6 +149,10 @@ export function hasRouteAccess(
   href: string,
   roles: readonly WmsRole[] | null | undefined,
 ) {
+  if (RETIRED_ROUTES.has(href)) {
+    return false;
+  }
+
   const access = getRouteAccess(href);
 
   if (!access) {

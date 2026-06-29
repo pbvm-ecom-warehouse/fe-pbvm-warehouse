@@ -35,7 +35,8 @@ describe("WMS RBAC helpers", () => {
 
   it("unions permissions for multi-role users", () => {
     expect(hasRouteAccess("/purchases", ["RECEIVER", "PICKER"])).toBe(true);
-    expect(hasRouteAccess("/transfers", ["RECEIVER", "PICKER"])).toBe(true);
+    expect(hasRouteAccess("/goods-issues", ["RECEIVER", "PICKER"])).toBe(true);
+    expect(hasRouteAccess("/transfers", ["RECEIVER", "PICKER"])).toBe(false);
     expect(hasRouteAccess("/print-jobs", ["RECEIVER", "PICKER"])).toBe(false);
   });
 
@@ -49,7 +50,9 @@ describe("WMS RBAC helpers", () => {
 
     expect(receiverRoutes).toContain("/purchases");
     expect(receiverRoutes).toContain("/warehouse-navigation");
+    expect(receiverRoutes).not.toContain("/transfers");
     expect(receiverRoutes).not.toContain("/settings");
+    expect(printerRoutes).not.toContain("/transfers");
     expect(printerRoutes).toContain("/print-jobs");
     expect(printerRoutes).not.toContain("/purchases");
   });

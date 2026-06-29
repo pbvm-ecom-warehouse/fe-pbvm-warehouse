@@ -41,24 +41,62 @@ function toListResponse<T>(
   return payload;
 }
 
+function emptyListResponse<T>(): ApiListResponse<T> {
+  return {
+    data: [],
+    meta: {
+      pagination: {
+        page: 1,
+        pageSize: 0,
+        total: 0,
+      },
+    },
+  };
+}
+
+function isMissingBackendEndpoint(error: unknown) {
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  return status === 404 || status === 501;
+}
+
+async function withMissingEndpointFallback<T>(
+  request: () => Promise<ApiListResponse<T>>,
+) {
+  try {
+    return await request();
+  } catch (error) {
+    if (isMissingBackendEndpoint(error)) {
+      return emptyListResponse<T>();
+    }
+
+    throw error;
+  }
+}
+
 export async function listStockLedger() {
-  const response =
-    await apiClient.get<ApiEnvelope<StockLedgerRow[]> | ApiListResponse<StockLedgerRow>>(
-      "/inventory/ledger",
-    );
-  return toListResponse(response.data);
+  return withMissingEndpointFallback(async () => {
+    const response =
+      await apiClient.get<ApiEnvelope<StockLedgerRow[]> | ApiListResponse<StockLedgerRow>>(
+        "/inventory/ledger",
+      );
+    return toListResponse(response.data);
+  });
 }
 
 export async function listStockMovements() {
-  const response = await apiClient.get<
-    ApiEnvelope<StockMovement[]> | ApiListResponse<StockMovement>
-  >("/inventory/movements");
-  return toListResponse(response.data);
+  return withMissingEndpointFallback(async () => {
+    const response = await apiClient.get<
+      ApiEnvelope<StockMovement[]> | ApiListResponse<StockMovement>
+    >("/inventory/movements");
+    return toListResponse(response.data);
+  });
 }
 
 export async function listInventoryValueSeries() {
-  const response = await apiClient.get<
-    ApiEnvelope<InventoryValuePoint[]> | ApiListResponse<InventoryValuePoint>
-  >("/reports/inventory-value-series");
-  return toListResponse(response.data);
+  return withMissingEndpointFallback(async () => {
+    const response = await apiClient.get<
+      ApiEnvelope<InventoryValuePoint[]> | ApiListResponse<InventoryValuePoint>
+    >("/reports/inventory-value-series");
+    return toListResponse(response.data);
+  });
 }

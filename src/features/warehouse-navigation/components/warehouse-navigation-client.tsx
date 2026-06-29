@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
+import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
   Barcode,
   CheckCircle2,
+  Loader2,
   MapPinned,
   Navigation,
   PackageCheck,
@@ -27,10 +29,28 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getWarehouseLayout } from "@/features/warehouse-layout/services/warehouse-layout.service";
+import {
+  buildLayoutRoute,
+  fallbackWarehouseLayout,
+} from "@/features/warehouse-layout/utils/warehouse-layout";
 import { useSessionUser } from "@/hooks/use-session-user";
-import { listPutawaySuggestions } from "@/features/warehouse-navigation/services/putaway-navigation.service";
+import { hasAnyRole } from "@/lib/rbac";
+import { cn } from "@/lib/utils";
+import type { PutawaySuggestion, ShelfContentItem, WarehouseShelf } from "@/types/api";
+
+import { RouteGuidance } from "./route-guidance";
+import {
+  WarehouseArchitectureScene,
+  type WarehouseSceneMode,
+} from "./warehouse-architecture-scene";
+import {
+  listPutawaySuggestionResult,
+  listShelfContents,
+} from "../services/putaway-navigation.service";
 import {
   buildNavigationPath,
+  buildRouteToShelf,
   describeShelfGranularity,
   fallbackPutawaySuggestions,
   fallbackShelves,
@@ -39,9 +59,7 @@ import {
   getZoneCodes,
   groupShelvesByRack,
   selectSuggestedShelf,
-} from "@/features/warehouse-navigation/utils/putaway-navigation";
-import { hasAnyRole } from "@/lib/rbac";
-import type { PutawaySuggestion, WarehouseShelf } from "@/types/api";
+} from "../utils/putaway-navigation";
 
 const defaultPutawayInput = {
   sku: "CUP-BLANK-500",
@@ -50,7 +68,7 @@ const defaultPutawayInput = {
 };
 
 const initialSuggestions = fallbackPutawaySuggestions(defaultPutawayInput);
-const initialSelectedCode = initialSuggestions[0]?.shelf.code ?? null;
+const initialSelectedSuggestion = initialSuggestions[0] ?? null;
 
 function uniqueShelves(shelves: WarehouseShelf[]) {
   const byCode = new Map<string, WarehouseShelf>();
@@ -73,125 +91,14 @@ function FilterChip({
 }) {
   return (
     <button
-      type="button"
-      className="rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:bg-accent/60 data-[active=true]:border-primary/40 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground"
+      aria-pressed={active}
+      className="rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/30 data-[active=true]:border-primary/40 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground"
       data-active={active}
       onClick={onClick}
+      type="button"
     >
       {children}
     </button>
-  );
-}
-
-function RackStackMap({
-  onSelectShelf,
-  selectedCode,
-  shelves,
-  suggestions,
-  zoneCode,
-  rackCode,
-}: {
-  onSelectShelf: (shelfCode: string) => void;
-  selectedCode: string | null;
-  shelves: WarehouseShelf[];
-  suggestions: PutawaySuggestion[];
-  zoneCode: string | "ALL";
-  rackCode: string | "ALL";
-}) {
-  const groups = groupShelvesByRack(shelves, { rackCode, zoneCode });
-  const suggestedCodes = new Set(suggestions.map((suggestion) => suggestion.shelf.code));
-  const stagingShelf = shelves.find((shelf) => shelf.isStaging);
-
-  return (
-    <div className="space-y-4">
-      <div className="grid gap-4 xl:grid-cols-3">
-        {groups.map((group) => (
-          <div
-            className="rounded-lg border border-border/70 bg-card p-3"
-            key={group.id}
-          >
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold">{group.rackName}</div>
-                <div className="text-xs text-muted-foreground">
-                  {group.warehouseCode} / {group.zoneName}
-                </div>
-              </div>
-              <Badge variant="outline">
-                {group.shelves.length} shelf
-                {group.shelves.length > 1 ? "s" : ""}
-              </Badge>
-            </div>
-
-            <div className="rounded-xl border border-dashed border-border/80 bg-muted/20 p-3">
-              <div className="space-y-2">
-                {group.shelves.map((shelf) => {
-                  const isSelected = shelf.code === selectedCode;
-                  const isSuggested = suggestedCodes.has(shelf.code);
-
-                  return (
-                    <button
-                      key={shelf.id}
-                      type="button"
-                      className="grid min-h-[92px] w-full grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border/70 bg-card px-3 py-2 text-left transition hover:bg-accent/60 data-[selected=true]:border-primary/40 data-[selected=true]:bg-primary/5"
-                      data-selected={isSelected}
-                      onClick={() => onSelectShelf(shelf.code)}
-                    >
-                      <div className="rounded-lg bg-muted px-2 py-2 text-center">
-                        <div className="text-[11px] font-semibold text-muted-foreground">
-                          Level
-                        </div>
-                        <div className="font-mono text-base font-bold">
-                          {shelf.level}
-                        </div>
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-semibold">{shelf.code}</span>
-                          {isSuggested ? (
-                            <Badge variant={isSelected ? "default" : "outline"}>
-                              Suggested
-                            </Badge>
-                          ) : null}
-                        </div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {getShelfDimensionsLabel(shelf)}
-                        </div>
-                        <div className="mt-1 text-[11px] text-muted-foreground">
-                          Barcode: {shelf.barcode}
-                        </div>
-                      </div>
-                      <div className="text-right text-[11px] font-semibold text-muted-foreground">
-                        {shelf.rackCode}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {stagingShelf ? (
-        <div className="rounded-lg border border-sky-200 bg-sky-50/80 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold text-sky-900">
-                Staging / Receiving
-              </div>
-              <div className="text-xs text-sky-800/80">
-                {stagingShelf.code} là shelf tạm sau GRN. Put-away luôn đi từ
-                staging sang shelf thật.
-              </div>
-            </div>
-            <Badge className="bg-white text-sky-800" variant="outline">
-              {stagingShelf.barcode}
-            </Badge>
-          </div>
-        </div>
-      ) : null}
-    </div>
   );
 }
 
@@ -201,12 +108,19 @@ export function WarehouseNavigationClient() {
   const [quantity, setQuantity] = useState(defaultPutawayInput.quantity);
   const [suggestions, setSuggestions] =
     useState<PutawaySuggestion[]>(initialSuggestions);
-  const [selectedCode, setSelectedCode] = useState<string | null>(
-    initialSelectedCode,
+  const [suggestionSource, setSuggestionSource] = useState<"api" | "fallback">(
+    "fallback",
   );
+  const [selectedCode, setSelectedCode] = useState<string | null>(
+    initialSelectedSuggestion?.shelf.code ?? null,
+  );
+  const [selectedRackCode, setSelectedRackCode] = useState<string | null>(
+    initialSelectedSuggestion?.shelf.rackCode ?? null,
+  );
+  const [sceneMode, setSceneMode] = useState<WarehouseSceneMode>("map");
   const [scanSku, setScanSku] = useState(defaultPutawayInput.sku);
   const [scanShelf, setScanShelf] = useState(
-    initialSuggestions[0]?.shelf.barcode ?? "",
+    initialSelectedSuggestion?.shelf.barcode ?? "",
   );
   const [confirmed, setConfirmed] = useState(false);
   const [zoneFilter, setZoneFilter] = useState<string | "ALL">("ALL");
@@ -216,57 +130,205 @@ export function WarehouseNavigationClient() {
     () => uniqueShelves([...fallbackShelves, ...suggestions.map((item) => item.shelf)]),
     [suggestions],
   );
+  const layoutQuery = useQuery({
+    queryFn: () =>
+      getWarehouseLayout(defaultPutawayInput.warehouseId, "published"),
+    queryKey: [
+      "warehouse-layout",
+      defaultPutawayInput.warehouseId,
+      "published",
+    ],
+    retry: false,
+  });
+  const publishedLayout = layoutQuery.isError
+    ? fallbackWarehouseLayout
+    : (layoutQuery.data ?? null);
+  const layoutSource = layoutQuery.isError
+    ? "fallback"
+    : publishedLayout
+      ? "api"
+      : "missing";
+  const displayLayout = useMemo(() => {
+    if (!publishedLayout) {
+      return null;
+    }
+
+    const zoneIds = new Set(
+      publishedLayout.zones
+        .filter((zone) => zoneFilter === "ALL" || zone.code === zoneFilter)
+        .map((zone) => zone.id),
+    );
+
+    return {
+      ...publishedLayout,
+      zones: publishedLayout.zones.filter((zone) => zoneIds.has(zone.id)),
+      racks: publishedLayout.racks.filter(
+        (rack) =>
+          zoneIds.has(rack.zoneId) &&
+          (rackFilter === "ALL" || rack.code === rackFilter),
+      ),
+    };
+  }, [publishedLayout, rackFilter, zoneFilter]);
   const zoneCodes = useMemo(() => getZoneCodes(allShelves), [allShelves]);
   const rackCodes = useMemo(
     () => getRackCodesForZone(allShelves, zoneFilter),
     [allShelves, zoneFilter],
   );
-  const selectedSuggestion = useMemo(
+  const primarySuggestion = useMemo(
+    () => selectSuggestedShelf(suggestions),
+    [suggestions],
+  );
+  const exactSelectedSuggestion = useMemo(
     () =>
-      suggestions.find((suggestion) => suggestion.shelf.code === selectedCode) ??
-      selectSuggestedShelf(suggestions),
+      selectedCode
+        ? suggestions.find((suggestion) => suggestion.shelf.code === selectedCode) ??
+          null
+        : null,
     [selectedCode, suggestions],
   );
   const selectedShelf = useMemo(
     () =>
       allShelves.find((shelf) => shelf.code === selectedCode) ??
-      selectedSuggestion?.shelf ??
+      primarySuggestion?.shelf ??
       null,
-    [allShelves, selectedCode, selectedSuggestion],
+    [allShelves, primarySuggestion, selectedCode],
   );
+  const selectedRoute = selectedShelf
+    ? publishedLayout
+      ? buildLayoutRoute(
+          publishedLayout,
+          selectedShelf.rackCode,
+          selectedShelf.code,
+        ) ?? exactSelectedSuggestion?.route ?? buildRouteToShelf(selectedShelf)
+      : exactSelectedSuggestion?.route ?? buildRouteToShelf(selectedShelf)
+    : primarySuggestion?.route ?? null;
   const selectedPath = selectedShelf
     ? buildNavigationPath(selectedShelf).join(" / ")
     : "Chưa chọn shelf";
   const capacityUsage =
-    selectedSuggestion && selectedSuggestion.capacity > 0
-      ? Math.min(100, Math.round((quantity / selectedSuggestion.capacity) * 100))
+    exactSelectedSuggestion && exactSelectedSuggestion.capacity > 0
+      ? Math.min(
+          100,
+          Math.round((quantity / exactSelectedSuggestion.capacity) * 100),
+        )
       : 0;
+  const suggestedShelfCodes = useMemo(
+    () => new Set(suggestions.map((suggestion) => suggestion.shelf.code)),
+    [suggestions],
+  );
+  const selectedRackGroup = useMemo(
+    () =>
+      groupShelvesByRack(allShelves).find(
+        (group) => group.rackCode === selectedRackCode,
+      ) ?? null,
+    [allShelves, selectedRackCode],
+  );
+  const selectedRackShelves = useMemo(
+    () => selectedRackGroup?.shelves ?? [],
+    [selectedRackGroup],
+  );
   const canManageStructure = hasAnyRole(user?.roles, ["ADMIN", "MANAGER"]);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const nextSuggestions = await listPutawaySuggestions({
-      sku,
-      quantity,
-      warehouseId: "central",
-    });
-    const nextSelected = nextSuggestions[0];
+  const shelfContentQueries = useQueries({
+    queries: selectedRackShelves.map((shelf) => ({
+      enabled: sceneMode === "rack" && Boolean(selectedRackGroup),
+      queryFn: () =>
+        listShelfContents({
+          shelfCode: shelf.code,
+          warehouseId: defaultPutawayInput.warehouseId,
+        }),
+      queryKey: [
+        "warehouse-navigation",
+        "shelf-contents",
+        defaultPutawayInput.warehouseId,
+        shelf.code,
+      ],
+    })),
+  });
 
-    setSuggestions(nextSuggestions);
-    setSelectedCode(nextSelected?.shelf.code ?? null);
-    setScanSku(sku);
-    setScanShelf(nextSelected?.shelf.barcode ?? "");
-    setConfirmed(false);
-    setZoneFilter(nextSelected?.shelf.zoneCode ?? "ALL");
-    setRackFilter(nextSelected?.shelf.rackCode ?? "ALL");
-  }
+  const contentsByShelf = useMemo(() => {
+    const next: Record<string, ShelfContentItem[] | undefined> = {};
+
+    selectedRackShelves.forEach((shelf, index) => {
+      next[shelf.code] = shelfContentQueries[index]?.data;
+    });
+
+    return next;
+  }, [selectedRackShelves, shelfContentQueries]);
+  const loadingShelfCodes = useMemo(
+    () =>
+      new Set(
+        selectedRackShelves
+          .filter((_, index) => shelfContentQueries[index]?.isLoading)
+          .map((shelf) => shelf.code),
+      ),
+    [selectedRackShelves, shelfContentQueries],
+  );
+  const erroredShelfCodes = useMemo(
+    () =>
+      new Set(
+        selectedRackShelves
+          .filter((_, index) => shelfContentQueries[index]?.isError)
+          .map((shelf) => shelf.code),
+      ),
+    [selectedRackShelves, shelfContentQueries],
+  );
+
+  const suggestionMutation = useMutation({
+    mutationFn: listPutawaySuggestionResult,
+    onSuccess: (result, variables) => {
+      const nextSuggestions = result.suggestions;
+      const nextSelected = selectSuggestedShelf(nextSuggestions);
+
+      setSuggestions(nextSuggestions);
+      setSuggestionSource(result.source);
+      setSelectedCode(nextSelected?.shelf.code ?? null);
+      setSelectedRackCode(nextSelected?.shelf.rackCode ?? null);
+      setScanSku(variables.sku);
+      setScanShelf(nextSelected?.shelf.barcode ?? "");
+      setConfirmed(false);
+      setSceneMode("map");
+      setZoneFilter("ALL");
+      setRackFilter("ALL");
+    },
+  });
 
   function handleSelectShelf(shelfCode: string) {
     const nextShelf = allShelves.find((shelf) => shelf.code === shelfCode);
 
     setSelectedCode(shelfCode);
+    setSelectedRackCode(nextShelf?.rackCode ?? selectedRackCode);
     setScanShelf(nextShelf?.barcode ?? "");
     setConfirmed(false);
+  }
+
+  function handleFocusRack(rackCode: string, shelfCode: string) {
+    const nextShelf = allShelves.find((shelf) => shelf.code === shelfCode);
+
+    setSelectedRackCode(rackCode);
+    setSelectedCode(shelfCode);
+    setScanShelf(nextShelf?.barcode ?? "");
+    setConfirmed(false);
+  }
+
+  function handleOpenRack(rackCode: string, shelfCode: string) {
+    handleFocusRack(rackCode, shelfCode);
+    setSceneMode("rack");
+  }
+
+  function handleRetryShelf(shelfCode: string) {
+    const index = selectedRackShelves.findIndex((shelf) => shelf.code === shelfCode);
+
+    void shelfContentQueries[index]?.refetch();
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    suggestionMutation.mutate({
+      sku,
+      quantity,
+      warehouseId: defaultPutawayInput.warehouseId,
+    });
   }
 
   return (
@@ -279,8 +341,8 @@ export function WarehouseNavigationClient() {
               Điều hướng put-away
             </CardTitle>
             <CardDescription>
-              Render đúng mô hình `Zone → Rack → Shelf(level)`; shelf là barcode
-              location nhỏ nhất hiện có trong docs.
+              Sơ đồ 2.5D từ cổng vào đến target shelf; receiver vẫn xác nhận
+              bằng barcode.
             </CardDescription>
             <CardAction>
               <Badge variant="secondary">
@@ -321,37 +383,68 @@ export function WarehouseNavigationClient() {
               >
                 Tất cả rack
               </FilterChip>
-              {rackCodes.map((rackCode) => (
-                <FilterChip
-                  active={rackFilter === rackCode}
-                  key={rackCode}
-                  onClick={() => setRackFilter(rackCode)}
-                >
-                  Rack {rackCode}
-                </FilterChip>
-              ))}
+              {rackCodes.map((rackCode) => {
+                const rackGroup = groupShelvesByRack(allShelves, {
+                  rackCode,
+                  zoneCode: zoneFilter,
+                })[0];
+                const shelfCode = rackGroup?.shelves[0]?.code;
+
+                return (
+                  <FilterChip
+                    active={rackFilter === rackCode}
+                    key={rackCode}
+                    onClick={() => {
+                      setRackFilter(rackCode);
+                      if (shelfCode) {
+                        handleFocusRack(rackCode, shelfCode);
+                      }
+                    }}
+                  >
+                    Rack {rackCode}
+                  </FilterChip>
+                );
+              })}
             </div>
 
-            <RackStackMap
+            <WarehouseArchitectureScene
+              contentsByShelf={contentsByShelf}
+              erroredShelfCodes={erroredShelfCodes}
+              layout={displayLayout}
+              layoutSource={layoutSource}
+              loadingShelfCodes={loadingShelfCodes}
+              onBackToMap={() => setSceneMode("map")}
+              onOpenRack={handleOpenRack}
+              onRetryShelf={handleRetryShelf}
               onSelectShelf={handleSelectShelf}
-              rackCode={rackFilter}
-              selectedCode={selectedShelf?.code ?? null}
-              shelves={allShelves}
+              rackGroup={selectedRackGroup}
+              route={selectedRoute}
+              sceneMode={sceneMode}
+              selectedRackCode={selectedRackCode}
+              selectedShelfCode={selectedShelf?.code ?? null}
               suggestions={suggestions}
-              zoneCode={zoneFilter}
+              suggestedShelfCodes={suggestedShelfCodes}
             />
           </CardContent>
         </Card>
+
+        <RouteGuidance route={selectedRoute} source={suggestionSource} />
 
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Gợi ý kệ</CardTitle>
             <CardDescription>
-              Advisory only: receiver vẫn có thể override, miễn quét đúng barcode
+              Advisory only: receiver có thể override, miễn quét đúng barcode
               shelf trước khi xác nhận.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
+            {suggestionSource === "fallback" ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                Đang dùng fallback local vì API AI chưa trả dữ liệu hoặc đang lỗi.
+              </div>
+            ) : null}
+
             {suggestions.length === 0 ? (
               <div className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
                 Không có shelf đủ sức chứa cho SKU và số lượng này.
@@ -359,11 +452,11 @@ export function WarehouseNavigationClient() {
             ) : (
               suggestions.map((suggestion) => (
                 <button
-                  key={suggestion.shelf.code}
-                  type="button"
-                  className="grid gap-2 rounded-lg border border-border/70 bg-card p-3 text-left text-sm transition hover:bg-accent/60 data-[active=true]:border-primary/50 data-[active=true]:bg-primary/5"
+                  className="grid gap-2 rounded-lg border border-border/70 bg-card p-3 text-left text-sm transition hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/40 data-[active=true]:border-primary/50 data-[active=true]:bg-primary/5"
                   data-active={selectedShelf?.code === suggestion.shelf.code}
+                  key={suggestion.shelf.code}
                   onClick={() => handleSelectShelf(suggestion.shelf.code)}
+                  type="button"
                 >
                   <span className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-semibold">
@@ -395,7 +488,7 @@ export function WarehouseNavigationClient() {
           <CardHeader className="border-b bg-muted/20">
             <CardTitle className="text-lg">Phiếu put-away</CardTitle>
             <CardDescription>
-              Nhập SKU và số lượng để lấy gợi ý từ backend hoặc fallback local.
+              Nhập SKU và số lượng để lấy gợi ý từ backend AI.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -403,29 +496,37 @@ export function WarehouseNavigationClient() {
               <div className="grid gap-2">
                 <Label htmlFor="putawaySku">SKU</Label>
                 <Input
+                  autoComplete="off"
                   id="putawaySku"
-                  value={sku}
+                  name="putawaySku"
                   onChange={(event) => {
                     setSku(event.target.value);
                     setScanSku(event.target.value);
                   }}
+                  value={sku}
                 />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="putawayQty">Số lượng</Label>
                 <Input
                   id="putawayQty"
-                  type="number"
+                  inputMode="numeric"
                   min={1}
-                  value={quantity}
+                  name="putawayQty"
                   onChange={(event) =>
                     setQuantity(Math.max(Number(event.target.value), 1))
                   }
+                  type="number"
+                  value={quantity}
                 />
               </div>
-              <Button type="submit">
-                <RotateCcw data-icon="inline-start" />
-                Tính gợi ý
+              <Button disabled={suggestionMutation.isPending} type="submit">
+                {suggestionMutation.isPending ? (
+                  <Loader2 className="animate-spin" data-icon="inline-start" />
+                ) : (
+                  <RotateCcw data-icon="inline-start" />
+                )}
+                {suggestionMutation.isPending ? "Đang tính…" : "Tính gợi ý"}
               </Button>
             </form>
           </CardContent>
@@ -439,12 +540,13 @@ export function WarehouseNavigationClient() {
           <CardContent className="space-y-3">
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
               <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold">
                     {selectedShelf?.code ?? "No shelf"}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {selectedSuggestion?.reason ?? "Chưa có gợi ý"}
+                    {exactSelectedSuggestion?.reason ??
+                      "Override shelf hoặc chưa có gợi ý trực tiếp"}
                   </div>
                 </div>
                 <Badge variant="secondary">
@@ -454,12 +556,17 @@ export function WarehouseNavigationClient() {
               </div>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-background">
                 <div
-                  className="h-full rounded-full bg-primary"
+                  className={cn(
+                    "h-full rounded-full bg-primary",
+                    !exactSelectedSuggestion && "bg-muted-foreground/40",
+                  )}
                   style={{ width: `${capacityUsage}%` }}
                 />
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
-                Dự kiến dùng {capacityUsage}% sức chứa gợi ý của shelf.
+                {exactSelectedSuggestion
+                  ? `Dự kiến dùng ${capacityUsage}% sức chứa gợi ý của shelf.`
+                  : "Shelf override không có capacity usage từ gợi ý AI."}
               </div>
             </div>
 
@@ -472,15 +579,23 @@ export function WarehouseNavigationClient() {
                   </div>
                   <div className="mt-3 space-y-2 text-sm text-muted-foreground">
                     <div>
+                      <span className="font-semibold text-foreground">Rack:</span>{" "}
+                      {selectedShelf.rackName}
+                    </div>
+                    <div>
                       <span className="font-semibold text-foreground">Level:</span>{" "}
                       {selectedShelf.level}
                     </div>
                     <div>
-                      <span className="font-semibold text-foreground">Barcode:</span>{" "}
+                      <span className="font-semibold text-foreground">
+                        Barcode:
+                      </span>{" "}
                       {selectedShelf.barcode}
                     </div>
                     <div>
-                      <span className="font-semibold text-foreground">Kích thước:</span>{" "}
+                      <span className="font-semibold text-foreground">
+                        Kích thước:
+                      </span>{" "}
                       {getShelfDimensionsLabel(selectedShelf)}
                     </div>
                   </div>
@@ -503,23 +618,26 @@ export function WarehouseNavigationClient() {
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Xác nhận scan</CardTitle>
-           
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-2">
               <Label htmlFor="scanSku">Barcode SKU</Label>
               <Input
+                autoComplete="off"
                 id="scanSku"
-                value={scanSku}
+                name="scanSku"
                 onChange={(event) => setScanSku(event.target.value)}
+                value={scanSku}
               />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="scanShelf">Barcode shelf</Label>
               <Input
+                autoComplete="off"
                 id="scanShelf"
-                value={scanShelf}
+                name="scanShelf"
                 onChange={(event) => setScanShelf(event.target.value)}
+                value={scanShelf}
               />
             </div>
             <Button
@@ -531,7 +649,10 @@ export function WarehouseNavigationClient() {
               Xác nhận đặt kệ
             </Button>
             {confirmed ? (
-              <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
+              <div
+                className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm"
+                role="status"
+              >
                 <CheckCircle2 className="size-4 text-primary" />
                 Đã xác nhận bằng barcode; nếu override shelf, hệ vẫn audit theo
                 mã vị trí đã quét.
@@ -543,31 +664,34 @@ export function WarehouseNavigationClient() {
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Cấu trúc vị trí</CardTitle>
-          
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-3 gap-3 text-center">
               <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-                <div className="text-xs font-semibold text-muted-foreground">Zone</div>
+                <div className="text-xs font-semibold text-muted-foreground">
+                  Zone
+                </div>
                 <div className="font-mono text-lg font-bold">
                   {zoneCodes.length}
                 </div>
               </div>
               <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-                <div className="text-xs font-semibold text-muted-foreground">Rack</div>
+                <div className="text-xs font-semibold text-muted-foreground">
+                  Rack
+                </div>
                 <div className="font-mono text-lg font-bold">
                   {groupShelvesByRack(allShelves).length}
                 </div>
               </div>
               <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-                <div className="text-xs font-semibold text-muted-foreground">Shelf</div>
+                <div className="text-xs font-semibold text-muted-foreground">
+                  Shelf
+                </div>
                 <div className="font-mono text-lg font-bold">
                   {allShelves.filter((shelf) => !shelf.isStaging).length}
                 </div>
               </div>
             </div>
-
-          
 
             {canManageStructure ? (
               <Button asChild className="w-full" variant="outline">

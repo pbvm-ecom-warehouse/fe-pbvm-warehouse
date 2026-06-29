@@ -5,12 +5,12 @@ import {
   FileBarChart2,
   Home,
   MapPinned,
+  PackageCheck,
   PackageOpen,
   Repeat2,
   Settings,
   ShoppingCart,
   SlidersHorizontal,
-  Truck,
   Warehouse,
 } from "lucide-react";
 
@@ -54,10 +54,10 @@ export const dashboardRoutes = [
     allowedRoles: getRouteAllowedRoles("/purchases"),
   },
   {
-    href: "/transfers",
-    label: "Chuyển kho",
-    icon: Truck,
-    allowedRoles: getRouteAllowedRoles("/transfers"),
+    href: "/goods-issues",
+    label: "Xuất kho",
+    icon: PackageCheck,
+    allowedRoles: getRouteAllowedRoles("/goods-issues"),
   },
   {
     href: "/adjustments",

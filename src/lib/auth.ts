@@ -6,6 +6,7 @@ import {
   ROLE_LABELS,
   type WmsRole,
 } from "@/lib/rbac";
+import type { WmsUserResponse } from "@/types/api";
 
 export type SessionUser = {
   id: string;
@@ -89,6 +90,33 @@ export function sessionUserFromClaims(
       fallbackTenantId,
     warehouseId:
       stringClaim(payload.warehouseId) ?? stringClaim(payload.warehouse_id),
+    type: "user",
+  };
+}
+
+export function sessionUserFromWmsUserResponse(
+  user: WmsUserResponse,
+  fallback: SessionUser | null = null,
+  fallbackTenantId = "demo-tenant",
+): SessionUser | null {
+  const roles = normalizeRoles(user.roles);
+
+  if (roles.length === 0 || user.status !== "ACTIVE") {
+    return null;
+  }
+
+  return {
+    id: user.id || fallback?.id || "current-user",
+    name:
+      user.name?.trim() ||
+      user.username?.trim() ||
+      user.email?.trim() ||
+      fallback?.name ||
+      "Nhân viên WMS",
+    email: user.email?.trim() || fallback?.email,
+    roles,
+    tenantId: fallback?.tenantId ?? fallbackTenantId,
+    warehouseId: user.warehouseId ?? fallback?.warehouseId,
     type: "user",
   };
 }
