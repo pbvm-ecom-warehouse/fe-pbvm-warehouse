@@ -33,5 +33,6 @@ describe("login page", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/google/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/firebase/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/role preview local/i)).not.toBeInTheDocument();
   });
 });

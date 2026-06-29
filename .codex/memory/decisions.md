@@ -61,3 +61,6 @@
   - Transfer helper/status type was removed; inventory movement types now align to docs: `RECEIVE`, `PUTAWAY`, `ISSUE`, `ADJUST`, `SCRAP`, `PRINT_CONSUME`, `PRINT_OUTPUT`.
   - Dashboard/module copy no longer references transfer-in/out; receiver sees GRN/put-away, picker sees Goods Issue/barcode confirmation.
   - Verification after this route cleanup: targeted RBAC/inventory Vitest passed, `pnpm typecheck`, `pnpm lint`, full `pnpm test` (`54/54`), and Playwright smoke (`8/8`) passed.
+- 2026-06-29: Repository cleanup after main merge:
+  - Login page must not render local role-preview shortcuts in development; staff access goes through the real WMS `username + password` API flow.
+  - Do not vendor unrelated generated/local design skill bundles into `fe-pbvm-warehouse/.codex/skills`; keep only the repo-local skills that already belong to this repo.

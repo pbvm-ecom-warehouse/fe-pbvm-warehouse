@@ -8,7 +8,6 @@ import {
   LoaderCircle,
   LogIn,
   ShieldCheck,
-  UserRound,
 } from "lucide-react";
 import { isAxiosError } from "axios";
 import { toast } from "sonner";
@@ -25,13 +24,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSessionUser } from "@/hooks/use-session-user";
-import { clearAuthTokens, setTenantId } from "@/lib/auth-token";
-import { env } from "@/lib/env";
 import {
-  ROLE_DESCRIPTIONS,
   ROLE_LABELS,
-  WMS_ROLES,
-  type WmsRole,
 } from "@/lib/rbac";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -49,27 +43,14 @@ const defaultPasswordChange = {
   newPassword: "",
 };
 
-function buildLocalRoleUser(role: WmsRole) {
-  return {
-    id: `local-${role.toLowerCase()}`,
-    name: `${ROLE_LABELS[role]} Local`,
-    roles: [role] as WmsRole[],
-    tenantId: env.NEXT_PUBLIC_DEFAULT_TENANT_ID,
-    type: "user" as const,
-    warehouseId: "MW-001",
-  };
-}
-
 export function LoginPageClient() {
   const router = useRouter();
   const hasHydrated = useAuthStore((state) => state.hasHydrated);
-  const setUser = useAuthStore((state) => state.setUser);
   const user = useSessionUser();
   const [credentials, setCredentials] = useState(defaultCredentials);
   const [passwordChange, setPasswordChange] = useState(defaultPasswordChange);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [isSwitchingRole, setIsSwitchingRole] = useState<WmsRole | null>(null);
   const [needsPasswordChange, setNeedsPasswordChange] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -162,16 +143,6 @@ export function LoginPageClient() {
     router.refresh();
   }
 
-  function handleLocalRolePreview(role: WmsRole) {
-    setErrorMessage(null);
-    setIsSwitchingRole(role);
-    clearAuthTokens();
-    setTenantId(env.NEXT_PUBLIC_DEFAULT_TENANT_ID);
-    setUser(buildLocalRoleUser(role));
-    toast.message(`Đã mở local role preview cho ${ROLE_LABELS[role]}.`);
-    router.replace("/dashboard");
-  }
-
   if (!hasHydrated) {
     return (
       <main className="grid min-h-screen place-items-center bg-background px-4 py-10">
@@ -260,8 +231,8 @@ export function LoginPageClient() {
               Phiên WMS hiện tại
             </CardTitle>
             <CardDescription>
-              Bạn đã có phiên đăng nhập hoặc local preview. Có thể vào dashboard
-              hoặc đăng xuất để đổi tài khoản.
+              Bạn đã có phiên đăng nhập. Có thể vào dashboard hoặc đăng xuất để
+              đổi tài khoản.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -387,44 +358,6 @@ export function LoginPageClient() {
               </form>
             </CardContent>
           </Card>
-
-          {process.env.NODE_ENV !== "production" ? (
-            <Card className="border-dashed">
-              <CardHeader>
-                <CardTitle className="text-base">Role preview local</CardTitle>
-                <CardDescription>
-                  Chỉ để thử RBAC frontend khi chưa seed đủ user ở backend. Không
-                  gọi API login thật.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3 sm:grid-cols-2">
-                {WMS_ROLES.map((role) => (
-                  <button
-                    key={role}
-                    type="button"
-                    className="rounded-lg border border-border/70 bg-card p-3 text-left transition hover:bg-accent/60 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={isSwitchingRole !== null}
-                    onClick={() => handleLocalRolePreview(role)}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <UserRound className="size-4 text-primary" />
-                        <span className="text-sm font-semibold">
-                          {ROLE_LABELS[role]}
-                        </span>
-                      </div>
-                      {isSwitchingRole === role ? (
-                        <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
-                      ) : null}
-                    </div>
-                    <div className="mt-1 text-xs leading-5 text-muted-foreground">
-                      {ROLE_DESCRIPTIONS[role]}
-                    </div>
-                  </button>
-                ))}
-              </CardContent>
-            </Card>
-          ) : null}
         </div>
       </div>
     </main>
