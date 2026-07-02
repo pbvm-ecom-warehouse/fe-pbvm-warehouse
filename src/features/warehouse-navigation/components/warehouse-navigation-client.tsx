@@ -30,11 +30,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getWarehouseLayout } from "@/features/warehouse-layout/services/warehouse-layout.service";
-import {
-  buildLayoutRoute,
-  fallbackWarehouseLayout,
-} from "@/features/warehouse-layout/utils/warehouse-layout";
+import { buildLayoutRoute } from "@/features/warehouse-layout/utils/warehouse-layout";
 import { useSessionUser } from "@/hooks/use-session-user";
+import { isMissingBackendEndpoint } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import type { PutawaySuggestion, ShelfContentItem, WarehouseShelf } from "@/types/api";
@@ -52,8 +50,6 @@ import {
   buildNavigationPath,
   buildRouteToShelf,
   describeShelfGranularity,
-  fallbackPutawaySuggestions,
-  fallbackShelves,
   getRackCodesForZone,
   getShelfDimensionsLabel,
   getZoneCodes,
@@ -66,9 +62,6 @@ const defaultPutawayInput = {
   quantity: 80,
   warehouseId: "central",
 };
-
-const initialSuggestions = fallbackPutawaySuggestions(defaultPutawayInput);
-const initialSelectedSuggestion = initialSuggestions[0] ?? null;
 
 function uniqueShelves(shelves: WarehouseShelf[]) {
   const byCode = new Map<string, WarehouseShelf>();
@@ -106,28 +99,18 @@ export function WarehouseNavigationClient() {
   const user = useSessionUser();
   const [sku, setSku] = useState(defaultPutawayInput.sku);
   const [quantity, setQuantity] = useState(defaultPutawayInput.quantity);
-  const [suggestions, setSuggestions] =
-    useState<PutawaySuggestion[]>(initialSuggestions);
-  const [suggestionSource, setSuggestionSource] = useState<"api" | "fallback">(
-    "fallback",
-  );
-  const [selectedCode, setSelectedCode] = useState<string | null>(
-    initialSelectedSuggestion?.shelf.code ?? null,
-  );
-  const [selectedRackCode, setSelectedRackCode] = useState<string | null>(
-    initialSelectedSuggestion?.shelf.rackCode ?? null,
-  );
+  const [suggestions, setSuggestions] = useState<PutawaySuggestion[]>([]);
+  const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  const [selectedRackCode, setSelectedRackCode] = useState<string | null>(null);
   const [sceneMode, setSceneMode] = useState<WarehouseSceneMode>("map");
   const [scanSku, setScanSku] = useState(defaultPutawayInput.sku);
-  const [scanShelf, setScanShelf] = useState(
-    initialSelectedSuggestion?.shelf.barcode ?? "",
-  );
+  const [scanShelf, setScanShelf] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [zoneFilter, setZoneFilter] = useState<string | "ALL">("ALL");
   const [rackFilter, setRackFilter] = useState<string | "ALL">("ALL");
 
   const allShelves = useMemo(
-    () => uniqueShelves([...fallbackShelves, ...suggestions.map((item) => item.shelf)]),
+    () => uniqueShelves(suggestions.map((item) => item.shelf)),
     [suggestions],
   );
   const layoutQuery = useQuery({
@@ -140,11 +123,11 @@ export function WarehouseNavigationClient() {
     ],
     retry: false,
   });
-  const publishedLayout = layoutQuery.isError
-    ? fallbackWarehouseLayout
-    : (layoutQuery.data ?? null);
-  const layoutSource = layoutQuery.isError
-    ? "fallback"
+  const layoutUnsupported =
+    layoutQuery.isError && isMissingBackendEndpoint(layoutQuery.error);
+  const publishedLayout = layoutQuery.isError ? null : (layoutQuery.data ?? null);
+  const layoutSource = layoutUnsupported
+    ? "unsupported"
     : publishedLayout
       ? "api"
       : "missing";
@@ -273,15 +256,33 @@ export function WarehouseNavigationClient() {
       ),
     [selectedRackShelves, shelfContentQueries],
   );
+  const unsupportedShelfCodes = useMemo(
+    () =>
+      new Set(
+        selectedRackShelves
+          .filter((_, index) =>
+            isMissingBackendEndpoint(shelfContentQueries[index]?.error),
+          )
+          .map((shelf) => shelf.code),
+      ),
+    [selectedRackShelves, shelfContentQueries],
+  );
 
   const suggestionMutation = useMutation({
     mutationFn: listPutawaySuggestionResult,
+    onError: () => {
+      setSuggestions([]);
+      setSelectedCode(null);
+      setSelectedRackCode(null);
+      setScanShelf("");
+      setConfirmed(false);
+      setSceneMode("map");
+    },
     onSuccess: (result, variables) => {
       const nextSuggestions = result.suggestions;
       const nextSelected = selectSuggestedShelf(nextSuggestions);
 
       setSuggestions(nextSuggestions);
-      setSuggestionSource(result.source);
       setSelectedCode(nextSelected?.shelf.code ?? null);
       setSelectedRackCode(nextSelected?.shelf.rackCode ?? null);
       setScanSku(variables.sku);
@@ -424,11 +425,12 @@ export function WarehouseNavigationClient() {
               selectedShelfCode={selectedShelf?.code ?? null}
               suggestions={suggestions}
               suggestedShelfCodes={suggestedShelfCodes}
+              unsupportedShelfCodes={unsupportedShelfCodes}
             />
           </CardContent>
         </Card>
 
-        <RouteGuidance route={selectedRoute} source={suggestionSource} />
+        <RouteGuidance route={selectedRoute} />
 
         <Card>
           <CardHeader>
@@ -439,9 +441,10 @@ export function WarehouseNavigationClient() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
-            {suggestionSource === "fallback" ? (
+            {suggestionMutation.isError &&
+            isMissingBackendEndpoint(suggestionMutation.error) ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                Đang dùng fallback local vì API AI chưa trả dữ liệu hoặc đang lỗi.
+                Chưa có gợi ý vị trí cho yêu cầu này.
               </div>
             ) : null}
 
@@ -488,7 +491,7 @@ export function WarehouseNavigationClient() {
           <CardHeader className="border-b bg-muted/20">
             <CardTitle className="text-lg">Phiếu put-away</CardTitle>
             <CardDescription>
-              Nhập SKU và số lượng để lấy gợi ý từ backend AI.
+              Nhập SKU và số lượng để tìm vị trí put-away phù hợp.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -646,7 +649,7 @@ export function WarehouseNavigationClient() {
               onClick={() => setConfirmed(true)}
             >
               <Barcode data-icon="inline-start" />
-              Xác nhận đặt kệ
+              Kiểm tra barcode
             </Button>
             {confirmed ? (
               <div
@@ -654,8 +657,7 @@ export function WarehouseNavigationClient() {
                 role="status"
               >
                 <CheckCircle2 className="size-4 text-primary" />
-                Đã xác nhận bằng barcode; nếu override shelf, hệ vẫn audit theo
-                mã vị trí đã quét.
+                Barcode đã khớp trên giao diện.
               </div>
             ) : null}
           </CardContent>

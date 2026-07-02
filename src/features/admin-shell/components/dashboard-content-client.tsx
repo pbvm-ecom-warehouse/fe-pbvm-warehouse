@@ -53,6 +53,7 @@ import {
   ROLE_LABELS,
   type WmsRole,
 } from "@/lib/rbac";
+import { isMissingBackendEndpoint } from "@/lib/api-contract";
 import { formatDateTime } from "@/utils/format-date";
 import type { MoveType, StockLedgerRow, StockMovement } from "@/types/api";
 
@@ -576,14 +577,15 @@ function DashboardSkeleton() {
   );
 }
 
-function DashboardError() {
+function DashboardError({ unsupported }: { unsupported: boolean }) {
   return (
     <div
       className="rounded-lg border border-dashed border-amber-300 bg-amber-50 p-4 text-sm font-medium text-amber-900"
       role="alert"
     >
-      Chưa kết nối được wms-api hoặc phiên đăng nhập đã hết hạn. Kiểm tra lại
-      API URL, token hoặc thử tải lại trang.
+      {unsupported
+        ? "Dữ liệu tồn kho và báo cáo chưa sẵn sàng."
+        : "Chưa kết nối được hệ thống hoặc phiên đăng nhập đã hết hạn. Tải lại trang hoặc đăng nhập lại."}
     </div>
   );
 }
@@ -944,7 +946,7 @@ function ExecutiveDashboard({
             <Card>
               <PanelHeader
                 title="Giá trị tồn kho theo nhóm"
-                description="Đọc từ report API, không dùng dữ liệu mock."
+                description="Theo dõi biến động giá trị tồn kho theo thời gian."
                 action={<Badge variant="outline">30 ngày</Badge>}
               />
               <CardContent>
@@ -1092,6 +1094,11 @@ export function DashboardContentClient() {
   );
   const hasApiError =
     ledgerQuery.isError || movementsQuery.isError || valueSeriesQuery.isError;
+  const hasUnsupportedEndpoint = [
+    ledgerQuery.error,
+    movementsQuery.error,
+    valueSeriesQuery.error,
+  ].some(isMissingBackendEndpoint);
   const isLoading =
     ledgerQuery.isLoading || movementsQuery.isLoading || valueSeriesQuery.isLoading;
   const warehouseCopy =
@@ -1111,7 +1118,9 @@ export function DashboardContentClient() {
         warehouseCopy={warehouseCopy}
       />
 
-      {hasApiError ? <DashboardError /> : null}
+      {hasApiError ? (
+        <DashboardError unsupported={hasUnsupportedEndpoint} />
+      ) : null}
 
       {isLoading ? (
         <DashboardSkeleton />

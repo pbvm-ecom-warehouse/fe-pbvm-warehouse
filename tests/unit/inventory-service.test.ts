@@ -6,6 +6,7 @@ import {
   listStockLedger,
   listStockMovements,
 } from "@/features/inventory/inventory.service";
+import { MissingBackendEndpointError } from "@/lib/api-contract";
 
 vi.mock("@/lib/api-client", () => ({
   apiClient: {
@@ -24,33 +25,20 @@ describe("inventory API service", () => {
     mockedGet.mockReset();
   });
 
-  it("returns an empty ledger when the backend endpoint is missing", async () => {
+  it("surfaces unsupported ledger endpoints instead of returning fake empty data", async () => {
     mockedGet.mockRejectedValueOnce(httpError(404));
 
-    await expect(listStockLedger()).resolves.toEqual({
-      data: [],
-      meta: {
-        pagination: {
-          page: 1,
-          pageSize: 0,
-          total: 0,
-        },
-      },
-    });
+    await expect(listStockLedger()).rejects.toBeInstanceOf(
+      MissingBackendEndpointError,
+    );
   });
 
-  it("returns an empty report series when the backend endpoint is not implemented", async () => {
+  it("surfaces unsupported report endpoints instead of returning fake empty data", async () => {
     mockedGet.mockRejectedValueOnce(httpError(501));
 
-    await expect(listInventoryValueSeries()).resolves.toEqual({
-      data: [],
-      meta: {
-        pagination: {
-          page: 1,
-          pageSize: 0,
-          total: 0,
-        },
-      },
+    await expect(listInventoryValueSeries()).rejects.toMatchObject({
+      endpoint: "GET /api/wms/reports/inventory-value-series",
+      status: 501,
     });
   });
 

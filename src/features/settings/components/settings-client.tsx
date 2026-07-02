@@ -140,9 +140,9 @@ function HealthCard({
         <div>
           <CardTitle className="flex items-center gap-2 text-base">
             <Server className="size-4 text-primary" />
-            Health
+            Trạng thái hệ thống
           </CardTitle>
-          <CardDescription>GET /health</CardDescription>
+          <CardDescription>Trạng thái dịch vụ</CardDescription>
         </div>
         <Button
           aria-label="Refresh health"
@@ -189,9 +189,9 @@ function RootCard({
         <div>
           <CardTitle className="flex items-center gap-2 text-base">
             <CheckCircle2 className="size-4 text-primary" />
-            Root API
+            Kết nối WMS
           </CardTitle>
-          <CardDescription>GET /</CardDescription>
+          <CardDescription>Kết nối hệ thống</CardDescription>
         </div>
         <Button
           aria-label="Refresh root API"
@@ -368,11 +368,10 @@ export function SettingsClient() {
     <div className="space-y-5">
       <div>
         <h1 className="font-heading text-2xl font-semibold tracking-normal">
-          Cài đặt API WMS
+          Cài đặt WMS
         </h1>
         <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Theo dõi health/root của backend và thao tác user admin theo public
-          Swagger hiện có.
+          Theo dõi trạng thái hệ thống và quản lý tài khoản nhân viên nội bộ.
         </p>
       </div>
 
@@ -400,8 +399,7 @@ export function SettingsClient() {
                 Quản trị user WMS
               </CardTitle>
               <CardDescription>
-                Backend chưa có list user, nên FE chỉ giữ user vừa tạo trong
-                state để thao tác tiếp.
+                Tạo tài khoản nhân viên và xử lý quyền truy cập theo vai trò.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -533,8 +531,8 @@ export function SettingsClient() {
                 Thao tác theo user id
               </CardTitle>
               <CardDescription>
-                Dùng ID vừa tạo hoặc dán ID từ backend để update roles, khóa/mở
-                khóa, reset mật khẩu.
+                Nhập ID nhân viên để cập nhật quyền, khóa/mở khóa hoặc reset
+                mật khẩu.
               </CardDescription>
             </CardHeader>
             <CardContent>

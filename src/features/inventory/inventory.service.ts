@@ -1,5 +1,9 @@
 import { apiClient } from "@/lib/api-client";
-import { isApiEnvelope, type ApiEnvelope } from "@/lib/api-contract";
+import {
+  isApiEnvelope,
+  throwIfMissingBackendEndpoint,
+  type ApiEnvelope,
+} from "@/lib/api-contract";
 import type {
   ApiListResponse,
   InventoryValuePoint,
@@ -41,62 +45,42 @@ function toListResponse<T>(
   return payload;
 }
 
-function emptyListResponse<T>(): ApiListResponse<T> {
-  return {
-    data: [],
-    meta: {
-      pagination: {
-        page: 1,
-        pageSize: 0,
-        total: 0,
-      },
-    },
-  };
-}
-
-function isMissingBackendEndpoint(error: unknown) {
-  const status = (error as { response?: { status?: number } })?.response?.status;
-  return status === 404 || status === 501;
-}
-
-async function withMissingEndpointFallback<T>(
+async function withUnsupportedEndpointGuard<T>(
   request: () => Promise<ApiListResponse<T>>,
+  endpoint: string,
 ) {
   try {
     return await request();
   } catch (error) {
-    if (isMissingBackendEndpoint(error)) {
-      return emptyListResponse<T>();
-    }
-
+    throwIfMissingBackendEndpoint(error, endpoint);
     throw error;
   }
 }
 
 export async function listStockLedger() {
-  return withMissingEndpointFallback(async () => {
+  return withUnsupportedEndpointGuard(async () => {
     const response =
       await apiClient.get<ApiEnvelope<StockLedgerRow[]> | ApiListResponse<StockLedgerRow>>(
         "/inventory/ledger",
       );
     return toListResponse(response.data);
-  });
+  }, "GET /api/wms/inventory/ledger");
 }
 
 export async function listStockMovements() {
-  return withMissingEndpointFallback(async () => {
+  return withUnsupportedEndpointGuard(async () => {
     const response = await apiClient.get<
       ApiEnvelope<StockMovement[]> | ApiListResponse<StockMovement>
     >("/inventory/movements");
     return toListResponse(response.data);
-  });
+  }, "GET /api/wms/inventory/movements");
 }
 
 export async function listInventoryValueSeries() {
-  return withMissingEndpointFallback(async () => {
+  return withUnsupportedEndpointGuard(async () => {
     const response = await apiClient.get<
       ApiEnvelope<InventoryValuePoint[]> | ApiListResponse<InventoryValuePoint>
     >("/reports/inventory-value-series");
     return toListResponse(response.data);
-  });
+  }, "GET /api/wms/reports/inventory-value-series");
 }

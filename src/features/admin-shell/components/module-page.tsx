@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, Eye, Plus } from "lucide-react";
+import { Clock3, Eye, Plus } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -223,9 +223,10 @@ export function ModulePage({ moduleKey }: { moduleKey: ModuleKey }) {
           </p>
         </div>
         {canUsePrimaryAction ? (
-          <Button>
+          <Button disabled>
             <Plus data-icon="inline-start" />
             {actionLabel}
+            <Clock3 data-icon="inline-end" />
           </Button>
         ) : (
           <Badge className="h-8 rounded-lg px-3" variant="outline">
@@ -239,14 +240,13 @@ export function ModulePage({ moduleKey }: { moduleKey: ModuleKey }) {
         <CardHeader className="border-b bg-muted/20">
           <CardTitle className="flex items-center gap-2 text-lg">
             {summary.title}
-            <ArrowUpRight className="size-4 text-primary" />
           </CardTitle>
           <CardDescription>{summary.description}</CardDescription>
           <CardAction>
             <Badge variant="outline">{ROLE_LABELS[primaryRole]}</Badge>
           </CardAction>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-4">
           <div className="grid gap-3 sm:grid-cols-3">
             {summary.highlights.map((item) => (
               <div
@@ -268,7 +268,6 @@ export function ModulePage({ moduleKey }: { moduleKey: ModuleKey }) {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle>{summary.tableTitle}</CardTitle>
-          
         </CardHeader>
         <CardContent>
           <Table>
@@ -285,7 +284,7 @@ export function ModulePage({ moduleKey }: { moduleKey: ModuleKey }) {
                   className="h-24 text-center text-sm text-muted-foreground"
                   colSpan={summary.columns.length}
                 >
-                  Chưa có dữ liệu từ wms-api cho role {ROLE_LABELS[primaryRole]}.
+                  Chưa có dữ liệu vận hành.
                 </TableCell>
               </TableRow>
             </TableBody>

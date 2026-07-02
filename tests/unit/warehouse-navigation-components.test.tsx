@@ -82,6 +82,7 @@ function WarehouseSceneHarness() {
       selectedShelfCode={selectedShelfCode}
       suggestions={suggestions}
       suggestedShelfCodes={suggestedShelfCodes}
+      unsupportedShelfCodes={new Set()}
     />
   );
 }

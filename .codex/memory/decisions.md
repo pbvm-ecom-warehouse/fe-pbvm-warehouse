@@ -64,3 +64,7 @@
 - 2026-06-29: Repository cleanup after main merge:
   - Login page must not render local role-preview shortcuts in development; staff access goes through the real WMS `username + password` API flow.
   - Do not vendor unrelated generated/local design skill bundles into `fe-pbvm-warehouse/.codex/skills`; keep only the repo-local skills that already belong to this repo.
+- 2026-06-29: WMS frontend implementation compact is stored at `fe-pbvm-warehouse/.codex/memory/2026-06-29-wms-fe-compact.md`.
+  - Internal backend/docs/Swagger/missing-endpoint notes belong in `.codex`, not in production UI copy.
+  - Visible brand is `WMS`; remove `PBVM`/`ECOM` from UI while keeping the real API URL unchanged.
+  - Logo should adapt to the existing blue/navy UI palette; do not recolor the whole app to match the logo reference.

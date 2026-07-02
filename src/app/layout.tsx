@@ -5,7 +5,7 @@ import { AppProviders } from "@/providers/app-providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "PBVM WMS Admin",
+  title: "WMS Admin",
   description:
     "Warehouse management dashboard for stock, put-away, and print jobs",
 };

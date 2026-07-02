@@ -80,8 +80,8 @@ describe("settings page", () => {
 
     renderSettings();
 
-    expect(await screen.findByText("Health")).toBeInTheDocument();
-    expect(screen.getByText("Root API")).toBeInTheDocument();
+    expect(await screen.findByText("Trạng thái hệ thống")).toBeInTheDocument();
+    expect(screen.getByText("Kết nối WMS")).toBeInTheDocument();
     expect(screen.getByText("Quản trị user WMS")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /Bootstrap admin/i }),
@@ -108,8 +108,8 @@ describe("settings page", () => {
 
     renderSettings();
 
-    expect(await screen.findByText("Health")).toBeInTheDocument();
-    expect(screen.getByText("Root API")).toBeInTheDocument();
+    expect(await screen.findByText("Trạng thái hệ thống")).toBeInTheDocument();
+    expect(screen.getByText("Kết nối WMS")).toBeInTheDocument();
     expect(screen.queryByText("Quản trị user WMS")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Tạo nhân viên/i }),

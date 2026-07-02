@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
-import { Building2, ChevronDown, Cuboid, LogOut } from "lucide-react";
+import { Building2, ChevronDown, LogOut } from "lucide-react";
 
+import { WmsLogo } from "@/components/brand/wms-logo";
 import { SheetClose } from "@/components/ui/sheet";
 import { dashboardRoutes } from "@/constants/routes";
 import { useSessionUser } from "@/hooks/use-session-user";
@@ -70,19 +71,11 @@ export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-sidebar px-4 py-5 text-sidebar-foreground">
-      <div className="mb-8 flex items-center gap-3 px-1">
-        <div className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_16px_30px_-18px_rgba(79,70,229,0.7)]">
-          <Cuboid className="size-5" />
-        </div>
-        <div className="min-w-0">
-          <div className="truncate text-lg font-bold leading-6 tracking-normal">
-            WMS
-          </div>
-          <div className="text-xs font-medium text-muted-foreground">
-            {ROLE_LABELS[primaryRole]} workspace
-          </div>
-        </div>
-      </div>
+      <WmsLogo
+        className="mb-8 px-1"
+        size="sm"
+        subtitle={`${ROLE_LABELS[primaryRole]} workspace`}
+      />
 
       <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
         {routes.map((route) => {
