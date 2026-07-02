@@ -4,7 +4,6 @@ import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
-  Boxes,
   LoaderCircle,
   LogIn,
   ShieldCheck,
@@ -12,6 +11,7 @@ import {
 import { isAxiosError } from "axios";
 import { toast } from "sonner";
 
+import { WmsLogo } from "@/components/brand/wms-logo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSessionUser } from "@/hooks/use-session-user";
+import { getApiErrorMessage } from "@/lib/api-contract";
 import {
   ROLE_LABELS,
 } from "@/lib/rbac";
@@ -86,8 +87,7 @@ export function LoginPageClient() {
       router.replace("/dashboard");
     } catch (error) {
       if (isAxiosError(error)) {
-        const apiMessage =
-          (error.response?.data as { message?: string } | undefined)?.message;
+        const apiMessage = getApiErrorMessage(error);
         setErrorMessage(apiMessage ?? "Đăng nhập thất bại. Kiểm tra lại username và mật khẩu.");
       } else {
         setErrorMessage("Không thể kết nối WMS API.");
@@ -116,7 +116,7 @@ export function LoginPageClient() {
       const result = await changePassword(parsed.data);
 
       if (result.mustChangePassword) {
-        setErrorMessage("Backend vẫn yêu cầu đổi mật khẩu. Hãy thử mật khẩu mới khác.");
+        setErrorMessage("Tài khoản vẫn cần đổi mật khẩu. Hãy thử mật khẩu mới khác.");
         return;
       }
 
@@ -126,8 +126,7 @@ export function LoginPageClient() {
       router.replace("/dashboard");
     } catch (error) {
       if (isAxiosError(error)) {
-        const apiMessage =
-          (error.response?.data as { message?: string } | undefined)?.message;
+        const apiMessage = getApiErrorMessage(error);
         setErrorMessage(apiMessage ?? "Không đổi được mật khẩu.");
       } else {
         setErrorMessage("Không thể kết nối WMS API.");
@@ -166,7 +165,7 @@ export function LoginPageClient() {
               Đổi mật khẩu tạm
             </CardTitle>
             <CardDescription>
-              Backend yêu cầu đổi mật khẩu trước khi vào dashboard.
+              Cập nhật mật khẩu mới trước khi vào dashboard.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -275,25 +274,10 @@ export function LoginPageClient() {
       <div className="grid w-full max-w-6xl overflow-hidden rounded-xl border bg-card shadow-[0_28px_70px_-46px_rgba(15,23,42,0.55)] lg:grid-cols-[0.92fr_1fr]">
         <section className="hidden border-r bg-muted/25 p-8 lg:flex lg:flex-col lg:justify-between">
           <div>
-            <div className="mb-8 flex items-center gap-3">
-              <div className="flex size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-                <Boxes className="size-5" />
-              </div>
-              <div>
-                <div className="text-lg font-bold">PBVM WMS</div>
-                <div className="text-xs font-medium text-muted-foreground">
-                  Warehouse operations
-                </div>
-              </div>
-            </div>
+            <WmsLogo className="mb-8" subtitle="Warehouse operations" />
             <h1 className="text-3xl font-bold tracking-normal">
               Đăng nhập nội bộ bằng username và mật khẩu.
             </h1>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              Theo docs WMS, nhân viên dùng tài khoản do ADMIN tạo với
-              `username + password`. Role quyết định module nhìn thấy sau khi vào
-              dashboard.
-            </p>
           </div>
          
         </section>
@@ -301,9 +285,7 @@ export function LoginPageClient() {
         <div className="grid gap-4 p-6 sm:p-8 lg:p-10">
           <Card className="border-0 shadow-none">
             <CardHeader className="px-0 pt-0">
-              <div className="mb-2 flex size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground lg:hidden">
-                <Boxes className="size-5" />
-              </div>
+              <WmsLogo className="mb-2 lg:hidden" showWordmark={false} />
               <CardTitle className="text-2xl">Đăng nhập WMS</CardTitle>
               <CardDescription>
                 Dùng username và mật khẩu của nhân viên nội bộ.

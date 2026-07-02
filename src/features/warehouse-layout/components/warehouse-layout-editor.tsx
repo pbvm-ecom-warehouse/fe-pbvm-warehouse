@@ -33,23 +33,28 @@ import {
 import { WarehouseLayoutInspector } from "@/features/warehouse-layout/components/warehouse-layout-inspector";
 import {
   applyRackConfiguration,
-  cloneWarehouseLayout,
   createDefaultWarehouseRack,
-  fallbackWarehouseLayout,
+  cloneWarehouseLayout,
   type RackConfigurationScope,
   validateWarehouseLayoutClient,
 } from "@/features/warehouse-layout/utils/warehouse-layout";
 import { useSessionUser } from "@/hooks/use-session-user";
+import { isMissingBackendEndpoint } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import type { WarehouseLayout } from "@/types/api";
 
 const WAREHOUSE_ID = "central";
 
-function draftFallback() {
+function emptyDraftLayout() {
   return {
-    ...cloneWarehouseLayout(fallbackWarehouseLayout),
+    warehouseId: WAREHOUSE_ID,
     revision: 0,
     status: "DRAFT" as const,
+    canvas: { widthM: 40, heightM: 24, gridM: 0.5 },
+    zones: [],
+    racks: [],
+    aisles: [],
+    gates: [],
   };
 }
 
@@ -79,15 +84,11 @@ export function WarehouseLayoutEditor() {
   });
 
   useEffect(() => {
-    if (initializedRef.current || layoutQuery.isPending) {
+    if (initializedRef.current || layoutQuery.isPending || layoutQuery.isError) {
       return;
     }
 
-    const initial =
-      layoutQuery.data ??
-      (canEdit
-        ? draftFallback()
-        : cloneWarehouseLayout(fallbackWarehouseLayout));
+    const initial = layoutQuery.data ?? (canEdit ? emptyDraftLayout() : null);
     setLayout(initial);
     initializedRef.current = true;
   }, [
@@ -100,8 +101,12 @@ export function WarehouseLayoutEditor() {
   const saveMutation = useMutation({
     mutationFn: (nextLayout: WarehouseLayout) =>
       saveWarehouseLayoutDraft(nextLayout),
-    onError: () => {
-      toast.error("Không lưu được draft. Kiểm tra kết nối hoặc revision.");
+    onError: (error) => {
+      toast.error(
+        isMissingBackendEndpoint(error)
+          ? "Chưa thể lưu bản nháp layout."
+          : "Không lưu được draft. Kiểm tra kết nối hoặc revision.",
+      );
     },
     onSuccess: (saved) => {
       setLayout(saved);
@@ -124,8 +129,12 @@ export function WarehouseLayoutEditor() {
       draftRevision: number;
       warehouseId: string;
     }) => publishWarehouseLayout(warehouseId, draftRevision),
-    onError: () => {
-      toast.error("Không publish được layout. Kiểm tra các lỗi trên mặt bằng.");
+    onError: (error) => {
+      toast.error(
+        isMissingBackendEndpoint(error)
+          ? "Chưa thể publish layout."
+          : "Không publish được layout. Kiểm tra các lỗi trên mặt bằng.",
+      );
     },
     onSuccess: (published) => {
       queryClient.setQueryData(
@@ -405,6 +414,33 @@ export function WarehouseLayoutEditor() {
     return null;
   }
 
+  if (layoutQuery.isError) {
+    const unsupported = isMissingBackendEndpoint(layoutQuery.error);
+
+    return (
+      <div className="rounded-lg border border-amber-300 bg-amber-50 p-5 text-sm text-amber-950">
+        <div className="font-semibold">
+          {unsupported
+            ? "Layout kho chưa sẵn sàng"
+            : "Không tải được layout kho"}
+        </div>
+        <p className="mt-2 max-w-3xl text-amber-900/80">
+          {unsupported
+            ? "Chưa có dữ liệu layout để hiển thị mặt bằng kho."
+            : "Kiểm tra lại phiên đăng nhập hoặc thử tải lại trang."}
+        </p>
+      </div>
+    );
+  }
+
+  if (!layoutQuery.isPending && !layout && !canEdit) {
+    return (
+      <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+        Chưa có layout published cho kho trung tâm.
+      </div>
+    );
+  }
+
   if (layoutQuery.isPending || !layout || !renderLayout) {
     return (
       <div className="grid gap-4">
@@ -430,7 +466,6 @@ export function WarehouseLayoutEditor() {
           <Badge variant={dirty ? "secondary" : "outline"}>
             {dirty ? "Có thay đổi chưa lưu" : `Revision ${layout.revision}`}
           </Badge>
-          {layoutQuery.isError ? <Badge variant="secondary">Layout demo local</Badge> : null}
           {canEdit ? (
             <>
               <Button

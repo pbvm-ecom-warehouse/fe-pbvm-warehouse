@@ -201,8 +201,8 @@ test("admin sees settings health and WMS user action forms", async ({ page }) =>
 
   await page.goto("/settings");
 
-  await expect(page.getByText("Health", { exact: true })).toBeVisible();
-  await expect(page.getByText("Root API", { exact: true })).toBeVisible();
+  await expect(page.getByText("Trạng thái hệ thống", { exact: true })).toBeVisible();
+  await expect(page.getByText("Kết nối WMS", { exact: true })).toBeVisible();
   await expect(page.getByText("Quản trị user WMS")).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Tạo nhân viên/i }),
@@ -234,8 +234,8 @@ test("manager sees settings API status without admin mutation controls", async (
 
   await page.goto("/settings");
 
-  await expect(page.getByText("Health", { exact: true })).toBeVisible();
-  await expect(page.getByText("Root API", { exact: true })).toBeVisible();
+  await expect(page.getByText("Trạng thái hệ thống", { exact: true })).toBeVisible();
+  await expect(page.getByText("Kết nối WMS", { exact: true })).toBeVisible();
   await expect(page.getByText("Quản trị user WMS")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: /Tạo nhân viên/i }),

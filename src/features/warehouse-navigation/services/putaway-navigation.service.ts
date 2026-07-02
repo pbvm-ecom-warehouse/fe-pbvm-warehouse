@@ -1,16 +1,19 @@
 import { apiClient } from "@/lib/api-client";
-import { type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
+import {
+  throwIfMissingBackendEndpoint,
+  type ApiEnvelope,
+  unwrapApiData,
+} from "@/lib/api-contract";
 import type { PutawaySuggestion, ShelfContentItem } from "@/types/api";
 
 import {
   GATE_ROUTE_POINT,
   buildRouteToShelf,
-  fallbackPutawaySuggestions,
   type PutawaySuggestionInput,
 } from "../utils/putaway-navigation";
 
 export type PutawaySuggestionResult = {
-  source: "api" | "fallback";
+  source: "api";
   suggestions: PutawaySuggestion[];
 };
 
@@ -40,11 +43,9 @@ export async function listPutawaySuggestionResult(
       source: "api",
       suggestions: normalizeSuggestionRoutes(unwrapApiData(response.data)),
     };
-  } catch {
-    return {
-      source: "fallback",
-      suggestions: fallbackPutawaySuggestions(input),
-    };
+  } catch (error) {
+    throwIfMissingBackendEndpoint(error, "GET /api/wms/putaway/suggestions");
+    throw error;
   }
 }
 
@@ -59,13 +60,21 @@ export async function listShelfContents({
   shelfCode: string;
   warehouseId: string;
 }) {
-  const response = await apiClient.get<
-    ApiEnvelope<ShelfContentItem[]> | ShelfContentItem[]
-  >(`/warehouse/shelves/${encodeURIComponent(shelfCode)}/contents`, {
-    params: {
-      warehouseId,
-    },
-  });
+  try {
+    const response = await apiClient.get<
+      ApiEnvelope<ShelfContentItem[]> | ShelfContentItem[]
+    >(`/warehouse/shelves/${encodeURIComponent(shelfCode)}/contents`, {
+      params: {
+        warehouseId,
+      },
+    });
 
-  return unwrapApiData(response.data);
+    return unwrapApiData(response.data);
+  } catch (error) {
+    throwIfMissingBackendEndpoint(
+      error,
+      `GET /api/wms/warehouse/shelves/${shelfCode}/contents`,
+    );
+    throw error;
+  }
 }

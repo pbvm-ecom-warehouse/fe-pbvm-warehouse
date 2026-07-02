@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildApiUrl, unwrapApiData } from "@/lib/api-contract";
+import { buildApiUrl, getApiErrorMessage, unwrapApiData } from "@/lib/api-contract";
 import { env } from "@/lib/env";
 
 describe("WMS API contract helpers", () => {
@@ -17,6 +17,9 @@ describe("WMS API contract helpers", () => {
   });
 
   it("preserves the /api/wms prefix when building WMS URLs", () => {
+    expect(buildApiUrl("/api/wms", "/auth/login")).toBe(
+      "/api/wms/auth/login",
+    );
     expect(buildApiUrl("http://localhost:3001", "/inventory/ledger")).toBe(
       "http://localhost:3001/api/wms/inventory/ledger",
     );
@@ -34,9 +37,24 @@ describe("WMS API contract helpers", () => {
     ).toBe("https://api-ecom-wms.hoaiphuong.io.vn/api/wms/auth/login");
   });
 
-  it("defaults the WMS API URL to the remote deployed backend", () => {
+  it("defaults browser WMS API calls to the CORS-enabled remote backend", () => {
     expect(env.NEXT_PUBLIC_WMS_API_URL).toBe(
       "https://api-ecom-wms.hoaiphuong.io.vn/api/wms",
     );
+  });
+
+  it("reads backend error messages from WMS error envelopes", () => {
+    expect(
+      getApiErrorMessage({
+        response: {
+          data: {
+            error: {
+              code: "AUTH_INVALID_CREDENTIALS",
+              message: "Sai tài khoản hoặc mật khẩu",
+            },
+          },
+        },
+      }),
+    ).toBe("Sai tài khoản hoặc mật khẩu");
   });
 });

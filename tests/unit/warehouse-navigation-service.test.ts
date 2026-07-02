@@ -5,6 +5,7 @@ import {
   listPutawaySuggestionResult,
   listShelfContents,
 } from "@/features/warehouse-navigation/services/putaway-navigation.service";
+import { MissingBackendEndpointError } from "@/lib/api-contract";
 
 vi.mock("@/lib/api-client", () => ({
   apiClient: {
@@ -13,6 +14,10 @@ vi.mock("@/lib/api-client", () => ({
 }));
 
 const mockedGet = vi.mocked(apiClient.get);
+
+function httpError(status: number) {
+  return { response: { status } };
+}
 
 describe("warehouse navigation services", () => {
   beforeEach(() => {
@@ -80,5 +85,17 @@ describe("warehouse navigation services", () => {
       placement: { x: 8, y: 10, width: 38, height: 24, label: "A" },
       sku: "CUP-BLANK-500",
     });
+  });
+
+  it("surfaces missing put-away API instead of returning local suggestions", async () => {
+    mockedGet.mockRejectedValueOnce(httpError(404));
+
+    await expect(
+      listPutawaySuggestionResult({
+        sku: "CUP-BLANK-500",
+        quantity: 80,
+        warehouseId: "central",
+      }),
+    ).rejects.toBeInstanceOf(MissingBackendEndpointError);
   });
 });

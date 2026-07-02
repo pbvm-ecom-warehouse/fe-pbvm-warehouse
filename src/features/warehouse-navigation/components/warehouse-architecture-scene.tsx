@@ -91,6 +91,7 @@ function TechnicalShelfLevel({
   selected,
   shelf,
   suggested,
+  unsupported,
 }: {
   contents: ShelfContentItem[];
   error: boolean;
@@ -100,6 +101,7 @@ function TechnicalShelfLevel({
   selected: boolean;
   shelf: WarehouseShelf;
   suggested: boolean;
+  unsupported: boolean;
 }) {
   const estimated = contents.some((item) => !item.placement);
 
@@ -141,17 +143,26 @@ function TechnicalShelfLevel({
           <div className="absolute inset-0 grid place-items-center p-4 text-center text-sm">
             <div>
               <div className="font-semibold text-destructive">
-                Không tải được thùng trong {shelf.code}
+                {unsupported
+                  ? "Chưa có dữ liệu trong kệ"
+                  : `Không tải được thùng trong ${shelf.code}`}
               </div>
-              <Button className="mt-2 h-8" onClick={onRetry} size="sm" variant="outline">
-                <RefreshCw data-icon="inline-start" />
-                Tải lại
-              </Button>
+              {unsupported ? null : (
+                <Button
+                  className="mt-2 h-8"
+                  onClick={onRetry}
+                  size="sm"
+                  variant="outline"
+                >
+                  <RefreshCw data-icon="inline-start" />
+                  Tải lại
+                </Button>
+              )}
             </div>
           </div>
         ) : contents.length === 0 ? (
           <div className="absolute inset-0 grid place-items-center px-4 text-sm text-muted-foreground">
-            Shelf đang trống hoặc API chưa trả nội dung.
+            Shelf đang trống hoặc chưa có dữ liệu.
           </div>
         ) : (
           <div className="absolute inset-x-4 bottom-3 top-7 overflow-hidden border-x border-dashed border-slate-300">
@@ -181,6 +192,7 @@ function RackElevation({
   rackGroup,
   selectedShelfCode,
   suggestedShelfCodes,
+  unsupportedShelfCodes,
 }: {
   contentsByShelf: Record<string, ShelfContentItem[] | undefined>;
   erroredShelfCodes: Set<string>;
@@ -191,6 +203,7 @@ function RackElevation({
   rackGroup: RackGroup | null;
   selectedShelfCode: string | null;
   suggestedShelfCodes: Set<string>;
+  unsupportedShelfCodes: Set<string>;
 }) {
   if (!rackGroup) {
     return (
@@ -243,6 +256,7 @@ function RackElevation({
                 selected={shelf.code === selectedShelfCode}
                 shelf={shelf}
                 suggested={suggestedShelfCodes.has(shelf.code)}
+                unsupported={unsupportedShelfCodes.has(shelf.code)}
               />
             ))}
           </div>
@@ -269,11 +283,12 @@ export function WarehouseArchitectureScene({
   selectedShelfCode,
   suggestions,
   suggestedShelfCodes,
+  unsupportedShelfCodes,
 }: {
   contentsByShelf: Record<string, ShelfContentItem[] | undefined>;
   erroredShelfCodes: Set<string>;
   layout: WarehouseLayout | null;
-  layoutSource: "api" | "fallback" | "missing";
+  layoutSource: "api" | "missing" | "unsupported";
   loadingShelfCodes: Set<string>;
   onBackToMap: () => void;
   onOpenRack: (rackCode: string, shelfCode: string) => void;
@@ -286,6 +301,7 @@ export function WarehouseArchitectureScene({
   selectedShelfCode: string | null;
   suggestions: PutawaySuggestion[];
   suggestedShelfCodes: Set<string>;
+  unsupportedShelfCodes: Set<string>;
 }) {
   useEffect(() => {
     if (sceneMode !== "rack") {
@@ -324,7 +340,9 @@ export function WarehouseArchitectureScene({
           </Badge>
           {layoutSource !== "api" ? (
             <Badge variant="secondary">
-              {layoutSource === "fallback" ? "Layout demo local" : "Chưa publish"}
+              {layoutSource === "unsupported"
+                ? "Chưa có layout"
+                : "Chưa publish"}
             </Badge>
           ) : null}
         </div>
@@ -343,6 +361,7 @@ export function WarehouseArchitectureScene({
               rackGroup={rackGroup}
               selectedShelfCode={selectedShelfCode}
               suggestedShelfCodes={suggestedShelfCodes}
+              unsupportedShelfCodes={unsupportedShelfCodes}
             />
           ) : layout ? (
             <motion.div

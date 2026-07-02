@@ -5,13 +5,7 @@ import { Clock3, MapPinned, Route } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { WarehouseRoute } from "@/types/api";
 
-export function RouteGuidance({
-  route,
-  source,
-}: {
-  route: WarehouseRoute | null;
-  source: "api" | "fallback";
-}) {
+export function RouteGuidance({ route }: { route: WarehouseRoute | null }) {
   if (!route) {
     return (
       <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
@@ -33,9 +27,7 @@ export function RouteGuidance({
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge variant={source === "api" ? "default" : "outline"}>
-            {source === "api" ? "AI route" : "Fallback local"}
-          </Badge>
+          <Badge variant="default">WMS route</Badge>
           {route.distanceMeters ? (
             <Badge variant="secondary">
               <MapPinned data-icon="inline-start" />

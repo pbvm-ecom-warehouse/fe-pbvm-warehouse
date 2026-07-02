@@ -1,5 +1,5 @@
 export const appConfig = {
-  name: "PBVM WMS",
+  name: "WMS",
   tenantFallback: "demo-tenant",
-  supportEmail: "ops@pbvm.example",
+  supportEmail: "ops@wms.local",
 };

@@ -5,8 +5,13 @@ import { loginSchema } from "@/features/auth/schemas/login.schema";
 import {
   changePasswordSchema,
 } from "@/features/auth/schemas/change-password.schema";
-import { changePassword, login } from "@/features/auth/services/auth.service";
-import { clearAuthTokens, getAccessToken } from "@/lib/auth-token";
+import { changePassword, login, logout } from "@/features/auth/services/auth.service";
+import {
+  clearAuthTokens,
+  getAccessToken,
+  getRefreshToken,
+  setAuthTokens,
+} from "@/lib/auth-token";
 import { useAuthStore } from "@/stores/auth-store";
 
 vi.mock("@/lib/api-client", () => ({
@@ -40,7 +45,7 @@ describe("wms login schema", () => {
   it("rejects the old email plus tenant payload shape", () => {
     expect(
       loginSchema.safeParse({
-        email: "ops@pbvm.example",
+        email: "ops@wms.local",
         password: "P@ssw0rd!",
         tenantId: "demo-tenant",
       }).success,
@@ -121,5 +126,29 @@ describe("wms login schema", () => {
       mustChangePassword: false,
     });
     expect(mockedPost).toHaveBeenCalledWith("/auth/change-password", input);
+  });
+
+  it("clears local tokens and user state even when logout API fails", async () => {
+    setAuthTokens({
+      accessToken: "access-before-logout",
+      refreshToken: "refresh-before-logout",
+    });
+    useAuthStore.getState().setUser({
+      id: "user-1",
+      name: "Admin",
+      roles: ["ADMIN"],
+      tenantId: "demo-tenant",
+      type: "user",
+    });
+    mockedPost.mockRejectedValueOnce(new Error("network"));
+
+    await expect(logout()).rejects.toThrow("network");
+
+    expect(mockedPost).toHaveBeenCalledWith("/auth/logout", {
+      refreshToken: "refresh-before-logout",
+    });
+    expect(getAccessToken()).toBeNull();
+    expect(getRefreshToken()).toBeNull();
+    expect(useAuthStore.getState().user).toBeNull();
   });
 });

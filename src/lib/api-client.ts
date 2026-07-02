@@ -23,6 +23,7 @@ type RefreshResponse = {
 export const apiClient = axios.create({
   baseURL: getApiBaseUrl(env.NEXT_PUBLIC_WMS_API_URL),
   timeout: 15_000,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
     "X-Tenant-ID": env.NEXT_PUBLIC_DEFAULT_TENANT_ID,
@@ -32,6 +33,7 @@ export const apiClient = axios.create({
 const refreshClient = axios.create({
   baseURL: getApiBaseUrl(env.NEXT_PUBLIC_WMS_API_URL),
   timeout: 15_000,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
     "X-Tenant-ID": env.NEXT_PUBLIC_DEFAULT_TENANT_ID,
@@ -86,10 +88,15 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as RetryRequestConfig | undefined;
 
+    if (originalRequest?.url?.includes("/auth/login")) {
+      return Promise.reject(error);
+    }
+
     if (
       error.response?.status !== 401 ||
       !originalRequest ||
-      originalRequest._retry
+      originalRequest._retry ||
+      !getRefreshToken()
     ) {
       return Promise.reject(error);
     }
