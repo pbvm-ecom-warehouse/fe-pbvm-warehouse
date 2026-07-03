@@ -182,6 +182,15 @@ const roleActionLabels: Partial<Record<ModuleKey, Partial<Record<WmsRole, string
   },
 };
 
+const missingApiCopy: Partial<Record<ModuleKey, string>> = {
+  adjustments: "Backend chưa publish API stock count, adjustment, scrap hoặc RMA.",
+  "goods-issues": "Backend chưa publish API goods issue và xác nhận xuất kho.",
+  inventory: "Backend chưa publish API inventory ledger và stock movement.",
+  "print-jobs": "Backend chưa publish API print job.",
+  products: "Backend chưa publish API warehouse item.",
+  reports: "Backend chưa publish API report.",
+};
+
 function getRoleNote(moduleKey: ModuleKey, role: WmsRole) {
   const roleNotes = moduleSummaries[moduleKey].roleNotes as Partial<
     Record<WmsRole, string>
@@ -203,6 +212,7 @@ export function ModulePage({ moduleKey }: { moduleKey: ModuleKey }) {
   const canUsePrimaryAction = hasModuleActionAccess(moduleKey, user?.roles);
   const actionLabel = getActionLabel(moduleKey, primaryRole);
   const roleNote = getRoleNote(moduleKey, primaryRole);
+  const missingApi = missingApiCopy[moduleKey];
 
   if (!user) {
     return null;
@@ -218,9 +228,11 @@ export function ModulePage({ moduleKey }: { moduleKey: ModuleKey }) {
           <p className="mt-1 text-sm text-muted-foreground">
             {summary.description}
           </p>
-          <p className="mt-2 max-w-3xl text-xs font-medium text-primary">
-            {ROLE_LABELS[primaryRole]} · {roleNote}
-          </p>
+          {missingApi ? (
+            <p className="mt-2 max-w-3xl text-xs font-medium text-muted-foreground">
+              {missingApi}
+            </p>
+          ) : null}
         </div>
         {canUsePrimaryAction ? (
           <Button disabled>
@@ -257,7 +269,7 @@ export function ModulePage({ moduleKey }: { moduleKey: ModuleKey }) {
                   {item}
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {roleNote}
+                  {missingApi ?? roleNote}
                 </div>
               </div>
             ))}
@@ -284,7 +296,7 @@ export function ModulePage({ moduleKey }: { moduleKey: ModuleKey }) {
                   className="h-24 text-center text-sm text-muted-foreground"
                   colSpan={summary.columns.length}
                 >
-                  Chưa có dữ liệu vận hành.
+                  {missingApi ?? "Chưa có dữ liệu vận hành."}
                 </TableCell>
               </TableRow>
             </TableBody>

@@ -37,10 +37,8 @@ describe("WMS API contract helpers", () => {
     ).toBe("https://api-ecom-wms.hoaiphuong.io.vn/api/wms/auth/login");
   });
 
-  it("defaults browser WMS API calls to the CORS-enabled remote backend", () => {
-    expect(env.NEXT_PUBLIC_WMS_API_URL).toBe(
-      "https://api-ecom-wms.hoaiphuong.io.vn/api/wms",
-    );
+  it("defaults browser WMS API calls to the same-origin proxy", () => {
+    expect(env.NEXT_PUBLIC_WMS_API_URL).toBe("/api/wms");
   });
 
   it("reads backend error messages from WMS error envelopes", () => {
