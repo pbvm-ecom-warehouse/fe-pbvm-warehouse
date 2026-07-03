@@ -1,7 +1,20 @@
 import type { NextConfig } from "next";
 
+const wmsApiProxyTarget = (
+  process.env.WMS_API_PROXY_TARGET ?? "https://api-ecom-wms.hoaiphuong.io.vn"
+)
+  .replace(/\/api\/wms\/?$/, "")
+  .replace(/\/+$/, "");
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  async rewrites() {
+    return [
+      {
+        source: "/api/wms/:path*",
+        destination: `${wmsApiProxyTarget}/api/wms/:path*`,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

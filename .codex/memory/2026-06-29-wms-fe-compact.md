@@ -14,8 +14,9 @@ Scope: `fe-pbvm-warehouse` only.
 ## API Behavior
 
 - Keep all HTTP calls through `src/lib/api-client.ts`.
-- Base URL defaults to the CORS-enabled remote API through `NEXT_PUBLIC_WMS_API_URL=https://api-ecom-wms.hoaiphuong.io.vn/api/wms`.
-- Browser-side API calls may go directly to the remote API now that backend CORS allows the local frontend origin.
+- Base URL defaults to same-origin `/api/wms` in local dev because the currently deployed remote API may still omit `Access-Control-Allow-Origin`.
+- Next rewrites proxy `/api/wms/:path*` to `WMS_API_PROXY_TARGET/api/wms/:path*`.
+- Direct remote CORS can be used by overriding `NEXT_PUBLIC_WMS_API_URL=https://api-ecom-wms.hoaiphuong.io.vn/api/wms` after the deployed backend returns `Access-Control-Allow-Origin`.
 - Axios uses `withCredentials: true` so backend cookie auth remains compatible while FE also stores bearer tokens from the response body.
 - API responses unwrap `{ data, meta }`.
 - Refresh-token interceptor is kept.
@@ -87,7 +88,8 @@ Most recent verification after API cleanup, UI copy cleanup, and logo correction
 - 2026-07-02 CORS fix verification:
   - `pnpm lint`, `pnpm typecheck`, `pnpm test` (57 tests), and `pnpm build` passed.
   - Initial proxy workaround sent login to local `/api/wms/auth/login`.
-  - After backend CORS was added, FE was restored to direct remote calls with `withCredentials: true`.
+  - Direct remote CORS was tested but the remote deploy still omitted `Access-Control-Allow-Origin`; local dev was restored to the `/api/wms` proxy.
+  - Logout swallows remote revoke/network errors after clearing local tokens/store to avoid browser unhandled rejections.
   - Backend CORS source was updated to normalize trailing slashes and support `http://localhost:*` style origin patterns.
   - Deploy backend with `WMS_CORS_ORIGINS` including `http://localhost:3101` or `http://localhost:*`; otherwise the remote API will still omit `Access-Control-Allow-Origin`.
 

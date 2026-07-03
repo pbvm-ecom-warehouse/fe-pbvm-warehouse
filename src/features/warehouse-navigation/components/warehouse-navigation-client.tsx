@@ -210,7 +210,7 @@ export function WarehouseNavigationClient() {
     () => selectedRackGroup?.shelves ?? [],
     [selectedRackGroup],
   );
-  const canManageStructure = hasAnyRole(user?.roles, ["ADMIN", "MANAGER"]);
+  const canManageStructure = hasAnyRole(user?.roles, ["MANAGER"]);
 
   const shelfContentQueries = useQueries({
     queries: selectedRackShelves.map((shelf) => ({

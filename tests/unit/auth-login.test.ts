@@ -142,7 +142,7 @@ describe("wms login schema", () => {
     });
     mockedPost.mockRejectedValueOnce(new Error("network"));
 
-    await expect(logout()).rejects.toThrow("network");
+    await expect(logout()).resolves.toBeUndefined();
 
     expect(mockedPost).toHaveBeenCalledWith("/auth/logout", {
       refreshToken: "refresh-before-logout",

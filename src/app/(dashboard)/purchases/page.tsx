@@ -1,5 +1,5 @@
-import { ModulePage } from "@/features/admin-shell/components/module-page";
+import { PurchaseOrdersClient } from "@/features/purchases/components/purchase-orders-client";
 
 export default function PurchasesPage() {
-  return <ModulePage moduleKey="purchases" />;
+  return <PurchaseOrdersClient />;
 }

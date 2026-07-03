@@ -52,14 +52,14 @@ const RETIRED_ROUTES = new Set<string>(["/transfers"]);
 
 export const ROUTE_ACCESS_BY_HREF = {
   "/dashboard": ALL_STAFF_ROLES,
-  "/warehouses": ["ADMIN", "MANAGER"],
+  "/warehouses": ["MANAGER"],
   "/products": ["ADMIN", "MANAGER", "PRINTER"],
   "/inventory": ALL_STAFF_ROLES,
   "/warehouse-navigation": ["ADMIN", "MANAGER", "RECEIVER", "PICKER"],
-  "/purchases": ["ADMIN", "MANAGER", "RECEIVER"],
+  "/purchases": ["ADMIN", "MANAGER"],
   "/goods-issues": ["ADMIN", "MANAGER", "PICKER"],
   "/adjustments": ["ADMIN", "MANAGER", "COUNTER"],
-  "/suppliers": ["ADMIN", "MANAGER", "RECEIVER"],
+  "/suppliers": ["ADMIN", "MANAGER"],
   "/print-jobs": ["ADMIN", "MANAGER", "PRINTER"],
   "/cup-conversions": ["ADMIN", "MANAGER", "PRINTER"],
   "/reports": ["ADMIN", "MANAGER"],
@@ -68,10 +68,10 @@ export const ROUTE_ACCESS_BY_HREF = {
 } as const satisfies Record<string, readonly WmsRole[]>;
 
 export const MODULE_PRIMARY_ACTION_ROLES = {
-  warehouses: ["ADMIN", "MANAGER"],
+  warehouses: ["MANAGER"],
   products: ["ADMIN", "MANAGER"],
   inventory: ALL_STAFF_ROLES,
-  purchases: ["ADMIN", "MANAGER", "RECEIVER"],
+  purchases: ["ADMIN", "MANAGER"],
   "goods-issues": ["ADMIN", "MANAGER", "PICKER"],
   adjustments: ["ADMIN", "MANAGER", "COUNTER"],
   suppliers: ["ADMIN", "MANAGER"],

@@ -130,6 +130,8 @@ export async function logout() {
 
   try {
     await apiClient.post("/auth/logout", refreshToken ? { refreshToken } : {});
+  } catch {
+    // Local logout must still complete even if the remote session revoke fails.
   } finally {
     clearAuthTokens();
     useAuthStore.getState().clearUser();
