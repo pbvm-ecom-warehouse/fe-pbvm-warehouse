@@ -549,7 +549,7 @@ export function WarehouseNavigationClient() {
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {exactSelectedSuggestion?.reason ??
-                      "Override shelf hoặc chưa có gợi ý trực tiếp"}
+                      "Vị trí do người dùng chọn"}
                   </div>
                 </div>
                 <Badge variant="secondary">

@@ -264,7 +264,7 @@ function StockStatusCard({ rows }: { rows: StockLedgerRow[] }) {
     <Card>
       <PanelHeader
         title="Trạng thái stock"
-        description="Phân nhóm theo available_qty và reorder point."
+        description="Phân nhóm theo trạng thái tồn kho."
       />
       <CardContent className="grid gap-5 sm:grid-cols-[160px_1fr] xl:grid-cols-1 2xl:grid-cols-[160px_1fr]">
         <div className="relative mx-auto flex size-40 items-center justify-center rounded-full">
@@ -350,7 +350,7 @@ function RecentMovements({
       <CardContent className="space-y-2">
         {movements.length === 0 ? (
           <div className="rounded-lg border border-dashed bg-muted/30 p-5 text-sm text-muted-foreground">
-            Chưa có stock movement từ wms-api.
+            Chưa có dữ liệu biến động kho.
           </div>
         ) : null}
 
@@ -408,7 +408,7 @@ function PutawayAdvisory({ rows }: { rows: StockLedgerRow[] }) {
     <Card className="xl:sticky xl:top-[92px]">
       <PanelHeader
         title="Put-away advisory"
-        description="Gợi ý vẫn là advisory; receiver xác nhận bằng barcode."
+        description="Gợi ý vị trí lưu kho tối ưu cho hàng nhập."
         action={<Badge className="bg-teal-50 text-teal-700">Active</Badge>}
       />
       <CardContent className="space-y-4">
@@ -427,7 +427,7 @@ function PutawayAdvisory({ rows }: { rows: StockLedgerRow[] }) {
             </div>
           </div>
           <div className="text-sm font-semibold">
-            {priorityRow?.productName ?? "Chờ dữ liệu từ wms-api"}
+            {priorityRow?.productName ?? "Đang tải dữ liệu"}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
             Available:{" "}
@@ -636,7 +636,7 @@ function buildExecutiveMetrics(stats: DashboardStats): DashboardMetric[] {
       value: formatNumber(stats.totalAvailableQty),
       detail: (
         <>
-          <Trend tone="good" value="+8.2%" /> · quantity - reserved_qty
+          <Trend tone="good" value="+8.2%" /> so với tháng trước
         </>
       ),
       icon: Boxes,
@@ -645,7 +645,7 @@ function buildExecutiveMetrics(stats: DashboardStats): DashboardMetric[] {
     {
       label: "Dòng tồn kho",
       value: formatNumber(stats.ledgerCount),
-      detail: "Đọc từ /inventory/ledger",
+      detail: "Tổng số dòng tồn kho hiện tại",
       icon: ShieldCheck,
       tone: "teal",
     },
@@ -654,7 +654,7 @@ function buildExecutiveMetrics(stats: DashboardStats): DashboardMetric[] {
       value: formatNumber(stats.reservedQty),
       detail: (
         <>
-          <Trend tone="good" value="+3.6%" /> · đơn pending giữ reserved_qty
+          <Trend tone="good" value="+3.6%" /> đang chờ xuất kho
         </>
       ),
       icon: Activity,
@@ -665,7 +665,7 @@ function buildExecutiveMetrics(stats: DashboardStats): DashboardMetric[] {
       value: formatNumber(stats.lowStockCount),
       detail: (
         <>
-          <Trend tone="warn" value="+12" /> · available thấp hơn reorder point
+          <Trend tone="warn" value="+12" /> mặt hàng cần bổ sung
         </>
       ),
       icon: TrendingUp,

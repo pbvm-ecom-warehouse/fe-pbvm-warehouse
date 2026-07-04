@@ -436,7 +436,7 @@ export function WarehouseLayoutEditor() {
   if (!layoutQuery.isPending && !layout && !canEdit) {
     return (
       <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-        Chưa có layout published cho kho trung tâm.
+        Chưa có bản vẽ mặt bằng cho kho trung tâm.
       </div>
     );
   }
@@ -459,7 +459,7 @@ export function WarehouseLayoutEditor() {
             <h1 className="text-2xl font-bold">Bố trí mặt bằng kho</h1>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Zone, rack và lối đi dùng đơn vị mét; navigation chỉ đọc bản published.
+            Zone, rack và lối đi dùng đơn vị mét.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -558,7 +558,7 @@ export function WarehouseLayoutEditor() {
             </>
           ) : (
             <div className="text-sm text-muted-foreground">
-              Manager có thể xem layout published nhưng không thể chỉnh sửa.
+              Manager có thể xem mặt bằng kho nhưng không thể chỉnh sửa.
             </div>
           )}
         </div>

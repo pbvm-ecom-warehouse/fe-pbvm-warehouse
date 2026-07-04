@@ -54,7 +54,7 @@ export function InventoryTable({ rows }: { rows: StockLedgerRow[] }) {
               className="h-24 text-center text-sm text-muted-foreground"
               colSpan={6}
             >
-              Chưa có dữ liệu tồn kho từ wms-api.
+              Chưa có dữ liệu tồn kho.
             </TableCell>
           </TableRow>
         ) : null}

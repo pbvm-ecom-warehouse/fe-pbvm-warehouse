@@ -162,7 +162,7 @@ function TechnicalShelfLevel({
           </div>
         ) : contents.length === 0 ? (
           <div className="absolute inset-0 grid place-items-center px-4 text-sm text-muted-foreground">
-            Shelf đang trống hoặc chưa có dữ liệu.
+            Kệ đang trống.
           </div>
         ) : (
           <div className="absolute inset-x-4 bottom-3 top-7 overflow-hidden border-x border-dashed border-slate-300">
@@ -396,7 +396,7 @@ export function WarehouseArchitectureScene({
             <div className="grid min-h-[420px] place-items-center border border-dashed p-8 text-center">
               <div>
                 <MapPinned className="mx-auto size-8 text-muted-foreground" />
-                <h3 className="mt-3 font-semibold">Kho chưa có layout published</h3>
+                <h3 className="mt-3 font-semibold">Kho chưa có bản vẽ mặt bằng</h3>
                 <p className="mt-1 max-w-md text-sm text-muted-foreground">
                   Admin cần mở module Kho, bố trí zone/rack/aisle và Publish trước
                   khi dùng điều hướng.

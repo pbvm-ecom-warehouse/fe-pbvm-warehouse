@@ -31,7 +31,7 @@ const roleSearchPlaceholder = {
   MANAGER: "Tìm SKU, PO, phiếu chuyển, báo cáo...",
   RECEIVER: "Tìm GRN, SKU, vị trí put-away...",
   PICKER: "Tìm đơn pick, SKU, shelf code...",
-  PRINTER: "Tìm lệnh in, CUP_BLANK, CUP_PRINTED...",
+  PRINTER: "Tìm lệnh in, ly chưa in, ly đã in...",
   COUNTER: "Tìm phiếu kiểm, SKU, chênh lệch...",
 } as const;
 
