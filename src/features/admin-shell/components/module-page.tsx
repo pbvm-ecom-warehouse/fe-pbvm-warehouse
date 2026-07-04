@@ -51,22 +51,22 @@ const moduleSummaries = {
     roleNotes: {
       ADMIN: "Admin quản lý SKU nền cho toàn hệ thống.",
       MANAGER: "Manager theo dõi SKU phục vụ PO, xuất kho và báo cáo.",
-      PRINTER: "Printer tập trung CUP_BLANK và CUP_PRINTED phục vụ lệnh in.",
+      PRINTER: "Printer tập trung ly chưa in và ly đã in phục vụ lệnh in.",
     },
   },
   inventory: {
     title: "Tồn kho",
-    description: "Theo dõi quantity, reserved_qty và available_qty.",
+    description: "Theo dõi số lượng tồn kho, đã đặt trước và khả dụng.",
     action: "Xem ledger",
     highlights: ["Stock ledger", "Stock movement", "Audit trail"],
     tableTitle: "Stock ledger",
     columns: ["SKU", "Kho", "Available"],
     roleNotes: {
-      ADMIN: "Admin xem toàn bộ quantity, reserved_qty và available_qty.",
+      ADMIN: "Admin xem toàn bộ số lượng tồn, đã đặt trước và khả dụng.",
       MANAGER: "Manager dùng ledger để điều phối và duyệt adjustment.",
       RECEIVER: "Receiver đối chiếu tồn sau GRN và put-away.",
       PICKER: "Picker xem vị trí và available trước khi xuất kho.",
-      PRINTER: "Printer kiểm tra tồn CUP_BLANK và CUP_PRINTED quanh Print Job.",
+      PRINTER: "Printer kiểm tra tồn ly chưa in và ly đã in quanh lệnh in.",
       COUNTER: "Counter dùng ledger làm baseline kiểm đếm thực tế.",
     },
   },
@@ -92,13 +92,13 @@ const moduleSummaries = {
     columns: ["Mã phiếu", "Order ref", "Trạng thái"],
     roleNotes: {
       ADMIN: "Admin có toàn quyền theo dõi và xử lý phiếu xuất.",
-      MANAGER: "Manager tạo phiếu xuất và theo dõi goods.issued.",
+      MANAGER: "Manager tạo phiếu xuất và theo dõi trạng thái xuất kho.",
       PICKER: "Picker quét SKU + shelf, lấy hàng theo FEFO và xác nhận xuất kho.",
     },
   },
   adjustments: {
     title: "Kiểm kê",
-    description: "Điều chỉnh thừa thiếu qua stock movement.",
+    description: "Kiểm kê và điều chỉnh số lượng tồn kho.",
     action: "Tạo điều chỉnh",
     highlights: ["Stock Count", "ADJUST", "SCRAP"],
     tableTitle: "Phiếu điều chỉnh",
@@ -136,15 +136,15 @@ const moduleSummaries = {
   },
   "print-jobs": {
     title: "Lệnh in ly",
-    description: "Theo dõi print.requested, blank cup hold và output CUP_PRINTED.",
+    description: "Theo dõi lệnh in, tiêu thụ ly chưa in và xuất ly đã in.",
     action: "Tạo lệnh in",
-    highlights: ["PRINT_CONSUME", "PRINT_OUTPUT", "Design snapshot"],
+    highlights: ["Tiêu thụ ly", "Xuất ly đã in", "Mẫu thiết kế"],
     tableTitle: "Danh sách Print Job",
     columns: ["Mã lệnh in", "Order ref", "Trạng thái"],
     roleNotes: {
       ADMIN: "Admin có toàn quyền với luồng in ly make-to-order.",
-      MANAGER: "Manager nhận print.requested và mở Print Job với designFile snapshot.",
-      PRINTER: "Printer tiêu thụ CUP_BLANK, xác nhận PRINT_OUTPUT và đóng job.",
+      MANAGER: "Manager nhận yêu cầu in và mở lệnh in với mẫu thiết kế.",
+      PRINTER: "Printer tiêu thụ ly chưa in, xác nhận hoàn thành và đóng lệnh.",
     },
   },
   settings: {
@@ -183,12 +183,12 @@ const roleActionLabels: Partial<Record<ModuleKey, Partial<Record<WmsRole, string
 };
 
 const missingApiCopy: Partial<Record<ModuleKey, string>> = {
-  adjustments: "Backend chưa publish API stock count, adjustment, scrap hoặc RMA.",
-  "goods-issues": "Backend chưa publish API goods issue và xác nhận xuất kho.",
-  inventory: "Backend chưa publish API inventory ledger và stock movement.",
-  "print-jobs": "Backend chưa publish API print job.",
-  products: "Backend chưa publish API warehouse item.",
-  reports: "Backend chưa publish API report.",
+  adjustments: "Tính năng kiểm kê đang được phát triển.",
+  "goods-issues": "Tính năng xuất kho đang được phát triển.",
+  inventory: "Tính năng tồn kho đang được phát triển.",
+  "print-jobs": "Tính năng lệnh in đang được phát triển.",
+  products: "Tính năng sản phẩm đang được phát triển.",
+  reports: "Tính năng báo cáo đang được phát triển.",
 };
 
 function getRoleNote(moduleKey: ModuleKey, role: WmsRole) {
@@ -228,11 +228,7 @@ export function ModulePage({ moduleKey }: { moduleKey: ModuleKey }) {
           <p className="mt-1 text-sm text-muted-foreground">
             {summary.description}
           </p>
-          {missingApi ? (
-            <p className="mt-2 max-w-3xl text-xs font-medium text-muted-foreground">
-              {missingApi}
-            </p>
-          ) : null}
+
         </div>
         {canUsePrimaryAction ? (
           <Button disabled>
@@ -269,7 +265,7 @@ export function ModulePage({ moduleKey }: { moduleKey: ModuleKey }) {
                   {item}
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {missingApi ?? roleNote}
+                  {roleNote}
                 </div>
               </div>
             ))}
@@ -296,7 +292,7 @@ export function ModulePage({ moduleKey }: { moduleKey: ModuleKey }) {
                   className="h-24 text-center text-sm text-muted-foreground"
                   colSpan={summary.columns.length}
                 >
-                  {missingApi ?? "Chưa có dữ liệu vận hành."}
+                  {"Chưa có dữ liệu."}
                 </TableCell>
               </TableRow>
             </TableBody>

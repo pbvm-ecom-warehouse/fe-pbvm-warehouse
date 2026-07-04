@@ -20,7 +20,7 @@ export function StockValueChartClient({ data }: StockValueChartClientProps) {
   if (data.length === 0) {
     return (
       <div className="flex h-72 w-full items-center justify-center rounded-lg border border-dashed bg-muted/30 text-sm font-medium text-muted-foreground">
-        Chưa có dữ liệu báo cáo từ wms-api.
+        Chưa có dữ liệu báo cáo.
       </div>
     );
   }

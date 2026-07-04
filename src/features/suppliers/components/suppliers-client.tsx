@@ -33,6 +33,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -182,6 +190,7 @@ export function SuppliersClient() {
   const [page, setPage] = useState(1);
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
   const [createForm, setCreateForm] = useState(defaultSupplierForm);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const suppliersQuery = useQuery({
     enabled: canManage,
@@ -200,9 +209,7 @@ export function SuppliersClient() {
     [suppliersQuery.data?.data],
   );
   const selectedSupplier = useMemo(
-    () =>
-      suppliers.find((supplier) => supplier.id === selectedSupplierId) ??
-      suppliers[0],
+    () => suppliers.find((supplier) => supplier.id === selectedSupplierId),
     [selectedSupplierId, suppliers],
   );
   const activeSupplierId = selectedSupplier?.id ?? "";
@@ -216,6 +223,7 @@ export function SuppliersClient() {
       setCreateForm(defaultSupplierForm);
       setSelectedSupplierId(supplier.id);
       void queryClient.invalidateQueries({ queryKey: ["suppliers", "list"] });
+      setDialogOpen(false);
       toast.success("Đã tạo nhà cung cấp");
     },
   });
@@ -239,35 +247,87 @@ export function SuppliersClient() {
             Nhà cung cấp
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Quản lý Supplier và SupplierItem theo dữ liệu WMS.
+            Quản lý nhà cung cấp và các mặt hàng cung ứng.
           </p>
         </div>
-        <Button
-          disabled={!canManage}
-          onClick={() =>
-            void queryClient.invalidateQueries({ queryKey: ["suppliers"] })
-          }
-          type="button"
-          variant="outline"
-        >
-          {suppliersQuery.isFetching ? (
-            <LoaderCircle className="animate-spin" data-icon="inline-start" />
-          ) : (
-            <RefreshCw data-icon="inline-start" />
-          )}
-          Làm mới
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            disabled={!canManage}
+            onClick={() =>
+              void queryClient.invalidateQueries({ queryKey: ["suppliers"] })
+            }
+            type="button"
+            variant="outline"
+          >
+            {suppliersQuery.isFetching ? (
+              <LoaderCircle className="animate-spin" data-icon="inline-start" />
+            ) : (
+              <RefreshCw data-icon="inline-start" />
+            )}
+            Làm mới
+          </Button>
+
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button disabled={!canManage}>
+                <Plus data-icon="inline-start" />
+                Tạo NCC
+              </Button>
+            </DialogTrigger>
+            <DialogContent size="lg" className="max-h-[90vh] overflow-y-auto p-6">
+              <DialogHeader className="mb-5">
+                <DialogTitle>Tạo NCC</DialogTitle>
+                <DialogDescription>Thêm nhà cung cấp mới vào hệ thống</DialogDescription>
+              </DialogHeader>
+              <SupplierForm
+                busy={createSupplierMutation.isPending}
+                disabled={!canManage}
+                form={createForm}
+                submitLabel="Tạo NCC"
+                onChange={setCreateForm}
+                onSubmit={handleCreateSupplier}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {!canManage ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          API nhà cung cấp chỉ mở cho Manager/Admin.
+          Bạn cần quyền Quản lý để sử dụng tính năng này.
         </div>
       ) : null}
 
       {suppliersQuery.error ? <ErrorBanner error={suppliersQuery.error} /> : null}
 
-      <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <Card>
+        <CardHeader className="border-b bg-muted/20">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            Nhà cung cấp
+          </CardTitle>
+          <CardDescription>
+            Quản lý nhà cung cấp và các mặt hàng cung ứng
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
+              <div className="text-sm font-semibold text-foreground">Tổng số NCC</div>
+              <div className="mt-1 text-2xl font-bold">{total}</div>
+            </div>
+            <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
+              <div className="text-sm font-semibold text-foreground">Phân tích danh mục</div>
+              <div className="mt-1 text-xs text-muted-foreground">Theo dõi mặt hàng từ các NCC</div>
+            </div>
+            <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
+              <div className="text-sm font-semibold text-foreground">Chính sách mua hàng</div>
+              <div className="mt-1 text-xs text-muted-foreground">Quản lý MOQ và Lead time</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4">
         <Card>
           <CardHeader className="border-b bg-muted/20">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -386,33 +446,27 @@ export function SuppliersClient() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="border-b bg-muted/20">
-            <CardTitle className="text-base">Tạo NCC</CardTitle>
-            <CardDescription>Supplier master data</CardDescription>
-          </CardHeader>
-          <CardContent className="pt-4">
-            <SupplierForm
-              busy={createSupplierMutation.isPending}
-              disabled={!canManage}
-              form={createForm}
-              submitLabel="Tạo NCC"
-              onChange={setCreateForm}
-              onSubmit={handleCreateSupplier}
-            />
-          </CardContent>
-        </Card>
       </div>
 
-      {selectedSupplier ? (
-        <SupplierDetailSection
-          canDelete={canDelete}
-          canManage={canManage}
-          key={selectedSupplier.id}
-          supplier={selectedSupplier}
-          onDeleted={() => setSelectedSupplierId("")}
-        />
-      ) : null}
+      <Dialog
+        open={Boolean(selectedSupplierId)}
+        onOpenChange={(open) => !open && setSelectedSupplierId("")}
+      >
+        <DialogContent size="4xl" className="max-h-[90vh] overflow-y-auto p-6">
+          <DialogHeader className="mb-5">
+            <DialogTitle>Chi tiết & Mặt hàng NCC</DialogTitle>
+          </DialogHeader>
+          {selectedSupplier ? (
+            <SupplierDetailSection
+              canDelete={canDelete}
+              canManage={canManage}
+              key={selectedSupplier.id}
+              supplier={selectedSupplier}
+              onDeleted={() => setSelectedSupplierId("")}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
