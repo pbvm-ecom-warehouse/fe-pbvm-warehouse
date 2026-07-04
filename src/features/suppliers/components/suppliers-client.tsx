@@ -301,14 +301,7 @@ export function SuppliersClient() {
       {suppliersQuery.error ? <ErrorBanner error={suppliersQuery.error} /> : null}
 
       <Card>
-        <CardHeader className="border-b bg-muted/20">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            Nhà cung cấp
-          </CardTitle>
-          <CardDescription>
-            Quản lý nhà cung cấp và các mặt hàng cung ứng
-          </CardDescription>
-        </CardHeader>
+
         <CardContent className="pt-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
