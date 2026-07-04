@@ -222,8 +222,9 @@ export function ModulePage({ moduleKey }: { moduleKey: ModuleKey }) {
     <div className="space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-normal">
+          <h1 className="flex items-center gap-3 text-2xl font-bold tracking-normal">
             {summary.title}
+            <Badge variant="outline" className="text-xs">{ROLE_LABELS[primaryRole]}</Badge>
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {summary.description}
@@ -245,15 +246,7 @@ export function ModulePage({ moduleKey }: { moduleKey: ModuleKey }) {
       </div>
 
       <Card>
-        <CardHeader className="border-b bg-muted/20">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            {summary.title}
-          </CardTitle>
-          <CardDescription>{summary.description}</CardDescription>
-          <CardAction>
-            <Badge variant="outline">{ROLE_LABELS[primaryRole]}</Badge>
-          </CardAction>
-        </CardHeader>
+
         <CardContent className="pt-4">
           <div className="grid gap-3 sm:grid-cols-3">
             {summary.highlights.map((item) => (
