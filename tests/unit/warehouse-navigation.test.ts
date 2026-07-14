@@ -2,14 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import {
   GATE_ROUTE_POINT,
+  buildLayoutPutawaySuggestions,
   buildNavigationPath,
   buildRouteToShelf,
   describeShelfGranularity,
   fallbackPutawaySuggestions,
   getRackFootprints,
+  layoutToWarehouseShelves,
   normalizeShelfBoxPlacement,
   selectSuggestedShelf,
 } from "@/features/warehouse-navigation/utils/putaway-navigation";
+import { fallbackWarehouseLayout } from "@/features/warehouse-layout/utils/warehouse-layout";
 
 describe("warehouse put-away navigation", () => {
   it("returns advisory fallback suggestions with capacity and reason", () => {
@@ -154,4 +157,38 @@ describe("warehouse put-away navigation", () => {
     expect(placement.x + placement.width).toBeLessThanOrEqual(100);
     expect(placement.y + placement.height).toBeLessThanOrEqual(100);
   });
+
+  it("maps a published layout into scan-ready shelves", () => {
+    const shelves = layoutToWarehouseShelves(fallbackWarehouseLayout);
+    const shelf = shelves.find((item) => item.code === "A1-S02");
+
+    expect(shelf).toMatchObject({
+      barcode: "A1-S02",
+      code: "A1-S02",
+      level: 2,
+      rackCode: "A1",
+      warehouseId: "central",
+      zoneCode: "A",
+    });
+    expect(shelf?.innerDepth).toBe(150);
+    expect(shelf?.innerWidth).toBe(333);
+  });
+
+  it("builds visual suggestions from backend shelfCode/capacity payloads", () => {
+    const suggestions = buildLayoutPutawaySuggestions({
+      layout: fallbackWarehouseLayout,
+      suggestions: [{ capacity: 120, shelfCode: "A1-S02" }],
+    });
+
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0]).toMatchObject({
+      advisory: true,
+      capacity: 120,
+      pathLabel: "central / Zone A / Rack A1 / A1-S02",
+      reason: "Gợi ý từ WMS theo sức chứa còn lại",
+    });
+    expect(suggestions[0]?.route?.to.code).toBe("A1-S02");
+  });
 });
+
+

@@ -1,32 +1,91 @@
-import { MissingBackendEndpointError } from "@/lib/api-contract";
-import type { WarehouseLayout } from "@/types/api";
-
-function missingWarehouseLayoutEndpoint(endpoint: string): never {
-  throw new MissingBackendEndpointError({ endpoint });
-}
+import { apiClient } from "@/lib/api-client";
+import {
+  throwIfMissingBackendEndpoint,
+  type ApiEnvelope,
+  unwrapApiData,
+} from "@/lib/api-contract";
+import type { ShelfContentItem, WarehouseLayout } from "@/types/api";
 
 export async function getWarehouseLayout(
   warehouseId: string,
   status: "draft" | "published",
 ): Promise<WarehouseLayout | null> {
-  return missingWarehouseLayoutEndpoint(
-    `GET /api/wms/warehouses/${warehouseId}/layout?status=${status}`,
-  );
+  try {
+    const response = await apiClient.get<
+      ApiEnvelope<WarehouseLayout | null> | WarehouseLayout | null
+    >(`/warehouse/${encodeURIComponent(warehouseId)}/layout`, {
+      params: { status },
+    });
+
+    return unwrapApiData(response.data);
+  } catch (error) {
+    throwIfMissingBackendEndpoint(
+      error,
+      `GET /api/wms/warehouse/${warehouseId}/layout?status=${status}`,
+    );
+    throw error;
+  }
 }
 
 export async function saveWarehouseLayoutDraft(
   layout: WarehouseLayout,
 ): Promise<WarehouseLayout> {
-  return missingWarehouseLayoutEndpoint(
-    `PUT /api/wms/warehouses/${layout.warehouseId}/layout/draft`,
-  );
+  try {
+    const response = await apiClient.put<
+      ApiEnvelope<WarehouseLayout> | WarehouseLayout
+    >(`/warehouse/${encodeURIComponent(layout.warehouseId)}/layout/draft`, layout);
+
+    return unwrapApiData(response.data);
+  } catch (error) {
+    throwIfMissingBackendEndpoint(
+      error,
+      `PUT /api/wms/warehouse/${layout.warehouseId}/layout/draft`,
+    );
+    throw error;
+  }
 }
 
 export async function publishWarehouseLayout(
   warehouseId: string,
   draftRevision: number,
 ): Promise<WarehouseLayout> {
-  return missingWarehouseLayoutEndpoint(
-    `POST /api/wms/warehouses/${warehouseId}/layout/publish revision ${draftRevision}`,
-  );
+  try {
+    const response = await apiClient.post<
+      ApiEnvelope<WarehouseLayout> | WarehouseLayout
+    >(`/warehouse/${encodeURIComponent(warehouseId)}/layout/publish`, {
+      draftRevision,
+    });
+
+    return unwrapApiData(response.data);
+  } catch (error) {
+    throwIfMissingBackendEndpoint(
+      error,
+      `POST /api/wms/warehouse/${warehouseId}/layout/publish`,
+    );
+    throw error;
+  }
+}
+
+export async function listShelfContents({
+  shelfCode,
+  warehouseId,
+}: {
+  shelfCode: string;
+  warehouseId: string;
+}) {
+  try {
+    const response = await apiClient.get<
+      ApiEnvelope<ShelfContentItem[]> | ShelfContentItem[]
+    >(`/warehouse/shelves/${encodeURIComponent(shelfCode)}/contents`, {
+      params: { warehouseId },
+    });
+
+    return unwrapApiData(response.data);
+  } catch (error) {
+    throwIfMissingBackendEndpoint(
+      error,
+      `GET /api/wms/warehouse/shelves/${shelfCode}/contents`,
+    );
+    throw error;
+  }
 }

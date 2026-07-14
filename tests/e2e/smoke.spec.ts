@@ -431,11 +431,11 @@ test("picker mobile drawer exposes picker routes", async ({ page }) => {
   await expect(page.getByRole("link", { name: /Nhập hàng/i })).toHaveCount(0);
 });
 
-test("admin sees warehouse structure without layout API calls", async ({ page }) => {
+test("admin manages warehouse layout and can switch to structure data", async ({ page }) => {
   await seedWmsSession(page, ["ADMIN"], "Admin User");
   let layoutCalled = false;
 
-  await page.route("**/api/wms/warehouses/*/layout**", async (route) => {
+  await page.route("**/api/wms/warehouse/*/layout**", async (route) => {
     layoutCalled = true;
     await route.fulfill({
       status: 404,
@@ -482,10 +482,13 @@ test("admin sees warehouse structure without layout API calls", async ({ page })
 
   await page.goto("/warehouses");
   await expect(
-    page.getByRole("heading", { name: /^Kho$/i }),
+    page.getByRole("heading", { name: /Bố trí mặt bằng kho/i }),
   ).toBeVisible();
+  await expect(page.getByRole("button", { name: /Khu vực/i })).toBeVisible();
+  expect(layoutCalled).toBe(true);
+
+  await page.getByRole("tab", { name: /Dữ liệu kệ/i }).click();
   await expect(page.getByText("Danh sách kho", { exact: true })).toBeVisible();
-  expect(layoutCalled).toBe(false);
 });
 
 test("receiver confirms put-away task through warehouse navigation", async ({
@@ -567,3 +570,4 @@ test("receiver confirms put-away task through warehouse navigation", async ({
   await page.getByRole("button", { name: /^Xác nhận$/i }).click();
   await expect(page.getByText(/Đã xác nhận dòng cất hàng/i)).toBeVisible();
 });
+

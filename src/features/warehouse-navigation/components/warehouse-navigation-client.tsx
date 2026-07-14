@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   ArrowRight,
   Barcode,
@@ -50,11 +55,20 @@ import {
   StatusBadge,
   TableSkeleton,
 } from "@/features/admin-shell/components/operations-ui";
-import { getApiErrorMessage } from "@/lib/api-contract";
+import {
+  getWarehouseLayout,
+  listShelfContents,
+} from "@/features/warehouse-layout/services/warehouse-layout.service";
+import {
+  WarehouseArchitectureScene,
+  type WarehouseSceneMode,
+} from "@/features/warehouse-navigation/components/warehouse-architecture-scene";
+import { getApiErrorMessage, isMissingBackendEndpoint } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
 import { useSessionUser } from "@/hooks/use-session-user";
+import type { ShelfContentItem } from "@/types/api";
 
 import {
   listPutawaySuggestionResult,
@@ -70,6 +84,12 @@ import {
   type PutawayTaskItem,
   type PutawayTaskStatus,
 } from "../services/putaway-task.service";
+import {
+  buildLayoutPutawaySuggestions,
+  groupShelvesByRack,
+  layoutToWarehouseShelves,
+  selectSuggestedShelf,
+} from "../utils/putaway-navigation";
 
 const PAGE_SIZE = 20;
 
@@ -155,6 +175,9 @@ export function WarehouseNavigationClient() {
   const [confirmForm, setConfirmForm] = useState(defaultConfirmForm);
   const [suggestionSku, setSuggestionSku] = useState("");
   const [suggestionQty, setSuggestionQty] = useState("1");
+  const [sceneMode, setSceneMode] = useState<WarehouseSceneMode>("map");
+  const [selectedRackCode, setSelectedRackCode] = useState<string | null>(null);
+  const [selectedShelfCode, setSelectedShelfCode] = useState<string | null>(null);
 
   const tasksQuery = useQuery({
     enabled: canUsePutawayApi,
@@ -185,6 +208,13 @@ export function WarehouseNavigationClient() {
     : undefined;
   const activeWarehouseId = detail?.warehouseId ?? "";
 
+  const layoutQuery = useQuery({
+    enabled: canUsePutawayApi && Boolean(activeWarehouseId),
+    queryFn: () => getWarehouseLayout(activeWarehouseId, "published"),
+    queryKey: ["warehouse-layout", activeWarehouseId, "published"],
+    retry: false,
+  });
+
   const suggestionMutation = useMutation({
     mutationFn: () =>
       listPutawaySuggestionResult({
@@ -194,6 +224,114 @@ export function WarehouseNavigationClient() {
       }),
     onError: (error) => toast.error(formatError(error)),
   });
+
+  const apiSuggestions = useMemo(
+    () => suggestionMutation.data?.suggestions ?? [],
+    [suggestionMutation.data?.suggestions],
+  );
+  const layout = layoutQuery.data ?? null;
+  const layoutShelves = useMemo(
+    () => (layout ? layoutToWarehouseShelves(layout) : []),
+    [layout],
+  );
+  const visualSuggestions = useMemo(
+    () =>
+      layout
+        ? buildLayoutPutawaySuggestions({
+            layout,
+            suggestions: apiSuggestions,
+          })
+        : [],
+    [apiSuggestions, layout],
+  );
+  const selectedVisualSuggestion = useMemo(
+    () =>
+      visualSuggestions.find(
+        (suggestion) => suggestion.shelf.code === selectedShelfCode,
+      ) ?? selectSuggestedShelf(visualSuggestions),
+    [selectedShelfCode, visualSuggestions],
+  );
+  const activeSelectedShelfCode =
+    selectedShelfCode ?? selectedVisualSuggestion?.shelf.code ?? null;
+  const activeSelectedRackCode =
+    selectedRackCode ?? selectedVisualSuggestion?.shelf.rackCode ?? null;
+  const suggestedShelfCodes = useMemo(
+    () => new Set(apiSuggestions.map((suggestion) => suggestion.shelfCode)),
+    [apiSuggestions],
+  );
+  const rackGroup = useMemo(
+    () =>
+      activeSelectedRackCode
+        ? groupShelvesByRack(layoutShelves).find(
+            (group) => group.rackCode === activeSelectedRackCode,
+          ) ?? null
+        : null,
+    [activeSelectedRackCode, layoutShelves],
+  );
+  const layoutSource = layout
+    ? "api"
+    : layoutQuery.error && isMissingBackendEndpoint(layoutQuery.error)
+      ? "unsupported"
+      : "missing";
+  const contentQueries = useQueries({
+    queries:
+      sceneMode === "rack" && rackGroup && activeWarehouseId
+        ? rackGroup.shelves.map((shelf) => ({
+            enabled: true,
+            queryFn: () =>
+              listShelfContents({
+                shelfCode: shelf.code,
+                warehouseId: activeWarehouseId,
+              }),
+            queryKey: [
+              "warehouse-shelf-contents",
+              activeWarehouseId,
+              shelf.code,
+            ],
+            retry: false,
+          }))
+        : [],
+  });
+  const contentsByShelf = useMemo(() => {
+    const contents: Record<string, ShelfContentItem[] | undefined> = {};
+
+    rackGroup?.shelves.forEach((shelf, index) => {
+      const data = contentQueries[index]?.data;
+      contents[shelf.code] = Array.isArray(data) ? data : [];
+    });
+
+    return contents;
+  }, [contentQueries, rackGroup]);
+  const loadingShelfCodes = useMemo(
+    () =>
+      new Set(
+        rackGroup?.shelves
+          .filter((_, index) => contentQueries[index]?.isLoading)
+          .map((shelf) => shelf.code) ?? [],
+      ),
+    [contentQueries, rackGroup],
+  );
+  const erroredShelfCodes = useMemo(
+    () =>
+      new Set(
+        rackGroup?.shelves
+          .filter((_, index) => contentQueries[index]?.isError)
+          .map((shelf) => shelf.code) ?? [],
+      ),
+    [contentQueries, rackGroup],
+  );
+  const unsupportedShelfCodes = useMemo(
+    () =>
+      new Set(
+        rackGroup?.shelves
+          .filter((_, index) =>
+            isMissingBackendEndpoint(contentQueries[index]?.error),
+          )
+          .map((shelf) => shelf.code) ?? [],
+      ),
+    [contentQueries, rackGroup],
+  );
+
 
   const confirmMutation = useMutation({
     mutationFn: () =>
@@ -244,6 +382,9 @@ export function WarehouseNavigationClient() {
     setConfirmForm(defaultConfirmForm);
     setSuggestionSku("");
     setSuggestionQty("1");
+    setSceneMode("map");
+    setSelectedRackCode(null);
+    setSelectedShelfCode(null);
     suggestionMutation.reset();
   }
 
@@ -259,10 +400,20 @@ export function WarehouseNavigationClient() {
     });
     setSuggestionSku(item.sku);
     setSuggestionQty(String(Math.max(1, qty)));
+    setSceneMode("map");
+    setSelectedRackCode(null);
+    setSelectedShelfCode(null);
     suggestionMutation.reset();
   }
 
   function selectSuggestion(suggestion: PutawayShelfSuggestion) {
+    const visualSuggestion = visualSuggestions.find(
+      (item) => item.shelf.code === suggestion.shelfCode,
+    );
+
+    setSelectedShelfCode(suggestion.shelfCode);
+    setSelectedRackCode(visualSuggestion?.shelf.rackCode ?? null);
+    setSceneMode(visualSuggestion ? "rack" : "map");
     setConfirmForm((current) => ({
       ...current,
       quantity: String(
@@ -270,6 +421,24 @@ export function WarehouseNavigationClient() {
       ),
       shelfCode: suggestion.shelfCode,
     }));
+  }
+
+  function openRack(rackCode: string, shelfCode: string) {
+    setSelectedRackCode(rackCode);
+    setSelectedShelfCode(shelfCode);
+    setConfirmForm((current) => ({ ...current, shelfCode }));
+    setSceneMode("rack");
+  }
+
+  function selectShelfOnRack(shelfCode: string) {
+    setSelectedShelfCode(shelfCode);
+    setConfirmForm((current) => ({ ...current, shelfCode }));
+  }
+
+  function retryShelfContents(shelfCode: string) {
+    void queryClient.invalidateQueries({
+      queryKey: ["warehouse-shelf-contents", activeWarehouseId, shelfCode],
+    });
   }
 
   const warning = warningLabel(suggestionMutation.data?.warning);
@@ -402,6 +571,28 @@ export function WarehouseNavigationClient() {
               detail={detail}
               selectedItemId={selectedItem?.itemId ?? ""}
               onSelectItem={selectItem}
+            />
+          ) : null}
+
+          {selectedItem && activeWarehouseId ? (
+            <WarehouseArchitectureScene
+              contentsByShelf={contentsByShelf}
+              erroredShelfCodes={erroredShelfCodes}
+              layout={layout}
+              layoutSource={layoutSource}
+              loadingShelfCodes={loadingShelfCodes}
+              onBackToMap={() => setSceneMode("map")}
+              onOpenRack={openRack}
+              onRetryShelf={retryShelfContents}
+              onSelectShelf={selectShelfOnRack}
+              rackGroup={rackGroup}
+              route={selectedVisualSuggestion?.route ?? null}
+              sceneMode={sceneMode}
+              selectedRackCode={activeSelectedRackCode}
+              selectedShelfCode={activeSelectedShelfCode}
+              suggestions={visualSuggestions}
+              suggestedShelfCodes={suggestedShelfCodes}
+              unsupportedShelfCodes={unsupportedShelfCodes}
             />
           ) : null}
         </div>
@@ -697,3 +888,9 @@ function TextField({
     </div>
   );
 }
+
+
+
+
+
+

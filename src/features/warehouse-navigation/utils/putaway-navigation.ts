@@ -1,7 +1,9 @@
+import { buildLayoutRoute } from "@/features/warehouse-layout/utils/warehouse-layout";
 import type {
   PutawaySuggestion,
   ShelfContentItem,
   WarehouseRoute,
+  WarehouseLayout,
   WarehouseRoutePoint,
   WarehouseShelf,
 } from "@/types/api";
@@ -426,6 +428,86 @@ export function normalizeShelfBoxPlacement(
   };
 }
 
+function parseShelfLevel(code: string, fallback: number) {
+  const match = code.match(/(?:S|T)(\d+)$/i);
+  const parsed = match ? Number.parseInt(match[1], 10) : Number.NaN;
+
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export function layoutToWarehouseShelves(layout: WarehouseLayout) {
+  const zonesById = new Map(layout.zones.map((zone) => [zone.id, zone]));
+
+  return layout.racks.flatMap((rack): WarehouseShelf[] => {
+    const zone = zonesById.get(rack.zoneId);
+    const zoneCode = zone?.code ?? rack.zoneId;
+    const zoneName = zone?.name ?? zoneCode;
+    const levelCount = Math.max(1, rack.levelCount);
+
+    return rack.shelfCodes.map((code, index) => {
+      const level = parseShelfLevel(code, index + 1);
+      const visualTop = rack.yM + (levelCount - level) * (rack.depthM + 0.2);
+
+      return {
+        id: `${layout.warehouseId}-${rack.id}-${code}`,
+        barcode: code,
+        code,
+        fillFactor: undefined,
+        height: rack.depthM,
+        innerDepth: Math.round(rack.depthM * 100),
+        innerHeight: undefined,
+        innerWidth: Math.round((rack.widthM * 100) / Math.max(1, rack.bayCount)),
+        isStaging: false,
+        level,
+        rackCode: rack.code,
+        rackName: rack.name,
+        warehouseCode: layout.warehouseId,
+        warehouseId: layout.warehouseId,
+        width: rack.widthM,
+        x: rack.xM,
+        y: visualTop,
+        zoneCode,
+        zoneName,
+      };
+    });
+  });
+}
+
+export function buildLayoutPutawaySuggestions({
+  layout,
+  suggestions,
+}: {
+  layout: WarehouseLayout;
+  suggestions: Array<{ capacity: number; shelfCode: string }>;
+}): PutawaySuggestion[] {
+  const shelvesByCode = new Map(
+    layoutToWarehouseShelves(layout).map((shelf) => [shelf.code, shelf]),
+  );
+
+  return suggestions.flatMap((suggestion): PutawaySuggestion[] => {
+    const shelf = shelvesByCode.get(suggestion.shelfCode);
+    const rack = shelf
+      ? layout.racks.find((item) => item.code === shelf.rackCode)
+      : undefined;
+
+    if (!shelf) {
+      return [];
+    }
+
+    const route = rack ? buildLayoutRoute(layout, rack.code, shelf.code) : null;
+
+    return [
+      {
+        advisory: true,
+        capacity: suggestion.capacity,
+        pathLabel: buildNavigationPath(shelf).join(" / "),
+        reason: "Gợi ý từ WMS theo sức chứa còn lại",
+        ...(route ? { route } : {}),
+        shelf,
+      },
+    ];
+  });
+}
 export function fallbackPutawaySuggestions({
   sku,
   quantity,
@@ -465,3 +547,4 @@ export function fallbackPutawaySuggestions({
 export function selectSuggestedShelf(suggestions: PutawaySuggestion[]) {
   return suggestions[0] ?? null;
 }
+

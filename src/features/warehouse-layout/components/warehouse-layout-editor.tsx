@@ -43,11 +43,11 @@ import { isMissingBackendEndpoint } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import type { WarehouseLayout } from "@/types/api";
 
-const WAREHOUSE_ID = "central";
+const DEFAULT_WAREHOUSE_ID = "central";
 
-function emptyDraftLayout() {
+function emptyDraftLayout(warehouseId: string): WarehouseLayout {
   return {
-    warehouseId: WAREHOUSE_ID,
+    warehouseId,
     revision: 0,
     status: "DRAFT" as const,
     canvas: { widthM: 40, heightM: 24, gridM: 0.5 },
@@ -64,8 +64,9 @@ function nextId(prefix: string, count: number) {
 
 export function WarehouseLayoutEditor() {
   const user = useSessionUser();
-  const canEdit = hasAnyRole(user?.roles, ["ADMIN"]);
+  const canEdit = hasAnyRole(user?.roles, ["MANAGER"]);
   const queryClient = useQueryClient();
+  const warehouseId = user?.warehouseId ?? DEFAULT_WAREHOUSE_ID;
   const [layout, setLayout] = useState<WarehouseLayout | null>(null);
   const [selection, setSelection] = useState<LayoutSelection>(null);
   const [snapEnabled, setSnapEnabled] = useState(true);
@@ -77,25 +78,38 @@ export function WarehouseLayoutEditor() {
   const queryStatus = canEdit ? "draft" : "published";
 
   const layoutQuery = useQuery({
-    enabled: Boolean(user),
-    queryFn: () => getWarehouseLayout(WAREHOUSE_ID, queryStatus),
-    queryKey: ["warehouse-layout", WAREHOUSE_ID, queryStatus],
+    enabled: Boolean(user && warehouseId),
+    queryFn: () => getWarehouseLayout(warehouseId, queryStatus),
+    queryKey: ["warehouse-layout", warehouseId, queryStatus],
     retry: false,
   });
 
   useEffect(() => {
-    if (initializedRef.current || layoutQuery.isPending || layoutQuery.isError) {
+    if (initializedRef.current || layoutQuery.isPending) {
       return;
     }
 
-    const initial = layoutQuery.data ?? (canEdit ? emptyDraftLayout() : null);
-    setLayout(initial);
+    if (layoutQuery.isError) {
+      if (canEdit && isMissingBackendEndpoint(layoutQuery.error)) {
+        const draftLayout = emptyDraftLayout(warehouseId);
+        initializedRef.current = true;
+        const timeoutId = window.setTimeout(() => setLayout(draftLayout), 0);
+        return () => window.clearTimeout(timeoutId);
+      }
+      return;
+    }
+
+    const initial = layoutQuery.data ?? (canEdit ? emptyDraftLayout(warehouseId) : null);
     initializedRef.current = true;
+    const timeoutId = window.setTimeout(() => setLayout(initial), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [
     canEdit,
     layoutQuery.data,
+    layoutQuery.error,
     layoutQuery.isError,
     layoutQuery.isPending,
+    warehouseId,
   ]);
 
   const saveMutation = useMutation({
@@ -114,7 +128,7 @@ export function WarehouseLayoutEditor() {
       setPast([]);
       setFuture([]);
       queryClient.setQueryData(
-        ["warehouse-layout", WAREHOUSE_ID, "draft"],
+        ["warehouse-layout", saved.warehouseId, "draft"],
         saved,
       );
       toast.success(`Đã lưu bản nháp mặt bằng bản ${saved.revision}.`);
@@ -138,7 +152,7 @@ export function WarehouseLayoutEditor() {
     },
     onSuccess: (published) => {
       queryClient.setQueryData(
-        ["warehouse-layout", WAREHOUSE_ID, "published"],
+        ["warehouse-layout", published.warehouseId, "published"],
         published,
       );
       toast.success(`Đã công bố mặt bằng bản ${published.revision}.`);
@@ -414,7 +428,7 @@ export function WarehouseLayoutEditor() {
     return null;
   }
 
-  if (layoutQuery.isError) {
+  if (layoutQuery.isError && !(canEdit && layout && isMissingBackendEndpoint(layoutQuery.error))) {
     const unsupported = isMissingBackendEndpoint(layoutQuery.error);
 
     return (
@@ -436,7 +450,7 @@ export function WarehouseLayoutEditor() {
   if (!layoutQuery.isPending && !layout && !canEdit) {
     return (
       <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-        Chưa có bản vẽ mặt bằng cho kho trung tâm.
+        Chưa có bản vẽ mặt bằng cho kho này.
       </div>
     );
   }
@@ -617,3 +631,8 @@ export function WarehouseLayoutEditor() {
     </div>
   );
 }
+
+
+
+
+
