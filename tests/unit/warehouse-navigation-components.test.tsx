@@ -97,7 +97,7 @@ describe("warehouse navigation components", () => {
       screen.getByRole("button", { name: /Mở Rack A1/i }),
     ).toHaveAttribute("aria-pressed", "true");
     expect(
-      screen.queryByRole("button", { name: /Quay lại mặt bằng/i }),
+      screen.queryByRole("button", { name: /Quay lại sơ đồ/i }),
     ).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Mở Rack A1/i }));
@@ -106,14 +106,14 @@ describe("warehouse navigation components", () => {
       await screen.findByRole("heading", { name: /Rack A1/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Quay lại mặt bằng/i }),
+      screen.getByRole("button", { name: /Quay lại sơ đồ/i }),
     ).toBeInTheDocument();
     expect(screen.getByText("LOT-A")).toBeInTheDocument();
     expect(screen.getByText("CUP-BLANK-500")).toBeInTheDocument();
     expect(screen.getByText("24 cái")).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: /Quay lại mặt bằng/i }),
+      screen.getByRole("button", { name: /Quay lại sơ đồ/i }),
     );
 
     expect(

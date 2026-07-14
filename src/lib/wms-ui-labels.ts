@@ -11,6 +11,7 @@ const statusLabels: Record<string, string> = {
   INACTIVE: "Ngưng dùng",
   PARTIALLY_RECEIVED: "Nhận một phần",
   PENDING: "Chờ xử lý",
+  REJECTED: "Từ chối",
   SENT: "Đã gửi",
 };
 
@@ -44,7 +45,7 @@ export function statusTone(status: string) {
     return "success" as const;
   }
 
-  if (["CANCELLED", "BLACKLIST"].includes(status)) {
+  if (["CANCELLED", "BLACKLIST", "REJECTED"].includes(status)) {
     return "danger" as const;
   }
 

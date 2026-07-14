@@ -68,3 +68,15 @@
   - Internal backend/docs/Swagger/missing-endpoint notes belong in `.codex`, not in production UI copy.
   - Visible brand is `WMS`; remove `PBVM`/`ECOM` from UI while keeping the real API URL unchanged.
   - Logo should adapt to the existing blue/navy UI palette; do not recolor the whole app to match the logo reference.
+- 2026-07-15: WMS Swagger connection and UX compact:
+  - Swagger-backed flows connected in frontend: stock items, suppliers/supplier items, purchase orders, goods receipt notes, put-away tasks/suggestions, goods issues/pick suggestions, print jobs, warehouse/zones/racks/shelves.
+  - Additional Swagger APIs connected: `stock-counts` and `scrap-notes`.
+    - `stock-counts`: list/create/detail/count item/approve.
+    - `scrap-notes`: list/create/detail/approve/reject.
+  - `/adjustments` is no longer a generic placeholder; it renders a real `Kiểm kê` workspace with tabs `Phiếu kiểm` and `Phiếu hủy`.
+  - `auth/refresh` remains centralized in `src/lib/api-client.ts` interceptor and is considered already connected. Do not add duplicate refresh logic in feature services.
+  - Google/Firebase login is intentionally not connected in WMS FE. Do not add a Google button, Firebase SDK, or `googleLogin` service unless product explicitly reintroduces this auth mode.
+  - Still missing from Swagger/backend, so frontend must not call them as real endpoints: warehouse layout save/publish (`/warehouse/{id}/layout`, `/layout/draft`, `/layout/publish`), shelf contents by shelf code, inventory balances/ledger/movements, and inventory value report series.
+  - Warehouse UX decision: only warehouses are the primary list; zones/racks/shelves are edited through the canvas/tooling for the selected warehouse where possible. Without layout APIs, canvas persistence must be clearly limited.
+  - Supplier UX decision: supplier rows expose explicit `Sửa`/`Xóa`; supplier-item rows expose explicit `Sửa`/`Xóa`, with supplier-item delete implemented as soft-delete via `PATCH /supplier/items/{id}` and `isActive=false`.
+  - Verification for latest API connection work: `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm test:e2e` passed.

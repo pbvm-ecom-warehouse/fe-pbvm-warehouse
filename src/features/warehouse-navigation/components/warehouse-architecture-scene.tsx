@@ -208,7 +208,7 @@ function RackElevation({
   if (!rackGroup) {
     return (
       <div className="grid min-h-[420px] place-items-center border border-dashed text-sm text-muted-foreground">
-        Chọn dãy kệ trên mặt bằng để xem chi tiết.
+        Chọn dãy kệ trên sơ đồ để xem chi tiết.
       </div>
     );
   }
@@ -225,7 +225,7 @@ function RackElevation({
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <Button onClick={onBackToMap} size="sm" variant="outline">
           <ArrowLeft data-icon="inline-start" />
-          Quay lại mặt bằng
+          Quay lại sơ đồ
         </Button>
         <Badge variant="secondary">Esc để zoom ra</Badge>
       </div>
@@ -324,7 +324,7 @@ export function WarehouseArchitectureScene({
         <div>
           <div className="flex items-center gap-2 text-base font-semibold">
             <MapPinned className="size-5 text-primary" />
-            Mặt bằng kho
+            Sơ đồ kho
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             Xem khu vực, dãy kệ và lối đi đã sẵn sàng cho điều hướng.
@@ -336,12 +336,12 @@ export function WarehouseArchitectureScene({
           </Badge>
           <Badge variant="outline">
             <Boxes data-icon="inline-start" />
-            {sceneMode === "rack" ? "Chi tiết dãy kệ" : "Mặt bằng"}
+            {sceneMode === "rack" ? "Chi tiết dãy kệ" : "Sơ đồ kho"}
           </Badge>
           {layoutSource !== "api" ? (
             <Badge variant="secondary">
               {layoutSource === "unsupported"
-                ? "Chưa có mặt bằng"
+                ? "Chưa có sơ đồ"
                 : "Chưa sẵn sàng"}
             </Badge>
           ) : null}
@@ -396,7 +396,7 @@ export function WarehouseArchitectureScene({
             <div className="grid min-h-[420px] place-items-center border border-dashed p-8 text-center">
               <div>
                 <MapPinned className="mx-auto size-8 text-muted-foreground" />
-                <h3 className="mt-3 font-semibold">Kho chưa có bản vẽ mặt bằng</h3>
+                <h3 className="mt-3 font-semibold">Kho chưa có sơ đồ</h3>
                 <p className="mt-1 max-w-md text-sm text-muted-foreground">
                   Quản trị viên cần bố trí khu vực, dãy kệ và lối đi trước khi
                   dùng điều hướng.

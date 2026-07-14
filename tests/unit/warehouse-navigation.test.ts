@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   GATE_ROUTE_POINT,
   buildLayoutPutawaySuggestions,
+  buildLayoutShelfSuggestions,
   buildNavigationPath,
   buildRouteToShelf,
   describeShelfGranularity,
@@ -186,6 +187,22 @@ describe("warehouse put-away navigation", () => {
       capacity: 120,
       pathLabel: "central / Zone A / Rack A1 / A1-S02",
       reason: "Gợi ý từ WMS theo sức chứa còn lại",
+    });
+    expect(suggestions[0]?.route?.to.code).toBe("A1-S02");
+  });
+
+  it("maps shared shelfCode suggestions for picking routes", () => {
+    const suggestions = buildLayoutShelfSuggestions({
+      layout: fallbackWarehouseLayout,
+      reason: "Vị trí có hàng để lấy",
+      suggestions: [{ capacity: 12, shelfCode: "A1-S02" }],
+    });
+
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0]).toMatchObject({
+      capacity: 12,
+      reason: "Vị trí có hàng để lấy",
+      shelf: { code: "A1-S02" },
     });
     expect(suggestions[0]?.route?.to.code).toBe("A1-S02");
   });

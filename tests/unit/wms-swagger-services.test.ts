@@ -32,6 +32,20 @@ import {
   listPrintJobs,
   normalizePrintJobListResponse,
 } from "@/features/print-jobs/services/print-job.service";
+import {
+  approveStockCount,
+  countStockCountItem,
+  createStockCount,
+  listStockCounts,
+  normalizeStockCountListResponse,
+} from "@/features/adjustments/services/stock-count.service";
+import {
+  approveScrapNote,
+  createScrapNote,
+  listScrapNotes,
+  normalizeScrapNoteListResponse,
+  rejectScrapNote,
+} from "@/features/adjustments/services/scrap-note.service";
 
 vi.mock("@/lib/api-client", () => ({
   apiClient: {
@@ -130,6 +144,43 @@ const printJob = {
   warehouseId: "wh-1",
 };
 
+const stockCount = {
+  createdAt: "2026-07-05T00:00:00.000Z",
+  createdBy: "counter-1",
+  id: "sc-1",
+  items: [
+    {
+      actualQty: null,
+      itemId: "item-1",
+      shelfId: "shelf-1",
+      sku: "CUP-BLANK-500",
+      systemQty: 12,
+    },
+  ],
+  status: "DRAFT" as const,
+  updatedAt: "2026-07-05T00:00:00.000Z",
+  warehouseId: "wh-1",
+  zoneId: null,
+};
+
+const scrapNote = {
+  createdAt: "2026-07-06T00:00:00.000Z",
+  createdBy: "counter-1",
+  id: "scrap-1",
+  items: [
+    {
+      itemId: "item-1",
+      quantity: 2,
+      reason: "Vỡ khi kiểm hàng",
+      shelfId: "shelf-1",
+      sku: "CUP-BLANK-500",
+    },
+  ],
+  status: "DRAFT" as const,
+  updatedAt: "2026-07-06T00:00:00.000Z",
+  warehouseId: "wh-1",
+};
+
 describe("Swagger-backed WMS services", () => {
   beforeEach(() => {
     mockedDelete.mockReset();
@@ -166,6 +217,14 @@ describe("Swagger-backed WMS services", () => {
     });
     expect(normalizePrintJobListResponse([printJob])).toMatchObject({
       data: [printJob],
+      total: 1,
+    });
+    expect(normalizeStockCountListResponse([stockCount])).toMatchObject({
+      data: [stockCount],
+      total: 1,
+    });
+    expect(normalizeScrapNoteListResponse([scrapNote])).toMatchObject({
+      data: [scrapNote],
       total: 1,
     });
   });
@@ -374,5 +433,110 @@ describe("Swagger-backed WMS services", () => {
         shelfCode: "A1-S03",
       },
     );
+  });
+
+  it("calls stock-count endpoints from Swagger", async () => {
+    mockedGet.mockResolvedValueOnce({ data: [stockCount] });
+    mockedPost.mockResolvedValue({ data: stockCount });
+
+    await listStockCounts({
+      limit: 20,
+      page: 1,
+      status: "DRAFT",
+      warehouseId: "wh-1",
+    });
+    await createStockCount({
+      note: "Kiểm định kỳ",
+      warehouseId: "wh-1",
+      zoneId: "zone-1",
+    });
+    await countStockCountItem({
+      input: {
+        actualQty: 10,
+        reason: "Lệch do vỡ",
+        shelfId: "shelf-1",
+      },
+      itemId: "item-1",
+      stockCountId: "sc-1",
+    });
+    await approveStockCount("sc-1", { reason: "Duyệt kiểm kê" });
+
+    expect(mockedGet).toHaveBeenCalledWith("/stock-counts", {
+      params: {
+        limit: 20,
+        page: 1,
+        status: "DRAFT",
+        warehouseId: "wh-1",
+      },
+    });
+    expect(mockedPost).toHaveBeenCalledWith("/stock-counts", {
+      note: "Kiểm định kỳ",
+      warehouseId: "wh-1",
+      zoneId: "zone-1",
+    });
+    expect(mockedPost).toHaveBeenCalledWith(
+      "/stock-counts/sc-1/items/item-1/count",
+      {
+        actualQty: 10,
+        reason: "Lệch do vỡ",
+        shelfId: "shelf-1",
+      },
+    );
+    expect(mockedPost).toHaveBeenCalledWith("/stock-counts/sc-1/approve", {
+      reason: "Duyệt kiểm kê",
+    });
+  });
+
+  it("calls scrap-note endpoints from Swagger", async () => {
+    mockedGet.mockResolvedValueOnce({ data: [scrapNote] });
+    mockedPost.mockResolvedValue({ data: scrapNote });
+
+    await listScrapNotes({
+      limit: 20,
+      page: 1,
+      status: "DRAFT",
+      warehouseId: "wh-1",
+    });
+    await createScrapNote({
+      items: [
+        {
+          itemId: "item-1",
+          quantity: 2,
+          reason: "Vỡ khi kiểm hàng",
+          shelfId: "shelf-1",
+        },
+      ],
+      note: "Hàng vỡ",
+      warehouseId: "wh-1",
+    });
+    await approveScrapNote("scrap-1");
+    await rejectScrapNote("scrap-1", {
+      rejectReason: "Cần kiểm lại số lượng",
+    });
+
+    expect(mockedGet).toHaveBeenCalledWith("/scrap-notes", {
+      params: {
+        limit: 20,
+        page: 1,
+        status: "DRAFT",
+        warehouseId: "wh-1",
+      },
+    });
+    expect(mockedPost).toHaveBeenCalledWith("/scrap-notes", {
+      items: [
+        {
+          itemId: "item-1",
+          quantity: 2,
+          reason: "Vỡ khi kiểm hàng",
+          shelfId: "shelf-1",
+        },
+      ],
+      note: "Hàng vỡ",
+      warehouseId: "wh-1",
+    });
+    expect(mockedPost).toHaveBeenCalledWith("/scrap-notes/scrap-1/approve");
+    expect(mockedPost).toHaveBeenCalledWith("/scrap-notes/scrap-1/reject", {
+      rejectReason: "Cần kiểm lại số lượng",
+    });
   });
 });

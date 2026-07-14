@@ -13,7 +13,6 @@ const forbiddenPrintJobCopy = [
 ];
 
 const forbiddenOperationalCopy = [
-  "API",
   "Swagger",
   "Purchase Orders",
   "WarehouseItem id",
@@ -21,6 +20,9 @@ const forbiddenOperationalCopy = [
   "Unit price",
   "Order ref",
   "Lot id",
+  "Điều hướng kệ",
+  "Mặt bằng",
+  "Dữ liệu kệ",
   "CUSTOM_PRINT",
   "Dữ liệu chưa có",
 ];

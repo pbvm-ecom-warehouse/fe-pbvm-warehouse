@@ -97,6 +97,18 @@ const putawayKeys = {
   detail: (taskId: string) => ["putaway-tasks", "detail", taskId] as const,
   list: (params: { page: number; status: PutawayTaskStatus | "ALL" }) =>
     ["putaway-tasks", "list", params] as const,
+  suggestions: ({
+    itemId,
+    quantity,
+    sku,
+    warehouseId,
+  }: {
+    itemId: string;
+    quantity: number;
+    sku: string;
+    warehouseId: string;
+  }) =>
+    ["putaway-tasks", "suggestions", warehouseId, itemId, sku, quantity] as const,
 };
 
 const defaultConfirmForm = {
@@ -157,6 +169,26 @@ function ErrorBanner({ error }: { error: unknown }) {
   );
 }
 
+function ShelfCodeFallback({
+  shelfCode,
+  text,
+}: {
+  shelfCode: string;
+  text: string;
+}) {
+  return (
+    <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 p-3">
+      <div className="text-xs font-medium text-muted-foreground">
+        Mã vị trí cần đến
+      </div>
+      <div className="mt-1 font-mono text-lg font-semibold text-primary">
+        {shelfCode}
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">{text}</p>
+    </div>
+  );
+}
+
 export function WarehouseNavigationClient() {
   const user = useSessionUser();
   const queryClient = useQueryClient();
@@ -173,8 +205,6 @@ export function WarehouseNavigationClient() {
   const [selectedTaskId, setSelectedTaskId] = useState("");
   const [selectedItemId, setSelectedItemId] = useState("");
   const [confirmForm, setConfirmForm] = useState(defaultConfirmForm);
-  const [suggestionSku, setSuggestionSku] = useState("");
-  const [suggestionQty, setSuggestionQty] = useState("1");
   const [sceneMode, setSceneMode] = useState<WarehouseSceneMode>("map");
   const [selectedRackCode, setSelectedRackCode] = useState<string | null>(null);
   const [selectedShelfCode, setSelectedShelfCode] = useState<string | null>(null);
@@ -206,7 +236,11 @@ export function WarehouseNavigationClient() {
   const selectedItem = selectedItemId
     ? detail?.items.find((item) => item.itemId === selectedItemId)
     : undefined;
+  const activeItemId = selectedItem?.itemId ?? "";
   const activeWarehouseId = detail?.warehouseId ?? "";
+  const suggestionQty = selectedItem
+    ? Math.max(1, selectedItem.remainingQty ?? selectedItem.quantity)
+    : 1;
 
   const layoutQuery = useQuery({
     enabled: canUsePutawayApi && Boolean(activeWarehouseId),
@@ -215,19 +249,30 @@ export function WarehouseNavigationClient() {
     retry: false,
   });
 
-  const suggestionMutation = useMutation({
-    mutationFn: () =>
+  const suggestionsQuery = useQuery({
+    enabled:
+      canUsePutawayApi &&
+      Boolean(activeWarehouseId) &&
+      Boolean(activeItemId) &&
+      Boolean(selectedItem?.sku),
+    queryFn: () =>
       listPutawaySuggestionResult({
-        quantity: parsePositiveNumber(suggestionQty),
-        sku: suggestionSku.trim(),
+        quantity: suggestionQty,
+        sku: selectedItem?.sku ?? "",
         warehouseId: activeWarehouseId,
       }),
-    onError: (error) => toast.error(formatError(error)),
+    queryKey: putawayKeys.suggestions({
+      itemId: activeItemId,
+      quantity: suggestionQty,
+      sku: selectedItem?.sku ?? "",
+      warehouseId: activeWarehouseId,
+    }),
+    retry: false,
   });
 
   const apiSuggestions = useMemo(
-    () => suggestionMutation.data?.suggestions ?? [],
-    [suggestionMutation.data?.suggestions],
+    () => suggestionsQuery.data?.suggestions ?? [],
+    [suggestionsQuery.data?.suggestions],
   );
   const layout = layoutQuery.data ?? null;
   const layoutShelves = useMemo(
@@ -354,17 +399,6 @@ export function WarehouseNavigationClient() {
     setPage(1);
   }
 
-  function handleSuggestion(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!activeWarehouseId || !suggestionSku.trim()) {
-      toast.error("Cần chọn dòng cất hàng và nhập SKU.");
-      return;
-    }
-
-    suggestionMutation.mutate();
-  }
-
   function handleConfirm(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -380,12 +414,9 @@ export function WarehouseNavigationClient() {
     setSelectedTaskId(task.id);
     setSelectedItemId("");
     setConfirmForm(defaultConfirmForm);
-    setSuggestionSku("");
-    setSuggestionQty("1");
     setSceneMode("map");
     setSelectedRackCode(null);
     setSelectedShelfCode(null);
-    suggestionMutation.reset();
   }
 
   function selectItem(item: PutawayTaskItem) {
@@ -398,12 +429,9 @@ export function WarehouseNavigationClient() {
       quantity: String(Math.max(1, qty)),
       shelfCode: "",
     });
-    setSuggestionSku(item.sku);
-    setSuggestionQty(String(Math.max(1, qty)));
     setSceneMode("map");
     setSelectedRackCode(null);
     setSelectedShelfCode(null);
-    suggestionMutation.reset();
   }
 
   function selectSuggestion(suggestion: PutawayShelfSuggestion) {
@@ -441,12 +469,19 @@ export function WarehouseNavigationClient() {
     });
   }
 
-  const warning = warningLabel(suggestionMutation.data?.warning);
+  const warning = warningLabel(suggestionsQuery.data?.warning);
+  const fallbackShelfCode =
+    selectedShelfCode ?? apiSuggestions[0]?.shelfCode ?? "";
+  const shouldShowShelfFallback =
+    Boolean(fallbackShelfCode) &&
+    (!layout || !visualSuggestions.some(
+      (suggestion) => suggestion.shelf.code === fallbackShelfCode,
+    ));
 
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Điều hướng kệ"
+        title="Cất hàng"
         actions={
           <>
           <Button
@@ -468,7 +503,7 @@ export function WarehouseNavigationClient() {
             <Button asChild variant="outline">
               <Link href="/warehouses">
                 <Warehouse data-icon="inline-start" />
-                Quản lý kệ
+                Quản lý vị trí
                 <ArrowRight data-icon="inline-end" />
               </Link>
             </Button>
@@ -602,66 +637,47 @@ export function WarehouseNavigationClient() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <MapPinned className="size-4 text-primary" />
-                Gợi ý mã vị trí
+                Vị trí cất hàng
               </CardTitle>
               <CardDescription>
-                {selectedItem?.sku ?? "Chọn dòng hàng để xem vị trí."}
+                {selectedItem?.sku ?? "Chọn dòng hàng để xem vị trí"}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {selectedItem ? (
-              <form className="grid gap-3" onSubmit={handleSuggestion}>
-                <TextField
-                  id="putaway-suggestion-sku"
-                  label="SKU"
-                  value={suggestionSku}
-                  onChange={setSuggestionSku}
-                />
-                <TextField
-                  id="putaway-suggestion-qty"
-                  label="Số lượng"
-                  type="number"
-                  value={suggestionQty}
-                  onChange={setSuggestionQty}
-                />
-                <Button
-                  disabled={
-                    !canUsePutawayApi ||
-                    !activeWarehouseId ||
-                    suggestionMutation.isPending
-                  }
-                  type="submit"
-                >
-                  {suggestionMutation.isPending ? (
-                    <LoaderCircle className="animate-spin" data-icon="inline-start" />
-                  ) : (
-                    <Search data-icon="inline-start" />
-                  )}
-                  Tìm vị trí
-                </Button>
-              </form>
-              ) : (
-                <EmptyState title="Chưa chọn dòng cất hàng" />
-              )}
+              {!selectedItem ? (
+                <EmptyState title="Chọn dòng hàng để xem vị trí" />
+              ) : suggestionsQuery.isLoading ? (
+                <TableSkeleton columns={2} rows={3} />
+              ) : null}
 
-              {suggestionMutation.error ? (
-                <ErrorBanner error={suggestionMutation.error} />
+              {suggestionsQuery.error ? (
+                <ErrorBanner error={suggestionsQuery.error} />
               ) : null}
               {warning ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                   {warning}
                 </div>
               ) : null}
-              {(suggestionMutation.data?.suggestions ?? []).length === 0 &&
-              suggestionMutation.isSuccess ? (
+              {apiSuggestions.length === 0 &&
+              suggestionsQuery.isSuccess ? (
                 <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
                   Chưa có vị trí phù hợp cho mặt hàng và số lượng này.
                 </div>
               ) : null}
+              {shouldShowShelfFallback ? (
+                <ShelfCodeFallback
+                  shelfCode={fallbackShelfCode}
+                  text="Kho chưa có sơ đồ cho vị trí này. Nhân viên dùng mã vị trí để tìm kệ và quét xác nhận."
+                />
+              ) : null}
               <div className="grid gap-2">
-                {(suggestionMutation.data?.suggestions ?? []).map((suggestion) => (
+                {apiSuggestions.map((suggestion) => (
                   <button
-                    className="flex items-center justify-between gap-3 rounded-lg border border-border/70 p-3 text-left text-sm transition hover:bg-accent/60"
+                    className={cn(
+                      "flex items-center justify-between gap-3 rounded-lg border border-border/70 p-3 text-left text-sm transition hover:bg-accent/60",
+                      selectedShelfCode === suggestion.shelfCode &&
+                        "border-primary bg-primary/5",
+                    )}
                     key={suggestion.shelfCode}
                     onClick={() => selectSuggestion(suggestion)}
                     type="button"

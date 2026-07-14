@@ -238,7 +238,7 @@ export function WarehouseFloorPlan({
       )}
     >
       <svg
-        aria-label="Mặt bằng kiến trúc kho"
+        aria-label="Sơ đồ kho"
         className="block h-auto min-h-[420px] w-full touch-none select-none"
         onPointerDown={() => onSelect?.(null)}
         onPointerMove={handlePointerMove}

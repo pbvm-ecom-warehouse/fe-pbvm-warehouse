@@ -43,7 +43,7 @@ export const dashboardRoutes = [
   },
   {
     href: "/warehouse-navigation",
-    label: "Điều hướng kệ",
+    label: "Cất hàng",
     icon: MapPinned,
     allowedRoles: getRouteAllowedRoles("/warehouse-navigation"),
   },

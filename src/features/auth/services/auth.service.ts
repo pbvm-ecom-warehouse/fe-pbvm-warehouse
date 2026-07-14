@@ -26,20 +26,7 @@ import type {
 
 import type { LoginInput } from "../schemas/login.schema";
 
-export async function getCurrentUser() {
-  const response = await apiClient.get<
-    ApiEnvelope<WmsUserResponse> | WmsUserResponse
-  >("/auth/me");
-
-  return unwrapApiData(response.data);
-}
-
-export async function login(input: LoginInput) {
-  const response = await apiClient.post<
-    ApiEnvelope<AuthTokenResponse> | AuthTokenResponse
-  >("/auth/login", input);
-  const data = unwrapApiData(response.data);
-
+async function establishSession(data: AuthTokenResponse) {
   setAuthTokens(data);
   const tokenUser = sessionUserFromAccessToken(
     data.accessToken,
@@ -59,6 +46,23 @@ export async function login(input: LoginInput) {
 
   setTenantId(sessionUser.tenantId ?? env.NEXT_PUBLIC_DEFAULT_TENANT_ID);
   useAuthStore.getState().setUser(sessionUser);
+}
+
+export async function getCurrentUser() {
+  const response = await apiClient.get<
+    ApiEnvelope<WmsUserResponse> | WmsUserResponse
+  >("/auth/me");
+
+  return unwrapApiData(response.data);
+}
+
+export async function login(input: LoginInput) {
+  const response = await apiClient.post<
+    ApiEnvelope<AuthTokenResponse> | AuthTokenResponse
+  >("/auth/login", input);
+  const data = unwrapApiData(response.data);
+
+  await establishSession(data);
 
   return data;
 }

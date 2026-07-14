@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   LoaderCircle,
+  Pencil,
   Plus,
   RefreshCw,
   Save,
@@ -51,7 +52,6 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  EntityDrawer,
   PageHeader,
   PermissionNotice,
   StatusBadge,
@@ -59,7 +59,6 @@ import {
 } from "@/features/admin-shell/components/operations-ui";
 import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
-import { cn } from "@/lib/utils";
 import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
 import { useSessionUser } from "@/hooks/use-session-user";
 
@@ -191,7 +190,9 @@ export function SuppliersClient() {
     "ALL",
   );
   const [page, setPage] = useState(1);
-  const [selectedSupplierId, setSelectedSupplierId] = useState("");
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [deleteSupplierTarget, setDeleteSupplierTarget] =
+    useState<Supplier | null>(null);
   const [createForm, setCreateForm] = useState(defaultSupplierForm);
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -211,11 +212,6 @@ export function SuppliersClient() {
     () => suppliersQuery.data?.data ?? [],
     [suppliersQuery.data?.data],
   );
-  const selectedSupplier = useMemo(
-    () => suppliers.find((supplier) => supplier.id === selectedSupplierId),
-    [selectedSupplierId, suppliers],
-  );
-  const activeSupplierId = selectedSupplier?.id ?? "";
   const total = suppliersQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -224,10 +220,20 @@ export function SuppliersClient() {
     onError: (error) => toast.error(formatError(error)),
     onSuccess: (supplier) => {
       setCreateForm(defaultSupplierForm);
-      setSelectedSupplierId(supplier.id);
+      setEditingSupplier(supplier);
       void queryClient.invalidateQueries({ queryKey: ["suppliers", "list"] });
       setDialogOpen(false);
       toast.success("Đã tạo nhà cung cấp");
+    },
+  });
+
+  const deleteSupplierMutation = useMutation({
+    mutationFn: (supplierId: string) => deleteSupplier(supplierId),
+    onError: (error) => toast.error(formatError(error)),
+    onSuccess: () => {
+      setDeleteSupplierTarget(null);
+      void queryClient.invalidateQueries({ queryKey: ["suppliers", "list"] });
+      toast.success("Đã xóa nhà cung cấp");
     },
   });
 
@@ -361,21 +367,15 @@ export function SuppliersClient() {
                   <TableHead>Tên</TableHead>
                   <TableHead>Liên hệ</TableHead>
                   <TableHead>Trạng thái</TableHead>
+                  <TableHead className="w-36 text-right">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {suppliers.length === 0 ? (
-                  <EmptyRow colSpan={4} label="Chưa có nhà cung cấp." />
+                  <EmptyRow colSpan={5} label="Chưa có nhà cung cấp." />
                 ) : (
                   suppliers.map((supplier) => (
-                    <TableRow
-                      className={cn(
-                        "cursor-pointer",
-                        supplier.id === activeSupplierId && "bg-primary/5",
-                      )}
-                      key={supplier.id}
-                      onClick={() => setSelectedSupplierId(supplier.id)}
-                    >
+                    <TableRow key={supplier.id} className="hover:bg-muted/35">
                       <TableCell className="font-medium">
                         {supplier.code}
                       </TableCell>
@@ -387,6 +387,30 @@ export function SuppliersClient() {
                         <StatusBadge tone={statusTone(supplier.status)}>
                           {statusLabel(supplier.status)}
                         </StatusBadge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            disabled={!canManage}
+                            onClick={() => setEditingSupplier(supplier)}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                          >
+                            <Pencil data-icon="inline-start" />
+                            Sửa
+                          </Button>
+                          <Button
+                            disabled={!canDelete}
+                            onClick={() => setDeleteSupplierTarget(supplier)}
+                            size="sm"
+                            type="button"
+                            variant="destructive"
+                          >
+                            <Trash2 data-icon="inline-start" />
+                            Xóa
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -422,23 +446,65 @@ export function SuppliersClient() {
         </Card>
 
       </div>
+      <Dialog
+        open={Boolean(editingSupplier)}
+        onOpenChange={(open) => !open && setEditingSupplier(null)}
+      >
+        <DialogContent size="5xl" className="max-h-[90vh] overflow-y-auto p-0">
+          {editingSupplier ? (
+            <>
+              <DialogHeader className="border-b bg-muted/20 px-6 py-4">
+                <DialogTitle>{editingSupplier.name}</DialogTitle>
+                <DialogDescription>{editingSupplier.code}</DialogDescription>
+              </DialogHeader>
+              <div className="p-4">
+                <SupplierDetailSection
+                  canDelete={canDelete}
+                  canManage={canManage}
+                  key={editingSupplier.id}
+                  supplier={editingSupplier}
+                  onDeleted={() => setEditingSupplier(null)}
+                />
+              </div>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
-      {selectedSupplier ? (
-        <EntityDrawer
-          open
-          title={selectedSupplier.name}
-          description={selectedSupplier.code}
-          onOpenChange={(open) => !open && setSelectedSupplierId("")}
-        >
-          <SupplierDetailSection
-            canDelete={canDelete}
-            canManage={canManage}
-            key={selectedSupplier.id}
-            supplier={selectedSupplier}
-            onDeleted={() => setSelectedSupplierId("")}
-          />
-        </EntityDrawer>
-      ) : null}
+      <Dialog
+        open={Boolean(deleteSupplierTarget)}
+        onOpenChange={(open) => !open && setDeleteSupplierTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xóa nhà cung cấp?</DialogTitle>
+            <DialogDescription>
+              Hành động này chỉ dùng khi dữ liệu nhà cung cấp không còn cần
+              quản lý trong WMS.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                Hủy
+              </Button>
+            </DialogClose>
+            <Button
+              disabled={!deleteSupplierTarget || deleteSupplierMutation.isPending}
+              onClick={() => {
+                if (deleteSupplierTarget) {
+                  deleteSupplierMutation.mutate(deleteSupplierTarget.id);
+                }
+              }}
+              type="button"
+              variant="destructive"
+            >
+              <Trash2 data-icon="inline-start" />
+              Xóa nhà cung cấp
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -468,7 +534,9 @@ function SupplierDetailSection({
   const [nextStatus, setNextStatus] = useState<SupplierStatus>(supplier.status);
   const [itemForm, setItemForm] = useState(defaultSupplierItemForm);
   const [itemEdit, setItemEdit] = useState(defaultSupplierItemForm);
-  const [editingItemId, setEditingItemId] = useState("");
+  const [editingItem, setEditingItem] = useState<SupplierItem | null>(null);
+  const [deleteItemTarget, setDeleteItemTarget] =
+    useState<SupplierItem | null>(null);
   const [blacklistConfirmOpen, setBlacklistConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
@@ -522,6 +590,7 @@ function SupplierDetailSection({
   const updateItemMutation = useMutation({
     mutationFn: (itemId: string) =>
       updateSupplierItem(itemId, {
+        itemId: requiredText(itemEdit.itemId),
         isActive: itemEdit.isActive,
         leadTimeDays: optionalNumber(itemEdit.leadTimeDays),
         minOrderQty: optionalNumber(itemEdit.minOrderQty),
@@ -531,11 +600,26 @@ function SupplierDetailSection({
       }),
     onError: (error) => toast.error(formatError(error)),
     onSuccess: () => {
-      setEditingItemId("");
+      setEditingItem(null);
       void queryClient.invalidateQueries({
         queryKey: supplierKeys.items(supplier.id),
       });
       toast.success("Đã cập nhật mặt hàng NCC");
+    },
+  });
+
+  const deleteItemMutation = useMutation({
+    mutationFn: (itemId: string) =>
+      updateSupplierItem(itemId, {
+        isActive: false,
+      }),
+    onError: (error) => toast.error(formatError(error)),
+    onSuccess: () => {
+      setDeleteItemTarget(null);
+      void queryClient.invalidateQueries({
+        queryKey: supplierKeys.items(supplier.id),
+      });
+      toast.success("Đã xóa mặt hàng NCC");
     },
   });
 
@@ -557,6 +641,25 @@ function SupplierDetailSection({
   function handleUpsertItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     upsertItemMutation.mutate();
+  }
+
+  function openItemEdit(item: SupplierItem) {
+    setEditingItem(item);
+    setItemEdit({
+      isActive: item.isActive,
+      itemId: item.itemId,
+      leadTimeDays: item.leadTimeDays?.toString() ?? "",
+      minOrderQty: item.minOrderQty?.toString() ?? "",
+      purchasePrice: item.purchasePrice.toString(),
+      supplierItemCode: item.supplierItemCode ?? "",
+    });
+  }
+
+  function handleUpdateItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (editingItem) {
+      updateItemMutation.mutate(editingItem.id);
+    }
   }
 
   const canUnblacklist =
@@ -779,25 +882,52 @@ function SupplierDetailSection({
 
           <SupplierItemTable
             canManage={canManage}
-            editingItemId={editingItemId}
-            editForm={itemEdit}
             items={supplierItems}
-            updateBusy={updateItemMutation.isPending}
-            onEditChange={setItemEdit}
-            onEditStart={(item) => {
-              setEditingItemId(item.id);
-              setItemEdit({
-                isActive: item.isActive,
-                itemId: item.itemId,
-                leadTimeDays: item.leadTimeDays?.toString() ?? "",
-                minOrderQty: item.minOrderQty?.toString() ?? "",
-                purchasePrice: item.purchasePrice.toString(),
-                supplierItemCode: item.supplierItemCode ?? "",
-              });
-            }}
-            onEditStop={() => setEditingItemId("")}
-            onUpdate={(itemId) => updateItemMutation.mutate(itemId)}
+            onDelete={setDeleteItemTarget}
+            onEdit={openItemEdit}
           />
+          <SupplierItemEditDialog
+            busy={updateItemMutation.isPending}
+            form={itemEdit}
+            open={Boolean(editingItem)}
+            onChange={setItemEdit}
+            onOpenChange={(open) => !open && setEditingItem(null)}
+            onSubmit={handleUpdateItem}
+          />
+          <Dialog
+            open={Boolean(deleteItemTarget)}
+            onOpenChange={(open) => !open && setDeleteItemTarget(null)}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Xóa mặt hàng NCC?</DialogTitle>
+                <DialogDescription>
+                  Mặt hàng này sẽ chuyển sang trạng thái ngưng dùng trong danh
+                  mục của nhà cung cấp.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">
+                    Hủy
+                  </Button>
+                </DialogClose>
+                <Button
+                  disabled={!deleteItemTarget || deleteItemMutation.isPending}
+                  onClick={() => {
+                    if (deleteItemTarget) {
+                      deleteItemMutation.mutate(deleteItemTarget.id);
+                    }
+                  }}
+                  type="button"
+                  variant="destructive"
+                >
+                  <Trash2 data-icon="inline-start" />
+                  Xóa
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </CardContent>
       </Card>
     </div>
@@ -919,44 +1049,32 @@ function TextField({
 
 function SupplierItemTable({
   canManage,
-  editingItemId,
-  editForm,
   items,
-  onEditChange,
-  onEditStart,
-  onEditStop,
-  onUpdate,
-  updateBusy,
+  onDelete,
+  onEdit,
 }: {
   canManage: boolean;
-  editingItemId: string;
-  editForm: typeof defaultSupplierItemForm;
   items: SupplierItem[];
-  onEditChange: (form: typeof defaultSupplierItemForm) => void;
-  onEditStart: (item: SupplierItem) => void;
-  onEditStop: () => void;
-  onUpdate: (itemId: string) => void;
-  updateBusy: boolean;
+  onDelete: (item: SupplierItem) => void;
+  onEdit: (item: SupplierItem) => void;
 }) {
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Mã mặt hàng kho</TableHead>
-          <TableHead>Giá</TableHead>
-          <TableHead>Giao hàng / SL tối thiểu</TableHead>
-          <TableHead>Trạng thái</TableHead>
-          <TableHead className="w-32"></TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {items.length === 0 ? (
-          <EmptyRow colSpan={5} label="Chưa có mặt hàng NCC." />
-        ) : (
-          items.map((item) => {
-            const isEditing = editingItemId === item.id;
-
-            return (
+    <div className="overflow-x-auto rounded-lg border border-border/70">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Mã mặt hàng kho</TableHead>
+            <TableHead>Giá nhập</TableHead>
+            <TableHead>Giao hàng / SL tối thiểu</TableHead>
+            <TableHead>Trạng thái</TableHead>
+            <TableHead className="w-36 text-right">Thao tác</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {items.length === 0 ? (
+            <EmptyRow colSpan={5} label="Chưa có mặt hàng NCC." />
+          ) : (
+            items.map((item) => (
               <TableRow key={item.id}>
                 <TableCell className="font-medium">
                   <div>{item.itemId}</div>
@@ -964,108 +1082,140 @@ function SupplierItemTable({
                     {item.supplierItemCode ?? "Chưa có mã NCC"}
                   </div>
                 </TableCell>
+                <TableCell>{item.purchasePrice.toLocaleString("vi-VN")}</TableCell>
                 <TableCell>
-                  {isEditing ? (
-                    <Input
-                      value={editForm.purchasePrice}
-                      onChange={(event) =>
-                        onEditChange({
-                          ...editForm,
-                          purchasePrice: event.target.value,
-                        })
-                      }
-                    />
-                  ) : (
-                    item.purchasePrice.toLocaleString("vi-VN")
-                  )}
+                  {item.leadTimeDays ?? 0} ngày / {item.minOrderQty ?? 0}
                 </TableCell>
                 <TableCell>
-                  {isEditing ? (
-                    <div className="grid gap-2">
-                      <Input
-                        placeholder="Thời gian giao"
-                        value={editForm.leadTimeDays}
-                        onChange={(event) =>
-                          onEditChange({
-                            ...editForm,
-                            leadTimeDays: event.target.value,
-                          })
-                        }
-                      />
-                      <Input
-                        placeholder="SL đặt tối thiểu"
-                        value={editForm.minOrderQty}
-                        onChange={(event) =>
-                          onEditChange({
-                            ...editForm,
-                            minOrderQty: event.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                  ) : (
-                    `${item.leadTimeDays ?? 0} ngày / ${item.minOrderQty ?? 0}`
-                  )}
+                  <StatusBadge tone={item.isActive ? "success" : "neutral"}>
+                    {item.isActive ? "Đang dùng" : "Ngưng dùng"}
+                  </StatusBadge>
                 </TableCell>
                 <TableCell>
-                  {isEditing ? (
-                    <Label className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={editForm.isActive}
-                        onCheckedChange={(checked) =>
-                          onEditChange({
-                            ...editForm,
-                            isActive: checked === true,
-                          })
-                        }
-                      />
-                      Đang dùng
-                    </Label>
-                  ) : (
-                    <StatusBadge tone={item.isActive ? "success" : "neutral"}>
-                      {item.isActive ? "Đang dùng" : "Ngưng dùng"}
-                    </StatusBadge>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {isEditing ? (
-                    <div className="flex gap-2">
-                      <Button
-                        disabled={!canManage || updateBusy}
-                        onClick={() => onUpdate(item.id)}
-                        size="sm"
-                        type="button"
-                      >
-                        <Save data-icon="inline-start" />
-                        Lưu
-                      </Button>
-                      <Button
-                        onClick={onEditStop}
-                        size="sm"
-                        type="button"
-                        variant="outline"
-                      >
-                        Hủy
-                      </Button>
-                    </div>
-                  ) : (
+                  <div className="flex justify-end gap-2">
                     <Button
                       disabled={!canManage}
-                      onClick={() => onEditStart(item)}
+                      onClick={() => onEdit(item)}
                       size="sm"
                       type="button"
                       variant="outline"
                     >
-                      <Save data-icon="inline-start" />
+                      <Pencil data-icon="inline-start" />
                       Sửa
                     </Button>
-                  )}
+                    <Button
+                      disabled={!canManage || !item.isActive}
+                      onClick={() => onDelete(item)}
+                      size="sm"
+                      type="button"
+                      variant="destructive"
+                    >
+                      <Trash2 data-icon="inline-start" />
+                      Xóa
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
-            );
-          })
-        )}
-      </TableBody>
-    </Table>
+            ))
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+function SupplierItemEditDialog({
+  busy,
+  form,
+  onChange,
+  onOpenChange,
+  onSubmit,
+  open,
+}: {
+  busy: boolean;
+  form: typeof defaultSupplierItemForm;
+  onChange: (form: typeof defaultSupplierItemForm) => void;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  open: boolean;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent size="lg">
+        <DialogHeader>
+          <DialogTitle>Sửa mặt hàng NCC</DialogTitle>
+          <DialogDescription>
+            Cập nhật mã hàng, giá nhập và điều kiện đặt hàng.
+          </DialogDescription>
+        </DialogHeader>
+        <form className="space-y-4" onSubmit={onSubmit}>
+          <div className="grid gap-3 md:grid-cols-2">
+            <TextField
+              id="supplier-item-edit-item-id"
+              label="Mã mặt hàng kho"
+              value={form.itemId}
+              onChange={(value) => onChange({ ...form, itemId: value })}
+            />
+            <TextField
+              id="supplier-item-edit-code"
+              label="Mã hàng NCC"
+              required={false}
+              value={form.supplierItemCode}
+              onChange={(value) =>
+                onChange({ ...form, supplierItemCode: value })
+              }
+            />
+            <TextField
+              id="supplier-item-edit-price"
+              label="Giá nhập"
+              value={form.purchasePrice}
+              onChange={(value) => onChange({ ...form, purchasePrice: value })}
+            />
+            <TextField
+              id="supplier-item-edit-lead-time"
+              label="Thời gian giao"
+              required={false}
+              value={form.leadTimeDays}
+              onChange={(value) => onChange({ ...form, leadTimeDays: value })}
+            />
+            <TextField
+              id="supplier-item-edit-moq"
+              label="SL đặt tối thiểu"
+              required={false}
+              value={form.minOrderQty}
+              onChange={(value) => onChange({ ...form, minOrderQty: value })}
+            />
+            <Label
+              className="flex items-center gap-2 rounded-lg border border-border/70 px-3 py-2 text-sm font-medium md:self-end"
+              htmlFor="supplier-item-edit-active"
+            >
+              <Checkbox
+                checked={form.isActive}
+                id="supplier-item-edit-active"
+                onCheckedChange={(checked) =>
+                  onChange({ ...form, isActive: checked === true })
+                }
+              />
+              Đang dùng
+            </Label>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                Hủy
+              </Button>
+            </DialogClose>
+            <Button disabled={busy} type="submit">
+              {busy ? (
+                <LoaderCircle className="animate-spin" data-icon="inline-start" />
+              ) : (
+                <Save data-icon="inline-start" />
+              )}
+              Lưu mặt hàng
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

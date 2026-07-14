@@ -62,11 +62,18 @@ function nextId(prefix: string, count: number) {
   return `${prefix}-${Date.now()}-${count + 1}`;
 }
 
-export function WarehouseLayoutEditor() {
+export function WarehouseLayoutEditor({
+  warehouseId: warehouseIdOverride,
+  warehouseName,
+}: {
+  warehouseId?: string;
+  warehouseName?: string;
+} = {}) {
   const user = useSessionUser();
   const canEdit = hasAnyRole(user?.roles, ["MANAGER"]);
   const queryClient = useQueryClient();
-  const warehouseId = user?.warehouseId ?? DEFAULT_WAREHOUSE_ID;
+  const warehouseId =
+    warehouseIdOverride ?? user?.warehouseId ?? DEFAULT_WAREHOUSE_ID;
   const [layout, setLayout] = useState<WarehouseLayout | null>(null);
   const [selection, setSelection] = useState<LayoutSelection>(null);
   const [snapEnabled, setSnapEnabled] = useState(true);
@@ -76,6 +83,7 @@ export function WarehouseLayoutEditor() {
   const initializedRef = useRef(false);
   const interactionStartRef = useRef<WarehouseLayout | null>(null);
   const queryStatus = canEdit ? "draft" : "published";
+  const layoutTitle = warehouseName ? `Sơ đồ kho ${warehouseName}` : "Bố trí sơ đồ kho";
 
   const layoutQuery = useQuery({
     enabled: Boolean(user && warehouseId),
@@ -118,8 +126,8 @@ export function WarehouseLayoutEditor() {
     onError: (error) => {
       toast.error(
         isMissingBackendEndpoint(error)
-          ? "Chưa thể lưu bản nháp mặt bằng."
-          : "Không lưu được bản nháp. Kiểm tra kết nối hoặc phiên bản mặt bằng.",
+          ? "Chưa thể lưu bản nháp sơ đồ."
+          : "Không lưu được bản nháp. Kiểm tra kết nối hoặc phiên bản sơ đồ.",
       );
     },
     onSuccess: (saved) => {
@@ -131,7 +139,7 @@ export function WarehouseLayoutEditor() {
         ["warehouse-layout", saved.warehouseId, "draft"],
         saved,
       );
-      toast.success(`Đã lưu bản nháp mặt bằng bản ${saved.revision}.`);
+      toast.success(`Đã lưu bản nháp sơ đồ bản ${saved.revision}.`);
     },
   });
 
@@ -146,8 +154,8 @@ export function WarehouseLayoutEditor() {
     onError: (error) => {
       toast.error(
         isMissingBackendEndpoint(error)
-          ? "Chưa thể công bố mặt bằng."
-          : "Không công bố được mặt bằng. Kiểm tra các lỗi đang hiển thị.",
+          ? "Chưa thể công bố sơ đồ."
+          : "Không công bố được sơ đồ. Kiểm tra các lỗi đang hiển thị.",
       );
     },
     onSuccess: (published) => {
@@ -155,7 +163,7 @@ export function WarehouseLayoutEditor() {
         ["warehouse-layout", published.warehouseId, "published"],
         published,
       );
-      toast.success(`Đã công bố mặt bằng bản ${published.revision}.`);
+      toast.success(`Đã công bố sơ đồ bản ${published.revision}.`);
     },
   });
 
@@ -176,6 +184,8 @@ export function WarehouseLayoutEditor() {
       canvas: { ...layout.canvas, gridM: 0.1 },
     };
   }, [layout, snapEnabled]);
+  const layoutEndpointMissing =
+    layoutQuery.isError && isMissingBackendEndpoint(layoutQuery.error);
 
   function commit(next: WarehouseLayout) {
     if (!layout) {
@@ -428,20 +438,14 @@ export function WarehouseLayoutEditor() {
     return null;
   }
 
-  if (layoutQuery.isError && !(canEdit && layout && isMissingBackendEndpoint(layoutQuery.error))) {
-    const unsupported = isMissingBackendEndpoint(layoutQuery.error);
-
+  if (layoutQuery.isError && !layoutEndpointMissing) {
     return (
       <div className="rounded-lg border border-amber-300 bg-amber-50 p-5 text-sm text-amber-950">
         <div className="font-semibold">
-          {unsupported
-            ? "Mặt bằng kho chưa sẵn sàng"
-            : "Không tải được mặt bằng kho"}
+          Không tải được sơ đồ kho
         </div>
         <p className="mt-2 max-w-3xl text-amber-900/80">
-          {unsupported
-            ? "Chưa có dữ liệu mặt bằng để hiển thị kho."
-            : "Kiểm tra lại phiên đăng nhập hoặc thử tải lại trang."}
+          Kiểm tra lại phiên đăng nhập hoặc thử tải lại trang.
         </p>
       </div>
     );
@@ -450,7 +454,7 @@ export function WarehouseLayoutEditor() {
   if (!layoutQuery.isPending && !layout && !canEdit) {
     return (
       <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-        Chưa có bản vẽ mặt bằng cho kho này.
+        Chưa có sơ đồ cho kho này.
       </div>
     );
   }
@@ -470,20 +474,25 @@ export function WarehouseLayoutEditor() {
         <div>
           <div className="flex items-center gap-2">
             <Warehouse className="size-6 text-primary" />
-            <h1 className="text-2xl font-bold">Bố trí mặt bằng kho</h1>
+            <h1 className="text-2xl font-bold">{layoutTitle}</h1>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Khu vực, dãy kệ và lối đi dùng đơn vị mét.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {layoutEndpointMissing ? (
+            <Badge className="border-amber-200 bg-amber-50 text-amber-700" variant="outline">
+              Chưa có API lưu sơ đồ
+            </Badge>
+          ) : null}
           <Badge variant={dirty ? "secondary" : "outline"}>
             {dirty ? "Có thay đổi chưa lưu" : `Bản ${layout.revision}`}
           </Badge>
           {canEdit ? (
             <>
               <Button
-                disabled={!dirty || saveMutation.isPending}
+                disabled={layoutEndpointMissing || !dirty || saveMutation.isPending}
                 onClick={() => saveMutation.mutate(layout)}
                 variant="outline"
               >
@@ -496,6 +505,7 @@ export function WarehouseLayoutEditor() {
               </Button>
               <Button
                 disabled={
+                  layoutEndpointMissing ||
                   dirty ||
                   layout.revision < 1 ||
                   validationErrors.length > 0 ||
@@ -572,7 +582,7 @@ export function WarehouseLayoutEditor() {
             </>
           ) : (
             <div className="text-sm text-muted-foreground">
-              Quản lý có thể xem mặt bằng kho nhưng không thể chỉnh sửa.
+              Quản lý có thể xem sơ đồ kho nhưng không thể chỉnh sửa.
             </div>
           )}
         </div>
@@ -603,7 +613,7 @@ export function WarehouseLayoutEditor() {
 
             {validationErrors.length > 0 ? (
               <div className="mt-3 border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-                <div className="font-semibold">Mặt bằng chưa thể công bố</div>
+                <div className="font-semibold">Sơ đồ chưa thể công bố</div>
                 <ul className="mt-2 grid gap-1">
                   {validationErrors.map((error) => (
                     <li key={error}>- {error}</li>
@@ -612,7 +622,7 @@ export function WarehouseLayoutEditor() {
               </div>
             ) : (
               <div className="mt-3 border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">
-                Mặt bằng đã sẵn sàng công bố.
+                Sơ đồ đã sẵn sàng công bố.
               </div>
             )}
           </div>

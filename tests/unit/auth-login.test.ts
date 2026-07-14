@@ -5,7 +5,11 @@ import { loginSchema } from "@/features/auth/schemas/login.schema";
 import {
   changePasswordSchema,
 } from "@/features/auth/schemas/change-password.schema";
-import { changePassword, login, logout } from "@/features/auth/services/auth.service";
+import {
+  changePassword,
+  login,
+  logout,
+} from "@/features/auth/services/auth.service";
 import {
   clearAuthTokens,
   getAccessToken,

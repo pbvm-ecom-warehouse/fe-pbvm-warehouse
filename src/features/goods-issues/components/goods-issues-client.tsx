@@ -1,7 +1,12 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   Barcode,
   ClipboardList,
@@ -46,11 +51,29 @@ import {
   StatusBadge,
   TableSkeleton,
 } from "@/features/admin-shell/components/operations-ui";
-import { getApiErrorMessage } from "@/lib/api-contract";
+import {
+  getApiErrorMessage,
+  isMissingBackendEndpoint,
+} from "@/lib/api-contract";
+import {
+  getWarehouseLayout,
+  listShelfContents,
+} from "@/features/warehouse-layout/services/warehouse-layout.service";
+import {
+  WarehouseArchitectureScene,
+  type WarehouseSceneMode,
+} from "@/features/warehouse-navigation/components/warehouse-architecture-scene";
+import {
+  buildLayoutShelfSuggestions,
+  groupShelvesByRack,
+  layoutToWarehouseShelves,
+  selectSuggestedShelf,
+} from "@/features/warehouse-navigation/utils/putaway-navigation";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
 import { useSessionUser } from "@/hooks/use-session-user";
+import type { ShelfContentItem } from "@/types/api";
 
 import {
   confirmGoodsIssueLine,
@@ -125,6 +148,26 @@ function ErrorBanner({ error }: { error: unknown }) {
   );
 }
 
+function ShelfCodeFallback({
+  shelfCode,
+  text,
+}: {
+  shelfCode: string;
+  text: string;
+}) {
+  return (
+    <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 p-3">
+      <div className="text-xs font-medium text-muted-foreground">
+        Mã vị trí cần đến
+      </div>
+      <div className="mt-1 font-mono text-lg font-semibold text-primary">
+        {shelfCode}
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">{text}</p>
+    </div>
+  );
+}
+
 export function GoodsIssuesClient() {
   const user = useSessionUser();
   const queryClient = useQueryClient();
@@ -140,6 +183,9 @@ export function GoodsIssuesClient() {
   const [selectedIssueId, setSelectedIssueId] = useState("");
   const [selectedItemId, setSelectedItemId] = useState("");
   const [confirmForm, setConfirmForm] = useState(defaultConfirmForm);
+  const [sceneMode, setSceneMode] = useState<WarehouseSceneMode>("map");
+  const [selectedRackCode, setSelectedRackCode] = useState<string | null>(null);
+  const [selectedShelfCode, setSelectedShelfCode] = useState<string | null>(null);
 
   const issuesQuery = useQuery({
     enabled: canUseGoodsIssueApi,
@@ -169,6 +215,7 @@ export function GoodsIssuesClient() {
     ? detail?.items.find((item) => item.itemId === selectedItemId)
     : undefined;
   const activeItemId = selectedItem?.itemId ?? "";
+  const activeWarehouseId = detail?.warehouseId ?? "";
 
   const suggestionsQuery = useQuery({
     enabled: canUseGoodsIssueApi && Boolean(activeIssueId) && Boolean(activeItemId),
@@ -179,6 +226,131 @@ export function GoodsIssuesClient() {
       }),
     queryKey: goodsIssueKeys.suggestions(activeIssueId, activeItemId),
   });
+  const pickSuggestions = useMemo(
+    () => suggestionsQuery.data ?? [],
+    [suggestionsQuery.data],
+  );
+
+  const layoutQuery = useQuery({
+    enabled: canUseGoodsIssueApi && Boolean(activeWarehouseId),
+    queryFn: () => getWarehouseLayout(activeWarehouseId, "published"),
+    queryKey: ["warehouse-layout", activeWarehouseId, "published"],
+    retry: false,
+  });
+  const layout = layoutQuery.data ?? null;
+  const layoutShelves = useMemo(
+    () => (layout ? layoutToWarehouseShelves(layout) : []),
+    [layout],
+  );
+  const visualSuggestions = useMemo(
+    () =>
+      layout
+        ? buildLayoutShelfSuggestions({
+            layout,
+            reason: "Vị trí có hàng để lấy",
+            suggestions: pickSuggestions.map((suggestion) => ({
+              capacity: suggestion.quantity,
+              shelfCode: suggestion.shelfCode,
+            })),
+          })
+        : [],
+    [layout, pickSuggestions],
+  );
+  const selectedVisualSuggestion = useMemo(
+    () =>
+      visualSuggestions.find(
+        (suggestion) => suggestion.shelf.code === selectedShelfCode,
+      ) ?? selectSuggestedShelf(visualSuggestions),
+    [selectedShelfCode, visualSuggestions],
+  );
+  const activeSelectedShelfCode =
+    selectedShelfCode ?? selectedVisualSuggestion?.shelf.code ?? null;
+  const activeSelectedRackCode =
+    selectedRackCode ?? selectedVisualSuggestion?.shelf.rackCode ?? null;
+  const suggestedShelfCodes = useMemo(
+    () => new Set(pickSuggestions.map((suggestion) => suggestion.shelfCode)),
+    [pickSuggestions],
+  );
+  const rackGroup = useMemo(
+    () =>
+      activeSelectedRackCode
+        ? groupShelvesByRack(layoutShelves).find(
+            (group) => group.rackCode === activeSelectedRackCode,
+          ) ?? null
+        : null,
+    [activeSelectedRackCode, layoutShelves],
+  );
+  const layoutSource = layout
+    ? "api"
+    : layoutQuery.error && isMissingBackendEndpoint(layoutQuery.error)
+      ? "unsupported"
+      : "missing";
+  const contentQueries = useQueries({
+    queries:
+      sceneMode === "rack" && rackGroup && activeWarehouseId
+        ? rackGroup.shelves.map((shelf) => ({
+            enabled: true,
+            queryFn: () =>
+              listShelfContents({
+                shelfCode: shelf.code,
+                warehouseId: activeWarehouseId,
+              }),
+            queryKey: [
+              "warehouse-shelf-contents",
+              activeWarehouseId,
+              shelf.code,
+            ],
+            retry: false,
+          }))
+        : [],
+  });
+  const contentsByShelf = useMemo(() => {
+    const contents: Record<string, ShelfContentItem[] | undefined> = {};
+
+    rackGroup?.shelves.forEach((shelf, index) => {
+      const data = contentQueries[index]?.data;
+      contents[shelf.code] = Array.isArray(data) ? data : [];
+    });
+
+    return contents;
+  }, [contentQueries, rackGroup]);
+  const loadingShelfCodes = useMemo(
+    () =>
+      new Set(
+        rackGroup?.shelves
+          .filter((_, index) => contentQueries[index]?.isLoading)
+          .map((shelf) => shelf.code) ?? [],
+      ),
+    [contentQueries, rackGroup],
+  );
+  const erroredShelfCodes = useMemo(
+    () =>
+      new Set(
+        rackGroup?.shelves
+          .filter((_, index) => contentQueries[index]?.isError)
+          .map((shelf) => shelf.code) ?? [],
+      ),
+    [contentQueries, rackGroup],
+  );
+  const unsupportedShelfCodes = useMemo(
+    () =>
+      new Set(
+        rackGroup?.shelves
+          .filter((_, index) =>
+            isMissingBackendEndpoint(contentQueries[index]?.error),
+          )
+          .map((shelf) => shelf.code) ?? [],
+      ),
+    [contentQueries, rackGroup],
+  );
+  const fallbackShelfCode =
+    selectedShelfCode ?? pickSuggestions[0]?.shelfCode ?? "";
+  const shouldShowShelfFallback =
+    Boolean(fallbackShelfCode) &&
+    (!layout ||
+      !visualSuggestions.some(
+        (suggestion) => suggestion.shelf.code === fallbackShelfCode,
+      ));
 
   const confirmMutation = useMutation({
     mutationFn: () =>
@@ -212,13 +384,60 @@ export function GoodsIssuesClient() {
     confirmMutation.mutate();
   }
 
+  function selectIssue(issue: GoodsIssue) {
+    setSelectedIssueId(issue.id);
+    setSelectedItemId("");
+    setConfirmForm(defaultConfirmForm);
+    setSceneMode("map");
+    setSelectedRackCode(null);
+    setSelectedShelfCode(null);
+  }
+
+  function selectItem(item: GoodsIssueItem) {
+    setSelectedItemId(item.itemId);
+    setConfirmForm({
+      itemBarcode: item.sku,
+      lotId: "",
+      quantity: String(Math.max(1, item.remainingQty)),
+      shelfCode: "",
+    });
+    setSceneMode("map");
+    setSelectedRackCode(null);
+    setSelectedShelfCode(null);
+  }
+
   function selectSuggestion(suggestion: PickSuggestion) {
+    const visualSuggestion = visualSuggestions.find(
+      (item) => item.shelf.code === suggestion.shelfCode,
+    );
+
+    setSelectedShelfCode(suggestion.shelfCode);
+    setSelectedRackCode(visualSuggestion?.shelf.rackCode ?? null);
+    setSceneMode(visualSuggestion ? "rack" : "map");
     setConfirmForm((current) => ({
       ...current,
       lotId: suggestion.lotId ?? "",
       quantity: String(Math.min(suggestion.quantity, selectedItem?.remainingQty ?? 1)),
       shelfCode: suggestion.shelfCode,
     }));
+  }
+
+  function openRack(rackCode: string, shelfCode: string) {
+    setSelectedRackCode(rackCode);
+    setSelectedShelfCode(shelfCode);
+    setConfirmForm((current) => ({ ...current, shelfCode }));
+    setSceneMode("rack");
+  }
+
+  function selectShelfOnRack(shelfCode: string) {
+    setSelectedShelfCode(shelfCode);
+    setConfirmForm((current) => ({ ...current, shelfCode }));
+  }
+
+  function retryShelfContents(shelfCode: string) {
+    void queryClient.invalidateQueries({
+      queryKey: ["warehouse-shelf-contents", activeWarehouseId, shelfCode],
+    });
   }
 
   return (
@@ -303,10 +522,7 @@ export function GoodsIssuesClient() {
                 <GoodsIssueTable
                   issues={issues}
                   selectedId={activeIssueId}
-                  onSelect={(issue) => {
-                    setSelectedIssueId(issue.id);
-                    setSelectedItemId("");
-                  }}
+                  onSelect={selectIssue}
                 />
               )}
 
@@ -340,14 +556,29 @@ export function GoodsIssuesClient() {
             <GoodsIssueDetail
               detail={detail}
               selectedItemId={activeItemId}
-              onSelectItem={(item) => {
-                setSelectedItemId(item.itemId);
-                setConfirmForm((current) => ({
-                  ...current,
-                  itemBarcode: item.sku,
-                  quantity: String(Math.max(1, item.remainingQty)),
-                }));
-              }}
+              onSelectItem={selectItem}
+            />
+          ) : null}
+
+          {selectedItem && activeWarehouseId ? (
+            <WarehouseArchitectureScene
+              contentsByShelf={contentsByShelf}
+              erroredShelfCodes={erroredShelfCodes}
+              layout={layout}
+              layoutSource={layoutSource}
+              loadingShelfCodes={loadingShelfCodes}
+              onBackToMap={() => setSceneMode("map")}
+              onOpenRack={openRack}
+              onRetryShelf={retryShelfContents}
+              onSelectShelf={selectShelfOnRack}
+              rackGroup={rackGroup}
+              route={selectedVisualSuggestion?.route ?? null}
+              sceneMode={sceneMode}
+              selectedRackCode={activeSelectedRackCode}
+              selectedShelfCode={activeSelectedShelfCode}
+              suggestions={visualSuggestions}
+              suggestedShelfCodes={suggestedShelfCodes}
+              unsupportedShelfCodes={unsupportedShelfCodes}
             />
           ) : null}
         </div>
@@ -357,28 +588,38 @@ export function GoodsIssuesClient() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <PackageSearch className="size-4 text-primary" />
-                Gợi ý lấy hàng
+                Vị trí lấy hàng
               </CardTitle>
               <CardDescription>
-                {selectedItem?.sku ?? "Chọn dòng hàng để xem vị trí."}
+                {selectedItem?.sku ?? "Chọn dòng hàng để xem vị trí"}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {suggestionsQuery.isLoading ? (
-                <div className="text-sm text-muted-foreground">Đang tải...</div>
+                <TableSkeleton columns={2} rows={3} />
               ) : null}
               {suggestionsQuery.error ? (
                 <ErrorBanner error={suggestionsQuery.error} />
               ) : null}
               {!selectedItem ? (
-                <EmptyState title="Chưa chọn dòng xuất" />
-              ) : (suggestionsQuery.data ?? []).length === 0 &&
+                <EmptyState title="Chọn dòng hàng để xem vị trí" />
+              ) : pickSuggestions.length === 0 &&
                 !suggestionsQuery.isLoading ? (
                 <EmptyState title="Chưa có gợi ý vị trí" />
               ) : null}
-              {(suggestionsQuery.data ?? []).map((suggestion) => (
+              {shouldShowShelfFallback ? (
+                <ShelfCodeFallback
+                  shelfCode={fallbackShelfCode}
+                  text="Kho chưa có sơ đồ cho vị trí này. Nhân viên dùng mã vị trí để tìm hàng và quét xác nhận."
+                />
+              ) : null}
+              {pickSuggestions.map((suggestion) => (
                 <button
-                  className="grid w-full gap-2 rounded-lg border border-border/70 p-3 text-left text-sm transition hover:bg-accent/60"
+                  className={cn(
+                    "grid w-full gap-2 rounded-lg border border-border/70 p-3 text-left text-sm transition hover:bg-accent/60",
+                    selectedShelfCode === suggestion.shelfCode &&
+                      "border-primary bg-primary/5",
+                  )}
                   key={`${suggestion.shelfId}-${suggestion.lotId ?? "none"}`}
                   onClick={() => selectSuggestion(suggestion)}
                   type="button"

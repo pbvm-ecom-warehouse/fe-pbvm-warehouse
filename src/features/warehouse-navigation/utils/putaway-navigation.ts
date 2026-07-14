@@ -480,6 +480,22 @@ export function buildLayoutPutawaySuggestions({
   layout: WarehouseLayout;
   suggestions: Array<{ capacity: number; shelfCode: string }>;
 }): PutawaySuggestion[] {
+  return buildLayoutShelfSuggestions({
+    layout,
+    reason: "Gợi ý từ WMS theo sức chứa còn lại",
+    suggestions,
+  });
+}
+
+export function buildLayoutShelfSuggestions({
+  layout,
+  reason,
+  suggestions,
+}: {
+  layout: WarehouseLayout;
+  reason: string;
+  suggestions: Array<{ capacity: number; shelfCode: string }>;
+}): PutawaySuggestion[] {
   const shelvesByCode = new Map(
     layoutToWarehouseShelves(layout).map((shelf) => [shelf.code, shelf]),
   );
@@ -501,7 +517,7 @@ export function buildLayoutPutawaySuggestions({
         advisory: true,
         capacity: suggestion.capacity,
         pathLabel: buildNavigationPath(shelf).join(" / "),
-        reason: "Gợi ý từ WMS theo sức chứa còn lại",
+        reason,
         ...(route ? { route } : {}),
         shelf,
       },

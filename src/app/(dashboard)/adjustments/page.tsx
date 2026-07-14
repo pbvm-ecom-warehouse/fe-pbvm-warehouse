@@ -1,5 +1,5 @@
-import { ModulePage } from "@/features/admin-shell/components/module-page";
+import { AdjustmentsClient } from "@/features/adjustments/components/adjustments-client";
 
 export default function AdjustmentsPage() {
-  return <ModulePage moduleKey="adjustments" />;
+  return <AdjustmentsClient />;
 }
