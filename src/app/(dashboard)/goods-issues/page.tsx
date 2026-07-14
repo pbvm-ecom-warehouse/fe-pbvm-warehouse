@@ -1,5 +1,5 @@
-import { ModulePage } from "@/features/admin-shell/components/module-page";
+import { GoodsIssuesClient } from "@/features/goods-issues/components/goods-issues-client";
 
 export default function GoodsIssuesPage() {
-  return <ModulePage moduleKey="goods-issues" />;
+  return <GoodsIssuesClient />;
 }

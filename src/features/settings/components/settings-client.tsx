@@ -69,7 +69,7 @@ function formatUnknownError(error: unknown) {
     return error.message;
   }
 
-  return "Không gọi được WMS API.";
+  return "Không kết nối được WMS.";
 }
 
 function formatRootResponse(response: WmsRootResponse | undefined) {
@@ -117,7 +117,7 @@ function StatusLine({
         className="max-w-[180px] justify-start truncate"
         variant={value === "up" || value === "ok" ? "default" : "outline"}
       >
-        {value ?? "unknown"}
+        {value === "up" || value === "ok" ? "Hoạt động" : value ?? "Chưa rõ"}
       </Badge>
     </div>
   );
@@ -145,7 +145,7 @@ function HealthCard({
           <CardDescription>Trạng thái dịch vụ</CardDescription>
         </div>
         <Button
-          aria-label="Refresh health"
+          aria-label="Làm mới trạng thái hệ thống"
           onClick={onRefresh}
           size="icon-sm"
           type="button"
@@ -164,9 +164,9 @@ function HealthCard({
             {formatUnknownError(error)}
           </div>
         ) : null}
-        <StatusLine label="status" value={health?.status} />
-        <StatusLine label="db" value={health?.db} />
-        <StatusLine label="redis" value={health?.redis} />
+        <StatusLine label="Trạng thái" value={health?.status} />
+        <StatusLine label="Cơ sở dữ liệu" value={health?.db} />
+        <StatusLine label="Bộ nhớ đệm" value={health?.redis} />
       </CardContent>
     </Card>
   );
@@ -194,7 +194,7 @@ function RootCard({
           <CardDescription>Kết nối hệ thống</CardDescription>
         </div>
         <Button
-          aria-label="Refresh root API"
+          aria-label="Làm mới kết nối WMS"
           onClick={onRefresh}
           size="icon-sm"
           type="button"
@@ -306,8 +306,8 @@ export function SettingsClient() {
       updateWmsUserRoles(targetUserId.trim(), { roles: targetRoles }),
     onError: (error) => toast.error(formatUnknownError(error)),
     onSuccess: (response) => {
-      setLastActionMessage(`Đã cập nhật roles: ${response.username}`);
-      toast.success("Đã cập nhật roles");
+      setLastActionMessage(`Đã cập nhật vai trò cho ${response.username}`);
+      toast.success("Đã cập nhật vai trò");
     },
   });
 
@@ -315,8 +315,8 @@ export function SettingsClient() {
     mutationFn: () => lockWmsUser(targetUserId.trim()),
     onError: (error) => toast.error(formatUnknownError(error)),
     onSuccess: (response) => {
-      setLastActionMessage(`Đã khóa user: ${response.username}`);
-      toast.success("Đã khóa user");
+      setLastActionMessage(`Đã khóa nhân viên ${response.username}`);
+      toast.success("Đã khóa nhân viên");
     },
   });
 
@@ -324,8 +324,8 @@ export function SettingsClient() {
     mutationFn: () => unlockWmsUser(targetUserId.trim()),
     onError: (error) => toast.error(formatUnknownError(error)),
     onSuccess: (response) => {
-      setLastActionMessage(`Đã mở khóa user: ${response.username}`);
-      toast.success("Đã mở khóa user");
+      setLastActionMessage(`Đã mở khóa nhân viên: ${response.username}`);
+      toast.success("Đã mở khóa nhân viên");
     },
   });
 
@@ -336,8 +336,8 @@ export function SettingsClient() {
       }),
     onError: (error) => toast.error(formatUnknownError(error)),
     onSuccess: () => {
-      setLastActionMessage("Đã reset mật khẩu tạm và bật yêu cầu đổi mật khẩu.");
-      toast.success("Đã reset mật khẩu");
+      setLastActionMessage("Đã đặt lại mật khẩu tạm và bật yêu cầu đổi mật khẩu.");
+      toast.success("Đã đặt lại mật khẩu");
     },
   });
 
@@ -396,7 +396,7 @@ export function SettingsClient() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <UserPlus className="size-4 text-primary" />
-                Quản trị user WMS
+                Quản lý tài khoản WMS
               </CardTitle>
               <CardDescription>
                 Tạo tài khoản nhân viên và xử lý quyền truy cập theo vai trò.
@@ -406,7 +406,7 @@ export function SettingsClient() {
               <form className="space-y-4" onSubmit={handleCreateUser}>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="settings-username">Username</Label>
+                    <Label htmlFor="settings-username">Tên đăng nhập</Label>
                     <Input
                       autoComplete="off"
                       id="settings-username"
@@ -470,7 +470,7 @@ export function SettingsClient() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Roles khi tạo nhân viên</Label>
+                  <Label>Vai trò khi tạo nhân viên</Label>
                   <RoleCheckboxes
                     idPrefix="create-role"
                     roles={selectedCreateRoles}
@@ -495,7 +495,7 @@ export function SettingsClient() {
                     ) : (
                       <ShieldCheck data-icon="inline-start" />
                     )}
-                    Bootstrap admin
+                    Khởi tạo quản trị viên
                   </Button>
                   <Button disabled={isCreateBusy} type="submit">
                     {createUserMutation.isPending ? (
@@ -513,11 +513,11 @@ export function SettingsClient() {
 
               {lastCreatedUser ? (
                 <div className="mt-4 rounded-lg border border-border/70 bg-muted/20 p-3 text-sm">
-                  <div className="font-semibold">User vừa tạo</div>
+                  <div className="font-semibold">Nhân viên vừa tạo</div>
                   <div className="mt-2 grid gap-1 text-muted-foreground">
-                    <div>ID: {lastCreatedUser.id}</div>
-                    <div>Username: {lastCreatedUser.username}</div>
-                    <div>Roles: {lastCreatedUser.roles.join(", ")}</div>
+                    <div>Mã nhân viên: {lastCreatedUser.id}</div>
+                    <div>Tên đăng nhập: {lastCreatedUser.username}</div>
+                    <div>Vai trò: {lastCreatedUser.roles.map((role) => ROLE_LABELS[role as WmsRole] ?? role).join(", ")}</div>
                   </div>
                 </div>
               ) : null}
@@ -528,17 +528,17 @@ export function SettingsClient() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <KeyRound className="size-4 text-primary" />
-                Thao tác theo user id
+                Thao tác theo mã nhân viên
               </CardTitle>
               <CardDescription>
-                Nhập ID nhân viên để cập nhật quyền, khóa/mở khóa hoặc reset
+                Nhập mã nhân viên để cập nhật quyền, khóa/mở khóa hoặc đặt lại
                 mật khẩu.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form className="space-y-4" onSubmit={handleUpdateRoles}>
                 <div className="space-y-2">
-                  <Label htmlFor="settings-target-user-id">User id</Label>
+                  <Label htmlFor="settings-target-user-id">Mã nhân viên</Label>
                   <Input
                     autoComplete="off"
                     id="settings-target-user-id"
@@ -549,7 +549,7 @@ export function SettingsClient() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Roles mới</Label>
+                  <Label>Vai trò mới</Label>
                   <RoleCheckboxes
                     idPrefix="target-role"
                     roles={targetRoles}
@@ -569,7 +569,7 @@ export function SettingsClient() {
                   ) : (
                     <ShieldCheck data-icon="inline-start" />
                   )}
-                  Cập nhật roles
+                  Cập nhật vai trò
                 </Button>
               </form>
 
@@ -589,7 +589,7 @@ export function SettingsClient() {
                     ) : (
                       <LockKeyhole data-icon="inline-start" />
                     )}
-                    Khóa user
+                    Khóa nhân viên
                   </Button>
                   <Button
                     disabled={!trimmedTargetUserId || isActionBusy}
@@ -605,7 +605,7 @@ export function SettingsClient() {
                     ) : (
                       <UnlockKeyhole data-icon="inline-start" />
                     )}
-                    Mở khóa user
+                    Mở khóa nhân viên
                   </Button>
                 </div>
 
@@ -642,7 +642,7 @@ export function SettingsClient() {
                   ) : (
                     <KeyRound data-icon="inline-start" />
                   )}
-                  Reset mật khẩu
+                  Đặt lại mật khẩu
                 </Button>
 
                 {lastActionMessage ? (

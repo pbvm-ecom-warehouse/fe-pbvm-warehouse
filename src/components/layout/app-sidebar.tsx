@@ -62,8 +62,8 @@ export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
     user?.roles,
   );
   const settingsIndex = routes.findIndex((route) => route.href === "/settings");
-  const warehouseLabel = user?.warehouseId ? "Assigned warehouse" : "Active scope";
-  const warehouseName = user?.warehouseId ?? "Warehouse scope pending";
+  const warehouseLabel = user?.warehouseId ? "Kho phụ trách" : "Phạm vi kho";
+  const warehouseName = user?.warehouseId ?? "Chưa gán kho";
 
   if (!user) {
     return null;
@@ -74,7 +74,7 @@ export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
       <WmsLogo
         className="mb-8 px-1"
         size="sm"
-        subtitle={`${ROLE_LABELS[primaryRole]} workspace`}
+        subtitle={`Khu vực làm việc ${ROLE_LABELS[primaryRole]}`}
       />
 
       <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">

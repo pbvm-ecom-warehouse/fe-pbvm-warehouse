@@ -119,14 +119,14 @@ function TechnicalShelfLevel({
         type="button"
       >
         <span className="block text-[10px] font-semibold uppercase text-slate-500">
-          Level {shelf.level}
+          Tầng {shelf.level}
         </span>
         <span className="mt-1 block font-mono text-sm font-bold">{shelf.code}</span>
         <span className="mt-1 block truncate text-[10px] text-slate-500">
           {shelf.barcode}
         </span>
-        {suggested ? <Badge className="mt-2">Suggested</Badge> : null}
-        <span className="sr-only">Chọn shelf {shelf.code}</span>
+        {suggested ? <Badge className="mt-2">Đề xuất</Badge> : null}
+        <span className="sr-only">Chọn vị trí {shelf.code}</span>
       </button>
 
       <div className="relative min-w-[360px] overflow-hidden bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f4_100%)]">
@@ -208,7 +208,7 @@ function RackElevation({
   if (!rackGroup) {
     return (
       <div className="grid min-h-[420px] place-items-center border border-dashed text-sm text-muted-foreground">
-        Chọn rack trên mặt bằng để xem mặt đứng.
+        Chọn dãy kệ trên mặt bằng để xem chi tiết.
       </div>
     );
   }
@@ -235,7 +235,7 @@ function RackElevation({
           <div>
             <h3 className="text-xl font-semibold">{rackGroup.rackName}</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Mặt đứng kỹ thuật · {rackGroup.warehouseCode} / {rackGroup.zoneName}
+              Chi tiết vị trí · {rackGroup.warehouseCode} / {rackGroup.zoneName}
             </p>
           </div>
           <div className="font-mono text-xs text-slate-600">
@@ -327,22 +327,22 @@ export function WarehouseArchitectureScene({
             Mặt bằng kho
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Bản vẽ top-down theo zone, rack và bề rộng lối đi đã publish.
+            Xem khu vực, dãy kệ và lối đi đã sẵn sàng cho điều hướng.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge variant={route ? "default" : "outline"}>
-            {route ? `${route.from.code} → ${route.to.code}` : "Chưa có route"}
+            {route ? `${route.from.code} → ${route.to.code}` : "Chưa có đường đi"}
           </Badge>
           <Badge variant="outline">
             <Boxes data-icon="inline-start" />
-            {sceneMode === "rack" ? "Mặt đứng rack" : "Mặt bằng"}
+            {sceneMode === "rack" ? "Chi tiết dãy kệ" : "Mặt bằng"}
           </Badge>
           {layoutSource !== "api" ? (
             <Badge variant="secondary">
               {layoutSource === "unsupported"
-                ? "Chưa có layout"
-                : "Chưa publish"}
+                ? "Chưa có mặt bằng"
+                : "Chưa sẵn sàng"}
             </Badge>
           ) : null}
         </div>
@@ -380,7 +380,7 @@ export function WarehouseArchitectureScene({
               <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
                 <span className="flex items-center gap-2">
                   <span className="h-3 w-6 border border-slate-500 bg-slate-200" />
-                  Rack
+                  Dãy kệ
                 </span>
                 <span className="flex items-center gap-2">
                   <span className="h-3 w-6 bg-[#dfe5e7]" />
@@ -388,7 +388,7 @@ export function WarehouseArchitectureScene({
                 </span>
                 <span className="flex items-center gap-2">
                   <span className="h-3 w-6 bg-[#edf0ef]" />
-                  Lối giữa rack
+                  Lối giữa kệ
                 </span>
               </div>
             </motion.div>
@@ -398,8 +398,8 @@ export function WarehouseArchitectureScene({
                 <MapPinned className="mx-auto size-8 text-muted-foreground" />
                 <h3 className="mt-3 font-semibold">Kho chưa có bản vẽ mặt bằng</h3>
                 <p className="mt-1 max-w-md text-sm text-muted-foreground">
-                  Admin cần mở module Kho, bố trí zone/rack/aisle và Publish trước
-                  khi dùng điều hướng.
+                  Quản trị viên cần bố trí khu vực, dãy kệ và lối đi trước khi
+                  dùng điều hướng.
                 </p>
               </div>
             </div>
@@ -409,7 +409,7 @@ export function WarehouseArchitectureScene({
 
       <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
         <PackageOpen className="size-4" />
-        {suggestions.length} gợi ý đang dùng cùng hệ tọa độ với layout.
+        {suggestions.length} gợi ý vị trí đang sẵn sàng.
       </div>
     </section>
   );

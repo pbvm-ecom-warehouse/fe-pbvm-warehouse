@@ -25,7 +25,7 @@ export const printJobSchema = z
     if (value.quantity > value.availableQty) {
       context.addIssue({
         code: "custom",
-        message: "Không đủ tồn ly trắng khả dụng để mở lệnh in",
+        message: "Không đủ tồn ly trắng khả dụng cho in ly",
         path: ["quantity"],
       });
     }

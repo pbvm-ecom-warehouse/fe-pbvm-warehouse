@@ -42,7 +42,7 @@ function ForbiddenState({
         </h2>
         <CardDescription className="text-amber-900/70">
           Role hiện tại là {ROLE_LABELS[currentRole]}. Module này chỉ mở cho
-          các role phù hợp theo RBAC WMS.
+          vai trò phù hợp theo phân quyền WMS.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -55,7 +55,7 @@ function ForbiddenState({
           ))}
         </div>
         <Button asChild>
-          <Link href="/dashboard">Về tổng quan phù hợp role</Link>
+          <Link href="/dashboard">Về tổng quan phù hợp vai trò</Link>
         </Button>
       </CardContent>
     </Card>

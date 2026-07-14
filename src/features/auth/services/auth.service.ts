@@ -54,7 +54,7 @@ export async function login(input: LoginInput) {
 
   if (!sessionUser) {
     clearAuthTokens();
-    throw new Error("WMS API không trả session user hợp lệ.");
+    throw new Error("WMS không trả session user hợp lệ.");
   }
 
   setTenantId(sessionUser.tenantId ?? env.NEXT_PUBLIC_DEFAULT_TENANT_ID);

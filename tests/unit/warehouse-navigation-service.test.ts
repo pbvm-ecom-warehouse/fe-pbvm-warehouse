@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "@/lib/api-client";
-import {
-  listPutawaySuggestionResult,
-  listShelfContents,
-} from "@/features/warehouse-navigation/services/putaway-navigation.service";
+import { listPutawaySuggestionResult } from "@/features/warehouse-navigation/services/putaway-navigation.service";
 import { MissingBackendEndpointError } from "@/lib/api-contract";
 
 vi.mock("@/lib/api-client", () => ({
@@ -24,10 +21,13 @@ describe("warehouse navigation services", () => {
     mockedGet.mockReset();
   });
 
-  it("requests put-away suggestions from the fixed gate entry point", async () => {
+  it("requests put-away suggestions with the Swagger query shape", async () => {
     mockedGet.mockResolvedValueOnce({
       data: {
-        data: [],
+        data: {
+          suggestions: [{ capacity: 120, shelfCode: "A1-S02" }],
+          warning: null,
+        },
         meta: { requestId: "req-1" },
       },
     });
@@ -40,7 +40,6 @@ describe("warehouse navigation services", () => {
 
     expect(mockedGet).toHaveBeenCalledWith("/putaway/suggestions", {
       params: {
-        from: "GATE-01",
         qty: 80,
         sku: "CUP-BLANK-500",
         warehouseId: "central",
@@ -48,42 +47,28 @@ describe("warehouse navigation services", () => {
     });
     expect(result).toEqual({
       source: "api",
-      suggestions: [],
+      suggestions: [{ capacity: 120, shelfCode: "A1-S02" }],
+      warning: null,
     });
   });
 
-  it("unwraps shelf contents from the shelf contents endpoint", async () => {
+  it("keeps backend warnings from put-away suggestions", async () => {
     mockedGet.mockResolvedValueOnce({
       data: {
-        data: [
-          {
-            id: "stock-1",
-            sku: "CUP-BLANK-500",
-            itemName: "Ly trắng 500ml",
-            quantity: 24,
-            unit: "cái",
-            placement: { x: 8, y: 10, width: 38, height: 24, label: "A" },
-            status: "AVAILABLE",
-          },
-        ],
-        meta: { requestId: "req-2" },
+        suggestions: [],
+        warning: "INSUFFICIENT_CAPACITY",
       },
     });
 
-    const contents = await listShelfContents({
-      shelfCode: "A1-S02",
-      warehouseId: "central",
-    });
-
-    expect(mockedGet).toHaveBeenCalledWith(
-      "/warehouse/shelves/A1-S02/contents",
-      { params: { warehouseId: "central" } },
-    );
-    expect(contents).toHaveLength(1);
-    expect(contents[0]).toMatchObject({
-      id: "stock-1",
-      placement: { x: 8, y: 10, width: 38, height: 24, label: "A" },
-      sku: "CUP-BLANK-500",
+    await expect(
+      listPutawaySuggestionResult({
+        sku: "SKU-001",
+        quantity: 999,
+        warehouseId: "central",
+      }),
+    ).resolves.toMatchObject({
+      suggestions: [],
+      warning: "INSUFFICIENT_CAPACITY",
     });
   });
 

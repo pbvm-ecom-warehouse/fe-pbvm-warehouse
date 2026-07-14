@@ -362,7 +362,7 @@ export function WarehouseFloorPlan({
 
           return (
             <g
-              aria-label={`${isMain ? "Đường chính" : "Lối rack"} ${aisle.code}`}
+              aria-label={`${isMain ? "Đường chính" : "Lối giữa kệ"} ${aisle.code}`}
               className={editable ? "cursor-move" : undefined}
               key={aisle.id}
               onPointerDown={(event) =>

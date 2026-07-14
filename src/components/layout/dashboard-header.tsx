@@ -28,10 +28,10 @@ function initials(name: string) {
 
 const roleSearchPlaceholder = {
   ADMIN: "Tìm SKU, phiếu nhập, người dùng...",
-  MANAGER: "Tìm SKU, PO, phiếu chuyển, báo cáo...",
-  RECEIVER: "Tìm GRN, SKU, vị trí put-away...",
-  PICKER: "Tìm đơn pick, SKU, shelf code...",
-  PRINTER: "Tìm lệnh in, ly chưa in, ly đã in...",
+  MANAGER: "Tìm SKU, đơn mua, phiếu chuyển, báo cáo...",
+  RECEIVER: "Tìm phiếu nhập, SKU, vị trí cất hàng...",
+  PICKER: "Tìm đơn soạn hàng, SKU, mã vị trí...",
+  PRINTER: "Tìm in ly, ly chưa in, ly đã in...",
   COUNTER: "Tìm phiếu kiểm, SKU, chênh lệch...",
 } as const;
 
@@ -61,7 +61,7 @@ export function DashboardHeader() {
             <SheetHeader className="sr-only">
               <SheetTitle>Điều hướng WMS</SheetTitle>
               <SheetDescription>
-                Danh sách module WMS được lọc theo role hiện tại.
+                Danh sách chức năng WMS được lọc theo vai trò hiện tại.
               </SheetDescription>
             </SheetHeader>
             <SidebarContent closeOnNavigate />
@@ -84,7 +84,7 @@ export function DashboardHeader() {
             className="hidden md:inline-flex"
             size="icon"
             variant="outline"
-            aria-label="Quét barcode"
+            aria-label="Quét mã vạch"
           >
             <ScanLine />
           </Button>

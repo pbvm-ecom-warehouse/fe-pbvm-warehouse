@@ -6,9 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
-  CardAction,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -31,14 +29,14 @@ import {
 const moduleSummaries = {
   warehouses: {
     title: "Kho",
-    description: "Quản lý kho trung tâm, zone, rack và shelf barcode.",
+    description: "Quản lý kho trung tâm, khu vực, dãy kệ và mã vị trí.",
     action: "Tạo kho",
-    highlights: ["Kho trung tâm", "Zone / Rack / Shelf", "Địa chỉ"],
+    highlights: ["Kho trung tâm", "Khu vực / dãy / vị trí", "Địa chỉ"],
     tableTitle: "Danh sách kho",
     columns: ["Tên kho", "Loại kho", "Trạng thái"],
     roleNotes: {
-      ADMIN: "Admin có thể quản lý cấu trúc kho và scope người dùng.",
-      MANAGER: "Manager xem năng lực kho và điều phối vận hành.",
+      ADMIN: "Quản trị viên quản lý cấu trúc kho và phạm vi làm việc của nhân viên.",
+      MANAGER: "Quản lý xem năng lực kho và điều phối vận hành.",
     },
   },
   products: {
@@ -49,77 +47,77 @@ const moduleSummaries = {
     tableTitle: "Danh sách sản phẩm",
     columns: ["SKU", "Tên sản phẩm", "Nhóm"],
     roleNotes: {
-      ADMIN: "Admin quản lý SKU nền cho toàn hệ thống.",
-      MANAGER: "Manager theo dõi SKU phục vụ PO, xuất kho và báo cáo.",
-      PRINTER: "Printer tập trung ly chưa in và ly đã in phục vụ lệnh in.",
+      ADMIN: "Quản trị viên quản lý mã hàng dùng chung cho toàn hệ thống.",
+      MANAGER: "Quản lý theo dõi mã hàng phục vụ nhập, xuất và báo cáo.",
+      PRINTER: "Nhân viên in theo dõi ly chưa in và ly đã in.",
     },
   },
   inventory: {
     title: "Tồn kho",
     description: "Theo dõi số lượng tồn kho, đã đặt trước và khả dụng.",
-    action: "Xem ledger",
-    highlights: ["Stock ledger", "Stock movement", "Audit trail"],
-    tableTitle: "Stock ledger",
-    columns: ["SKU", "Kho", "Available"],
+    action: "Xem sổ tồn kho",
+    highlights: ["Sổ tồn kho", "Biến động tồn", "Lịch sử đối chiếu"],
+    tableTitle: "Sổ tồn kho",
+    columns: ["SKU", "Kho", "Khả dụng"],
     roleNotes: {
-      ADMIN: "Admin xem toàn bộ số lượng tồn, đã đặt trước và khả dụng.",
-      MANAGER: "Manager dùng ledger để điều phối và duyệt adjustment.",
-      RECEIVER: "Receiver đối chiếu tồn sau GRN và put-away.",
-      PICKER: "Picker xem vị trí và available trước khi xuất kho.",
-      PRINTER: "Printer kiểm tra tồn ly chưa in và ly đã in quanh lệnh in.",
-      COUNTER: "Counter dùng ledger làm baseline kiểm đếm thực tế.",
+      ADMIN: "Quản trị viên xem toàn bộ số lượng tồn, đã đặt trước và khả dụng.",
+      MANAGER: "Quản lý dùng sổ tồn kho để điều phối và duyệt điều chỉnh.",
+      RECEIVER: "Nhân viên nhận hàng đối chiếu tồn sau khi nhập và cất hàng.",
+      PICKER: "Nhân viên soạn hàng xem vị trí và lượng khả dụng trước khi xuất.",
+      PRINTER: "Nhân viên in kiểm tra tồn ly chưa in và ly đã in.",
+      COUNTER: "Nhân viên kiểm kê dùng sổ tồn kho để đối chiếu số thực tế.",
     },
   },
   purchases: {
     title: "Nhập hàng",
-    description: "Purchase order và phiếu nhập kho GRN.",
-    action: "Tạo PO",
-    highlights: ["PO", "GRN", "Nhà cung cấp"],
+    description: "Quản lý đơn mua hàng và phiếu nhập kho.",
+    action: "Tạo đơn mua",
+    highlights: ["Đơn mua", "Phiếu nhập", "Nhà cung cấp"],
     tableTitle: "Phiếu nhập",
     columns: ["Mã phiếu", "Nhà cung cấp", "Trạng thái"],
     roleNotes: {
-      ADMIN: "Admin có toàn quyền với PO và GRN.",
-      MANAGER: "Manager tạo PO, kiểm tra chênh lệch và duyệt GRN.",
-      RECEIVER: "Receiver tạo/xác nhận GRN và chuyển hàng sang put-away.",
+      ADMIN: "Quản trị viên theo dõi và xử lý toàn bộ quy trình nhập hàng.",
+      MANAGER: "Quản lý tạo đơn mua, kiểm tra chênh lệch và duyệt phiếu nhập.",
+      RECEIVER: "Nhân viên nhận hàng tạo, xác nhận phiếu nhập và chuyển hàng đi cất.",
     },
   },
   "goods-issues": {
     title: "Xuất kho",
-    description: "Soạn hàng, quét SKU + shelf và xác nhận Goods Issue.",
+    description: "Soạn hàng, quét SKU và vị trí kệ trước khi xác nhận xuất kho.",
     action: "Tạo phiếu xuất",
-    highlights: ["Goods Issue", "FEFO", "Barcode confirm"],
+    highlights: ["Phiếu xuất", "Ưu tiên hạn dùng", "Quét mã xác nhận"],
     tableTitle: "Phiếu xuất kho",
-    columns: ["Mã phiếu", "Order ref", "Trạng thái"],
+    columns: ["Mã phiếu", "Mã đơn hàng", "Trạng thái"],
     roleNotes: {
-      ADMIN: "Admin có toàn quyền theo dõi và xử lý phiếu xuất.",
-      MANAGER: "Manager tạo phiếu xuất và theo dõi trạng thái xuất kho.",
-      PICKER: "Picker quét SKU + shelf, lấy hàng theo FEFO và xác nhận xuất kho.",
+      ADMIN: "Quản trị viên theo dõi toàn bộ quy trình xuất kho.",
+      MANAGER: "Quản lý tạo phiếu xuất và theo dõi trạng thái xuất kho.",
+      PICKER: "Nhân viên soạn hàng quét SKU, quét vị trí kệ và xác nhận xuất kho.",
     },
   },
   adjustments: {
     title: "Kiểm kê",
     description: "Kiểm kê và điều chỉnh số lượng tồn kho.",
     action: "Tạo điều chỉnh",
-    highlights: ["Stock Count", "ADJUST", "SCRAP"],
+    highlights: ["Phiếu kiểm", "Điều chỉnh tồn", "Hủy hàng"],
     tableTitle: "Phiếu điều chỉnh",
     columns: ["Mã phiếu", "Kho", "Loại"],
     roleNotes: {
-      ADMIN: "Admin có toàn quyền với kiểm kê và adjustment.",
-      MANAGER: "Manager tạo phiếu kiểm và duyệt điều chỉnh.",
-      COUNTER: "Counter kiểm đếm thực tế và ghi nhận chênh lệch.",
+      ADMIN: "Quản trị viên theo dõi toàn bộ quy trình kiểm kê và điều chỉnh tồn.",
+      MANAGER: "Quản lý tạo phiếu kiểm và duyệt điều chỉnh.",
+      COUNTER: "Nhân viên kiểm kê đếm thực tế và ghi nhận chênh lệch.",
     },
   },
   suppliers: {
     title: "Nhà cung cấp",
     description: "Thông tin nhà cung cấp và lịch sử giao dịch.",
     action: "Thêm NCC",
-    highlights: ["Liên hệ", "Địa chỉ", "PO history"],
+    highlights: ["Liên hệ", "Địa chỉ", "Lịch sử đơn mua"],
     tableTitle: "Danh sách nhà cung cấp",
     columns: ["Tên", "Liên hệ", "Trạng thái"],
     roleNotes: {
-      ADMIN: "Admin quản lý dữ liệu nhà cung cấp.",
-      MANAGER: "Manager dùng supplier history để tạo và theo dõi PO.",
-      RECEIVER: "Receiver xem nhà cung cấp để đối chiếu GRN khi nhận hàng.",
+      ADMIN: "Quản trị viên quản lý dữ liệu nhà cung cấp.",
+      MANAGER: "Quản lý dùng lịch sử giao dịch để tạo và theo dõi đơn mua.",
+      RECEIVER: "Nhân viên nhận hàng xem nhà cung cấp để đối chiếu phiếu nhập.",
     },
   },
   reports: {
@@ -130,33 +128,34 @@ const moduleSummaries = {
     tableTitle: "Báo cáo gần đây",
     columns: ["Tên báo cáo", "Kỳ", "Cập nhật"],
     roleNotes: {
-      ADMIN: "Admin xem báo cáo toàn tenant.",
-      MANAGER: "Manager theo dõi tồn kho, nhập xuất và giá trị kho.",
+      ADMIN: "Quản trị viên xem báo cáo toàn hệ thống.",
+      MANAGER: "Quản lý theo dõi tồn kho, nhập xuất và giá trị kho.",
     },
   },
   "print-jobs": {
-    title: "Lệnh in ly",
-    description: "Theo dõi lệnh in, tiêu thụ ly chưa in và xuất ly đã in.",
-    action: "Tạo lệnh in",
-    highlights: ["Tiêu thụ ly", "Xuất ly đã in", "Mẫu thiết kế"],
-    tableTitle: "Danh sách Print Job",
-    columns: ["Mã lệnh in", "Order ref", "Trạng thái"],
+    title: "In ly",
+    description: "Xử lý các đơn in ly đã thanh toán.",
+    action: "Làm mới",
+    highlights: ["Từ đơn đã thanh toán", "Tiêu thụ ly chưa in", "Xác nhận in xong"],
+    tableTitle: "Đơn in ly",
+    columns: ["Mã đơn in", "Mã đơn hàng", "Trạng thái"],
     roleNotes: {
-      ADMIN: "Admin có toàn quyền với luồng in ly make-to-order.",
-      MANAGER: "Manager nhận yêu cầu in và mở lệnh in với mẫu thiết kế.",
-      PRINTER: "Printer tiêu thụ ly chưa in, xác nhận hoàn thành và đóng lệnh.",
+      ADMIN: "Theo dõi toàn bộ quy trình in ly theo đơn.",
+      MANAGER: "Xem tiến độ in ly từ các đơn đã thanh toán.",
+      PRINTER:
+        "Nhân viên in quét SKU, quét vị trí, in ly và xác nhận hoàn thành.",
     },
   },
   settings: {
     title: "Cài đặt",
-    description: "Tenant, người dùng và cấu hình vận hành.",
+    description: "Người dùng, vai trò và cấu hình vận hành.",
     action: "Cấu hình",
-    highlights: ["Tenant", "Vai trò", "API"],
+    highlights: ["Đơn vị vận hành", "Vai trò", "Kết nối hệ thống"],
     tableTitle: "Cấu hình",
     columns: ["Nhóm", "Giá trị", "Trạng thái"],
     roleNotes: {
-      ADMIN: "Admin quản lý tenant, người dùng và role assignment.",
-      MANAGER: "Manager xem cấu hình vận hành liên quan điều phối.",
+      ADMIN: "Quản trị viên quản lý đơn vị vận hành, người dùng và phân quyền.",
+      MANAGER: "Quản lý xem cấu hình vận hành liên quan điều phối.",
     },
   },
 } as const;
@@ -165,8 +164,8 @@ type ModuleKey = keyof typeof moduleSummaries;
 
 const roleActionLabels: Partial<Record<ModuleKey, Partial<Record<WmsRole, string>>>> = {
   purchases: {
-    RECEIVER: "Xác nhận GRN",
-    MANAGER: "Tạo PO",
+    RECEIVER: "Xác nhận phiếu nhập",
+    MANAGER: "Tạo đơn mua",
   },
   "goods-issues": {
     PICKER: "Xác nhận xuất kho",
@@ -178,17 +177,8 @@ const roleActionLabels: Partial<Record<ModuleKey, Partial<Record<WmsRole, string
   },
   "print-jobs": {
     PRINTER: "Xác nhận in xong",
-    MANAGER: "Tạo lệnh in",
+    MANAGER: "Làm mới",
   },
-};
-
-const missingApiCopy: Partial<Record<ModuleKey, string>> = {
-  adjustments: "Tính năng kiểm kê đang được phát triển.",
-  "goods-issues": "Tính năng xuất kho đang được phát triển.",
-  inventory: "Tính năng tồn kho đang được phát triển.",
-  "print-jobs": "Tính năng lệnh in đang được phát triển.",
-  products: "Tính năng sản phẩm đang được phát triển.",
-  reports: "Tính năng báo cáo đang được phát triển.",
 };
 
 function getRoleNote(moduleKey: ModuleKey, role: WmsRole) {
@@ -197,7 +187,7 @@ function getRoleNote(moduleKey: ModuleKey, role: WmsRole) {
   >;
 
   return (
-    roleNotes[role] ?? "Bạn có quyền xem dữ liệu module này theo role hiện tại."
+    roleNotes[role] ?? "Bạn có quyền xem dữ liệu mục này theo vai trò hiện tại."
   );
 }
 
@@ -212,7 +202,6 @@ export function ModulePage({ moduleKey }: { moduleKey: ModuleKey }) {
   const canUsePrimaryAction = hasModuleActionAccess(moduleKey, user?.roles);
   const actionLabel = getActionLabel(moduleKey, primaryRole);
   const roleNote = getRoleNote(moduleKey, primaryRole);
-  const missingApi = missingApiCopy[moduleKey];
 
   if (!user) {
     return null;
@@ -257,12 +246,10 @@ export function ModulePage({ moduleKey }: { moduleKey: ModuleKey }) {
                 <div className="text-sm font-semibold text-foreground">
                   {item}
                 </div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {roleNote}
-                </div>
               </div>
             ))}
           </div>
+          <p className="mt-3 text-xs text-muted-foreground">{roleNote}</p>
         </CardContent>
       </Card>
 

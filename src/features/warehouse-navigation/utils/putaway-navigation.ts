@@ -377,10 +377,10 @@ export function getRackFootprints(shelves: WarehouseShelf[]) {
 
 export function describeShelfGranularity(shelf: WarehouseShelf) {
   if (shelf.isStaging) {
-    return "Shelf staging chỉ là vị trí tạm sau GRN, không phải đích .";
+    return "Khu nhận tạm chỉ dùng sau khi nhập hàng, không phải vị trí cất hàng cuối.";
   }
 
-  return "Hiện shelf là barcode location nhỏ nhất";
+  return "Hiện vị trí kệ là đơn vị nhỏ nhất có mã vạch";
 }
 
 export function normalizeShelfBoxPlacement(
@@ -443,7 +443,7 @@ export function fallbackPutawaySuggestions({
         capacity,
         reason: sameSkuCluster
           ? "same SKU cluster + gần staging + đủ chỗ"
-          : "best-fit theo sức chứa còn lại của shelf",
+          : "Vừa sức chứa còn lại của vị trí kệ",
         advisory: true,
         pathLabel: buildNavigationPath(shelf).join(" / "),
         route: buildRouteToShelf(shelf),

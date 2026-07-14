@@ -82,24 +82,24 @@ describe("settings page", () => {
 
     expect(await screen.findByText("Trạng thái hệ thống")).toBeInTheDocument();
     expect(screen.getByText("Kết nối WMS")).toBeInTheDocument();
-    expect(screen.getByText("Quản trị user WMS")).toBeInTheDocument();
+    expect(screen.getByText("Quản lý tài khoản WMS")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Bootstrap admin/i }),
+      screen.getByRole("button", { name: /Khởi tạo quản trị viên/i }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /Tạo nhân viên/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Cập nhật roles/i }),
+      screen.getByRole("button", { name: /Cập nhật vai trò/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /^Khóa user$/i }),
+      screen.getByRole("button", { name: /^Khóa nhân viên$/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Mở khóa user/i }),
+      screen.getByRole("button", { name: /Mở khóa nhân viên/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Reset mật khẩu/i }),
+      screen.getByRole("button", { name: /Đặt lại mật khẩu/i }),
     ).toBeInTheDocument();
   });
 
@@ -110,12 +110,12 @@ describe("settings page", () => {
 
     expect(await screen.findByText("Trạng thái hệ thống")).toBeInTheDocument();
     expect(screen.getByText("Kết nối WMS")).toBeInTheDocument();
-    expect(screen.queryByText("Quản trị user WMS")).not.toBeInTheDocument();
+    expect(screen.queryByText("Quản lý tài khoản WMS")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Tạo nhân viên/i }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /Reset mật khẩu/i }),
+      screen.queryByRole("button", { name: /Đặt lại mật khẩu/i }),
     ).not.toBeInTheDocument();
   });
 });

@@ -5,9 +5,9 @@ import { AppProviders } from "@/providers/app-providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "WMS Admin",
+  title: "WMS - Quản lý kho",
   description:
-    "Warehouse management dashboard for stock, put-away, and print jobs",
+    "Bảng điều hành kho cho nhập hàng, cất hàng, xuất kho và in ly",
 };
 
 export default function RootLayout({

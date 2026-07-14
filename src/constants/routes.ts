@@ -73,7 +73,7 @@ export const dashboardRoutes = [
   },
   {
     href: "/print-jobs",
-    label: "Lệnh in ly",
+    label: "In ly",
     icon: Repeat2,
     allowedRoles: getRouteAllowedRoles("/print-jobs"),
   },

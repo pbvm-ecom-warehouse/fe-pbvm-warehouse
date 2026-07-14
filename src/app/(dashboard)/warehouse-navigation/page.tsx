@@ -9,22 +9,22 @@ export default function WarehouseNavigationPage() {
             Điều hướng kệ
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Gợi ý vị trí theo zone, rack, shelf; nhân viên vẫn xác nhận bằng
-            barcode.
+            Gợi ý vị trí theo khu vực, dãy kệ và vị trí; nhân viên vẫn xác nhận
+            bằng mã vạch.
           </p>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center text-xs lg:w-[420px]">
           <div className="rounded-lg border bg-primary/5 px-3 py-2">
-            <div className="font-semibold">Advisory</div>
-            <div className="text-muted-foreground">best-fit</div>
+            <div className="font-semibold">Gợi ý</div>
+            <div className="text-muted-foreground">vừa sức chứa</div>
           </div>
           <div className="rounded-lg border bg-teal-50 px-3 py-2">
-            <div className="font-semibold">Barcode</div>
-            <div className="text-muted-foreground">required</div>
+            <div className="font-semibold">Mã vạch</div>
+            <div className="text-muted-foreground">bắt buộc</div>
           </div>
           <div className="rounded-lg border bg-amber-50 px-3 py-2">
-            <div className="font-semibold">Override</div>
-            <div className="text-muted-foreground">audited</div>
+            <div className="font-semibold">Đổi vị trí</div>
+            <div className="text-muted-foreground">có ghi nhận</div>
           </div>
         </div>
       </div>

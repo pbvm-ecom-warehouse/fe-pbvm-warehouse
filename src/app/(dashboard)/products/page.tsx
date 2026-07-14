@@ -1,5 +1,5 @@
-import { ModulePage } from "@/features/admin-shell/components/module-page";
+import { WarehouseItemsClient } from "@/features/products/components/warehouse-items-client";
 
 export default function ProductsPage() {
-  return <ModulePage moduleKey="products" />;
+  return <WarehouseItemsClient />;
 }

@@ -21,9 +21,9 @@ export const ROLE_LABELS: Record<WmsRole, string> = {
 export const ROLE_DESCRIPTIONS: Record<WmsRole, string> = {
   ADMIN: "Toàn quyền vận hành WMS",
   MANAGER: "Điều phối, tạo lệnh và duyệt",
-  RECEIVER: "Nhận hàng, put-away và hoàn hàng",
-  PICKER: "Soạn hàng, xuất kho và lấy đúng vị trí shelf",
-  PRINTER: "Vận hành in ly và xác nhận output",
+  RECEIVER: "Nhận hàng, cất hàng và hoàn hàng",
+  PICKER: "Soạn hàng, xuất kho và lấy đúng vị trí kệ",
+  PRINTER: "Vận hành in ly và xác nhận thành phẩm",
   COUNTER: "Kiểm đếm và ghi nhận chênh lệch",
 };
 

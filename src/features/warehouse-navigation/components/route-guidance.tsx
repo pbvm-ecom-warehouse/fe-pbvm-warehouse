@@ -9,7 +9,7 @@ export function RouteGuidance({ route }: { route: WarehouseRoute | null }) {
   if (!route) {
     return (
       <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-        Tính gợi ý để nhận route từ cổng vào đến shelf target.
+        Tính gợi ý để nhận chỉ đường từ cổng vào đến vị trí kệ.
       </div>
     );
   }
@@ -27,7 +27,7 @@ export function RouteGuidance({ route }: { route: WarehouseRoute | null }) {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge variant="default">WMS route</Badge>
+          <Badge variant="default">Đường đi WMS</Badge>
           {route.distanceMeters ? (
             <Badge variant="secondary">
               <MapPinned data-icon="inline-start" />

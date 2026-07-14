@@ -4,44 +4,49 @@ import {
   type ApiEnvelope,
   unwrapApiData,
 } from "@/lib/api-contract";
-import type { PutawaySuggestion, ShelfContentItem } from "@/types/api";
 
-import {
-  GATE_ROUTE_POINT,
-  buildRouteToShelf,
-  type PutawaySuggestionInput,
-} from "../utils/putaway-navigation";
+import type { PutawaySuggestionInput } from "../utils/putaway-navigation";
+
+export type PutawaySuggestionWarning =
+  | "ITEM_NO_DIMENSIONS"
+  | "NO_SHELF_FITS"
+  | "INSUFFICIENT_CAPACITY";
+
+export type PutawayShelfSuggestion = {
+  shelfCode: string;
+  capacity: number;
+};
+
+export type PutawaySuggestionResponse = {
+  suggestions: PutawayShelfSuggestion[];
+  warning?: PutawaySuggestionWarning | null;
+};
 
 export type PutawaySuggestionResult = {
   source: "api";
-  suggestions: PutawaySuggestion[];
+  suggestions: PutawayShelfSuggestion[];
+  warning?: PutawaySuggestionWarning | null;
 };
-
-function normalizeSuggestionRoutes(suggestions: PutawaySuggestion[]) {
-  return suggestions.map((suggestion) => ({
-    ...suggestion,
-    route: suggestion.route ?? buildRouteToShelf(suggestion.shelf),
-  }));
-}
 
 export async function listPutawaySuggestionResult(
   input: PutawaySuggestionInput,
 ): Promise<PutawaySuggestionResult> {
   try {
     const response = await apiClient.get<
-      ApiEnvelope<PutawaySuggestion[]> | PutawaySuggestion[]
+      ApiEnvelope<PutawaySuggestionResponse> | PutawaySuggestionResponse
     >("/putaway/suggestions", {
       params: {
-        from: GATE_ROUTE_POINT.code,
-        sku: input.sku,
         qty: input.quantity,
+        sku: input.sku,
         warehouseId: input.warehouseId,
       },
     });
+    const payload = unwrapApiData(response.data);
 
     return {
       source: "api",
-      suggestions: normalizeSuggestionRoutes(unwrapApiData(response.data)),
+      suggestions: payload.suggestions,
+      warning: payload.warning,
     };
   } catch (error) {
     throwIfMissingBackendEndpoint(error, "GET /api/wms/putaway/suggestions");
@@ -51,30 +56,4 @@ export async function listPutawaySuggestionResult(
 
 export async function listPutawaySuggestions(input: PutawaySuggestionInput) {
   return (await listPutawaySuggestionResult(input)).suggestions;
-}
-
-export async function listShelfContents({
-  shelfCode,
-  warehouseId,
-}: {
-  shelfCode: string;
-  warehouseId: string;
-}) {
-  try {
-    const response = await apiClient.get<
-      ApiEnvelope<ShelfContentItem[]> | ShelfContentItem[]
-    >(`/warehouse/shelves/${encodeURIComponent(shelfCode)}/contents`, {
-      params: {
-        warehouseId,
-      },
-    });
-
-    return unwrapApiData(response.data);
-  } catch (error) {
-    throwIfMissingBackendEndpoint(
-      error,
-      `GET /api/wms/warehouse/shelves/${shelfCode}/contents`,
-    );
-    throw error;
-  }
 }

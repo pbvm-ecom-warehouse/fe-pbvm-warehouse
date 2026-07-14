@@ -41,9 +41,9 @@ export function InventoryTable({ rows }: { rows: StockLedgerRow[] }) {
         <TableRow>
           <TableHead>SKU</TableHead>
           <TableHead>Kho</TableHead>
-          <TableHead className="text-right">Quantity</TableHead>
-          <TableHead className="text-right">Reserved</TableHead>
-          <TableHead className="text-right">Available</TableHead>
+          <TableHead className="text-right">Tồn thực tế</TableHead>
+          <TableHead className="text-right">Đã giữ</TableHead>
+          <TableHead className="text-right">Khả dụng</TableHead>
           <TableHead>Trạng thái</TableHead>
         </TableRow>
       </TableHeader>

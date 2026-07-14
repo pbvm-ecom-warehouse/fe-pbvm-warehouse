@@ -104,8 +104,8 @@ export function WarehouseLayoutEditor() {
     onError: (error) => {
       toast.error(
         isMissingBackendEndpoint(error)
-          ? "Chưa thể lưu bản nháp layout."
-          : "Không lưu được draft. Kiểm tra kết nối hoặc revision.",
+          ? "Chưa thể lưu bản nháp mặt bằng."
+          : "Không lưu được bản nháp. Kiểm tra kết nối hoặc phiên bản mặt bằng.",
       );
     },
     onSuccess: (saved) => {
@@ -117,7 +117,7 @@ export function WarehouseLayoutEditor() {
         ["warehouse-layout", WAREHOUSE_ID, "draft"],
         saved,
       );
-      toast.success(`Đã lưu draft revision ${saved.revision}.`);
+      toast.success(`Đã lưu bản nháp mặt bằng bản ${saved.revision}.`);
     },
   });
 
@@ -132,8 +132,8 @@ export function WarehouseLayoutEditor() {
     onError: (error) => {
       toast.error(
         isMissingBackendEndpoint(error)
-          ? "Chưa thể publish layout."
-          : "Không publish được layout. Kiểm tra các lỗi trên mặt bằng.",
+          ? "Chưa thể công bố mặt bằng."
+          : "Không công bố được mặt bằng. Kiểm tra các lỗi đang hiển thị.",
       );
     },
     onSuccess: (published) => {
@@ -141,7 +141,7 @@ export function WarehouseLayoutEditor() {
         ["warehouse-layout", WAREHOUSE_ID, "published"],
         published,
       );
-      toast.success(`Đã publish layout revision ${published.revision}.`);
+      toast.success(`Đã công bố mặt bằng bản ${published.revision}.`);
     },
   });
 
@@ -195,7 +195,7 @@ export function WarehouseLayoutEditor() {
     next.zones.push({
       id,
       code,
-      name: `Zone ${code}`,
+      name: `Khu ${code}`,
       xM: 1 + count,
       yM: 1 + count,
       widthM: 12,
@@ -210,7 +210,7 @@ export function WarehouseLayoutEditor() {
     if (!layout) return;
     const zone = layout.zones[0];
     if (!zone) {
-      toast.error("Tạo zone trước khi thêm rack.");
+      toast.error("Tạo khu vực trước khi thêm dãy kệ.");
       return;
     }
 
@@ -421,12 +421,12 @@ export function WarehouseLayoutEditor() {
       <div className="rounded-lg border border-amber-300 bg-amber-50 p-5 text-sm text-amber-950">
         <div className="font-semibold">
           {unsupported
-            ? "Layout kho chưa sẵn sàng"
-            : "Không tải được layout kho"}
+            ? "Mặt bằng kho chưa sẵn sàng"
+            : "Không tải được mặt bằng kho"}
         </div>
         <p className="mt-2 max-w-3xl text-amber-900/80">
           {unsupported
-            ? "Chưa có dữ liệu layout để hiển thị mặt bằng kho."
+            ? "Chưa có dữ liệu mặt bằng để hiển thị kho."
             : "Kiểm tra lại phiên đăng nhập hoặc thử tải lại trang."}
         </p>
       </div>
@@ -459,12 +459,12 @@ export function WarehouseLayoutEditor() {
             <h1 className="text-2xl font-bold">Bố trí mặt bằng kho</h1>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Zone, rack và lối đi dùng đơn vị mét.
+            Khu vực, dãy kệ và lối đi dùng đơn vị mét.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={dirty ? "secondary" : "outline"}>
-            {dirty ? "Có thay đổi chưa lưu" : `Revision ${layout.revision}`}
+            {dirty ? "Có thay đổi chưa lưu" : `Bản ${layout.revision}`}
           </Badge>
           {canEdit ? (
             <>
@@ -478,7 +478,7 @@ export function WarehouseLayoutEditor() {
                 ) : (
                   <Save data-icon="inline-start" />
                 )}
-                Lưu draft
+                Lưu bản nháp
               </Button>
               <Button
                 disabled={
@@ -495,7 +495,7 @@ export function WarehouseLayoutEditor() {
                 }
               >
                 <Send data-icon="inline-start" />
-                Publish
+                Công bố
               </Button>
             </>
           ) : (
@@ -514,11 +514,11 @@ export function WarehouseLayoutEditor() {
               </Button>
               <Button onClick={addZone} size="sm" variant="outline">
                 <SquareDashed data-icon="inline-start" />
-                Zone
+                Khu vực
               </Button>
               <Button onClick={addRack} size="sm" variant="outline">
                 <Grid2X2 data-icon="inline-start" />
-                Rack
+                Dãy kệ
               </Button>
               <Button onClick={() => addAisle("MAIN")} size="sm" variant="outline">
                 <Route data-icon="inline-start" />
@@ -526,11 +526,11 @@ export function WarehouseLayoutEditor() {
               </Button>
               <Button onClick={() => addAisle("RACK")} size="sm" variant="outline">
                 <Route data-icon="inline-start" />
-                Lối rack
+                Lối giữa kệ
               </Button>
               <Button onClick={addGate} size="sm" variant="outline">
                 <DoorOpen data-icon="inline-start" />
-                Gate
+                Cổng
               </Button>
               <span className="mx-1 h-6 w-px bg-slate-300" />
               <Button
@@ -552,13 +552,13 @@ export function WarehouseLayoutEditor() {
                 <Redo2 />
               </Button>
               <div className="ml-auto flex items-center gap-2 text-xs font-medium text-slate-600">
-                Snap {layout.canvas.gridM}m
+                Căn lưới {layout.canvas.gridM}m
                 <Switch checked={snapEnabled} onCheckedChange={setSnapEnabled} />
               </div>
             </>
           ) : (
             <div className="text-sm text-muted-foreground">
-              Manager có thể xem mặt bằng kho nhưng không thể chỉnh sửa.
+              Quản lý có thể xem mặt bằng kho nhưng không thể chỉnh sửa.
             </div>
           )}
         </div>
@@ -589,7 +589,7 @@ export function WarehouseLayoutEditor() {
 
             {validationErrors.length > 0 ? (
               <div className="mt-3 border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-                <div className="font-semibold">Layout chưa thể publish</div>
+                <div className="font-semibold">Mặt bằng chưa thể công bố</div>
                 <ul className="mt-2 grid gap-1">
                   {validationErrors.map((error) => (
                     <li key={error}>- {error}</li>
@@ -598,7 +598,7 @@ export function WarehouseLayoutEditor() {
               </div>
             ) : (
               <div className="mt-3 border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">
-                Layout hợp lệ để publish.
+                Mặt bằng đã sẵn sàng công bố.
               </div>
             )}
           </div>

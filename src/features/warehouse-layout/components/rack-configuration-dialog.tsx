@@ -68,7 +68,7 @@ export function RackConfigurationDialog({
           <DialogTitle>Đồng bộ cấu hình kệ</DialogTitle>
           <DialogDescription>
             Áp dụng cấu hình vật lý của {sourceRack.name} cho các kệ khác.
-            Mã, zone và vị trí từng kệ được giữ nguyên.
+            Mã, khu vực và vị trí từng kệ được giữ nguyên.
           </DialogDescription>
         </DialogHeader>
 
@@ -83,7 +83,7 @@ export function RackConfigurationDialog({
             size="sm"
             variant={scope === "ZONE" ? "default" : "ghost"}
           >
-            Zone {sourceZone?.code ?? sourceRack.zoneId}
+            Khu {sourceZone?.code ?? sourceRack.zoneId}
           </Button>
           <Button
             aria-pressed={scope === "WAREHOUSE"}

@@ -32,122 +32,6 @@ async function seedWmsSession(page: Page, roles: SeedRole[], name = "Role User")
   );
 }
 
-function warehouseLayoutFixture(status: "DRAFT" | "PUBLISHED" = "PUBLISHED") {
-  return {
-    warehouseId: "central",
-    revision: 1,
-    status,
-    canvas: { widthM: 40, heightM: 24, gridM: 0.5 },
-    zones: [
-      {
-        id: "zone-a",
-        code: "A",
-        name: "Zone A",
-        xM: 1,
-        yM: 1,
-        widthM: 16,
-        heightM: 22,
-        rotation: 0,
-      },
-      {
-        id: "zone-b",
-        code: "B",
-        name: "Zone B",
-        xM: 23,
-        yM: 1,
-        widthM: 16,
-        heightM: 22,
-        rotation: 0,
-      },
-    ],
-    racks: [
-      {
-        id: "rack-a1",
-        zoneId: "zone-a",
-        code: "A1",
-        name: "Rack A1",
-        xM: 3,
-        yM: 3,
-        widthM: 10,
-        depthM: 1.5,
-        rotation: 0,
-        levelCount: 3,
-        bayCount: 3,
-        shelfCodes: ["A1-S01", "A1-S02", "A1-S03"],
-        accessPoint: { xM: 8, yM: 6 },
-      },
-      {
-        id: "rack-b1",
-        zoneId: "zone-b",
-        code: "B1",
-        name: "Rack B1",
-        xM: 25,
-        yM: 3,
-        widthM: 10,
-        depthM: 1.5,
-        rotation: 0,
-        levelCount: 2,
-        bayCount: 3,
-        shelfCodes: ["B1-S01", "B1-S02"],
-        accessPoint: { xM: 30, yM: 6 },
-      },
-      {
-        id: "rack-b2",
-        zoneId: "zone-b",
-        code: "B2",
-        name: "Rack B2",
-        xM: 25,
-        yM: 11,
-        widthM: 10,
-        depthM: 1.5,
-        rotation: 0,
-        levelCount: 1,
-        bayCount: 3,
-        shelfCodes: ["B2-S01"],
-        accessPoint: { xM: 30, yM: 10 },
-      },
-    ],
-    aisles: [
-      {
-        id: "main-01",
-        code: "MAIN-01",
-        type: "MAIN",
-        xM: 18,
-        yM: 0,
-        widthM: 4,
-        heightM: 24,
-      },
-      {
-        id: "aisle-a1",
-        code: "AISLE-A1",
-        type: "RACK",
-        xM: 1,
-        yM: 6,
-        widthM: 16,
-        heightM: 2,
-      },
-      {
-        id: "aisle-b1",
-        code: "AISLE-B1",
-        type: "RACK",
-        xM: 23,
-        yM: 6,
-        widthM: 16,
-        heightM: 2,
-      },
-    ],
-    gates: [
-      {
-        id: "gate-01",
-        code: "GATE-01",
-        label: "Cổng vào",
-        xM: 20,
-        yM: 24,
-      },
-    ],
-  };
-}
-
 test("manager sees management dashboard and inventory route", async ({ page }) => {
   await seedWmsSession(page, ["MANAGER"], "Manager User");
 
@@ -162,7 +46,85 @@ test("manager sees management dashboard and inventory route", async ({ page }) =
   await expect(
     page.getByRole("heading", { name: /^Tồn kho$/i }),
   ).toBeVisible();
-  await expect(page.getByText(/Manager ·/i)).toBeVisible();
+  await expect(
+    page.getByText(/Tính năng tồn kho tổng hợp chưa sẵn sàng/i),
+  ).toBeVisible();
+});
+
+test("admin edits a product from the item drawer", async ({ page }) => {
+  await seedWmsSession(page, ["ADMIN"], "Admin User");
+  const item = {
+    altBarcodes: ["8938501234567"],
+    altUnits: [{ quantity: 24, unit: "thùng" }],
+    attributes: [{ color: "đỏ", size: "500ml" }],
+    barcode: "8938501234567",
+    createdAt: "2026-07-01T00:00:00.000Z",
+    height: 12,
+    id: "item-1",
+    isActive: true,
+    isPerishable: false,
+    name: "Ly nhựa 500ml",
+    sku: "CUP-500ML-RED",
+    type: "CUP_BLANK",
+    unit: "cái",
+    updatedAt: "2026-07-01T00:00:00.000Z",
+    width: 8,
+  };
+  let patchBody: unknown;
+  let deleteCalled = false;
+
+  await page.route("**/api/wms/stock/items**", async (route) => {
+    const method = route.request().method();
+
+    if (method === "PATCH") {
+      patchBody = route.request().postDataJSON();
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: { ...item, name: "Ly nhựa 500ml đỏ" },
+          meta: { requestId: "product-update" },
+        }),
+      });
+      return;
+    }
+
+    if (method === "DELETE") {
+      deleteCalled = true;
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ data: {}, meta: { requestId: "product-delete" } }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: [item],
+        meta: { requestId: "product-list" },
+      }),
+    });
+  });
+
+  await page.goto("/products");
+  await expect(page.getByRole("heading", { name: /^Sản phẩm$/i })).toBeVisible();
+  await page.getByRole("row", { name: /CUP-500ML-RED/i }).click();
+  await expect(page.getByRole("dialog", { name: /CUP-500ML-RED/i })).toBeVisible();
+  await expect(page.getByLabel("Đơn vị phụ")).toHaveValue(
+    "quantity: 24, unit: thùng",
+  );
+  await page.getByLabel("Tên mặt hàng").fill("Ly nhựa 500ml đỏ");
+  await page.getByRole("button", { name: /^Lưu mặt hàng$/i }).click();
+  await expect(page.getByText(/Đã cập nhật mặt hàng/i)).toBeVisible();
+  expect(patchBody).toMatchObject({ name: "Ly nhựa 500ml đỏ" });
+
+  await page.getByRole("button", { name: /^Ngưng dùng$/i }).click();
+  await page
+    .getByRole("dialog", { name: /Ngưng dùng mặt hàng/i })
+    .getByRole("button", { name: /^Ngưng dùng$/i })
+    .click();
+  await expect(page.getByText(/Đã ngưng dùng mặt hàng/i)).toBeVisible();
+  expect(deleteCalled).toBe(true);
 });
 
 test("receiver gets inbound navigation and forbidden settings", async ({ page }) => {
@@ -170,7 +132,7 @@ test("receiver gets inbound navigation and forbidden settings", async ({ page })
 
   await page.goto("/dashboard");
   await expect(
-    page.getByRole("heading", { name: /Receiver workspace/i }),
+    page.getByRole("heading", { name: /Khu vực nhận hàng/i }),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: /Nhập hàng/i })).toBeVisible();
   await expect(page.getByRole("link", { name: /Cài đặt/i })).toHaveCount(0);
@@ -181,6 +143,83 @@ test("receiver gets inbound navigation and forbidden settings", async ({ page })
   ).toBeVisible();
 });
 
+test("manager opens purchases when purchase order items are missing", async ({ page }) => {
+  await seedWmsSession(page, ["MANAGER"], "Manager User");
+  const purchaseOrderWithoutItems = {
+    createdAt: "2026-07-13T00:00:00.000Z",
+    expectedDate: "2026-07-18T00:00:00.000Z",
+    id: "po-no-items",
+    note: "Đơn mua backend trả thiếu dòng hàng",
+    orderDate: "2026-07-13T00:00:00.000Z",
+    poNumber: "PO-20260713-0002",
+    status: "CONFIRMED",
+    supplierId: "supplier-1",
+    updatedAt: "2026-07-13T00:00:00.000Z",
+    warehouseId: "wh-1",
+  };
+
+  await page.route("**/api/wms/suppliers**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: [
+          {
+            code: "NCC-001",
+            contactName: "Nguyễn Văn B",
+            id: "supplier-1",
+            name: "Công ty TNHH ABCD",
+            status: "ACTIVE",
+          },
+        ],
+        limit: 100,
+        page: 1,
+        total: 1,
+      }),
+    });
+  });
+  await page.route("**/api/wms/warehouse", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: [
+          {
+            address: "Kho A",
+            id: "wh-1",
+            isActive: true,
+            name: "Kho A",
+          },
+        ],
+        meta: { requestId: "warehouse-list" },
+      }),
+    });
+  });
+  await page.route("**/api/wms/purchase-orders**", async (route) => {
+    const url = route.request().url();
+
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: url.includes("/purchase-orders/po-no-items")
+          ? purchaseOrderWithoutItems
+          : [purchaseOrderWithoutItems],
+        limit: 20,
+        page: 1,
+        total: 1,
+      }),
+    });
+  });
+  await page.route("**/api/wms/goods-receipt-notes**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ data: [], limit: 50, page: 1, total: 0 }),
+    });
+  });
+
+  await page.goto("/purchases");
+
+  await expect(page.getByRole("heading", { name: /^Nhập hàng$/i })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "PO-20260713-0002" })).toBeVisible();
+});
 test("admin sees settings health and WMS user action forms", async ({ page }) => {
   await seedWmsSession(page, ["ADMIN"], "Admin User");
   await page.route("**/api/wms/health", async (route) => {
@@ -203,12 +242,12 @@ test("admin sees settings health and WMS user action forms", async ({ page }) =>
 
   await expect(page.getByText("Trạng thái hệ thống", { exact: true })).toBeVisible();
   await expect(page.getByText("Kết nối WMS", { exact: true })).toBeVisible();
-  await expect(page.getByText("Quản trị user WMS")).toBeVisible();
+  await expect(page.getByText("Quản lý tài khoản WMS")).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Tạo nhân viên/i }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Reset mật khẩu/i }),
+    page.getByRole("button", { name: /Đặt lại mật khẩu/i }),
   ).toBeVisible();
 });
 
@@ -236,74 +275,56 @@ test("manager sees settings API status without admin mutation controls", async (
 
   await expect(page.getByText("Trạng thái hệ thống", { exact: true })).toBeVisible();
   await expect(page.getByText("Kết nối WMS", { exact: true })).toBeVisible();
-  await expect(page.getByText("Quản trị user WMS")).toHaveCount(0);
+  await expect(page.getByText("Quản lý tài khoản WMS")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: /Tạo nhân viên/i }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: /Reset mật khẩu/i }),
+    page.getByRole("button", { name: /Đặt lại mật khẩu/i }),
   ).toHaveCount(0);
 });
 
 test("printer can use print jobs but not purchases", async ({ page }) => {
   await seedWmsSession(page, ["PRINTER"], "Printer User");
+  let lineStatus: "PENDING" | "CONSUMED" | "COMPLETED" = "PENDING";
+  const printJob = () => ({
+    createdAt: "2026-07-04T00:00:00.000Z",
+    id: "pj-1",
+    items: [
+      {
+        inputItemId: "blank-1",
+        lineStatus,
+        outputItemId: "printed-1",
+        quantity: 10,
+        remainingQty: lineStatus === "COMPLETED" ? 0 : 10,
+        reservedQty: 10,
+        sku: "CUP-BLANK-500",
+      },
+    ],
+    orderId: "order-1",
+    status:
+      lineStatus === "PENDING"
+        ? "PENDING"
+        : lineStatus === "CONSUMED"
+          ? "IN_PROGRESS"
+          : "COMPLETED",
+    updatedAt: "2026-07-04T00:00:00.000Z",
+    warehouseId: "central",
+  });
+  const postBodies: unknown[] = [];
 
-  await page.goto("/print-jobs");
-  await expect(
-    page.getByRole("heading", { name: /^Lệnh in ly$/i }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /Xác nhận in xong/i }),
-  ).toBeVisible();
-
-  await page.goto("/purchases");
-  await expect(
-    page.getByRole("heading", { name: /Không có quyền truy cập/i }),
-  ).toBeVisible();
-});
-
-test("picker mobile drawer exposes picker routes", async ({ page }) => {
-  await seedWmsSession(page, ["PICKER"], "Picker User");
-  await page.setViewportSize({ width: 390, height: 844 });
-
-  await page.goto("/dashboard");
-  await expect(
-    page.getByRole("heading", { name: /Picker workspace/i }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: /Mở menu/i }).click();
-  await expect(page.getByRole("link", { name: /Xuất kho/i })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Chuyển kho/i })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: /Nhập hàng/i })).toHaveCount(0);
-});
-
-test("admin saves and publishes a warehouse floor plan", async ({ page }) => {
-  await seedWmsSession(page, ["ADMIN"], "Admin User");
-  let draft = warehouseLayoutFixture("DRAFT");
-
-  await page.route("**/api/wms/warehouses/central/layout**", async (route) => {
+  await page.route("**/api/wms/print-jobs**", async (route) => {
     const method = route.request().method();
-
-    if (method === "PUT") {
-      const payload = route.request().postDataJSON();
-      draft = {
-        ...draft,
-        ...payload,
-        revision: 2,
-        status: "DRAFT",
-      };
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({ data: draft, meta: { requestId: "layout-save" } }),
-      });
-      return;
-    }
+    const url = route.request().url();
 
     if (method === "POST") {
+      postBodies.push(route.request().postDataJSON());
+      lineStatus = url.includes("/complete") ? "COMPLETED" : "CONSUMED";
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
-          data: { ...draft, status: "PUBLISHED" },
-          meta: { requestId: "layout-publish" },
+          data: printJob(),
+          meta: { requestId: "print-job-mutate" },
         }),
       });
       return;
@@ -312,53 +333,211 @@ test("admin saves and publishes a warehouse floor plan", async ({ page }) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
-        data: draft,
-        meta: { requestId: "layout-draft" },
+        data: url.includes("/print-jobs/pj-1") ? printJob() : [printJob()],
+        meta: { requestId: "print-job-list" },
       }),
+    });
+  });
+
+  await page.goto("/print-jobs");
+  await expect(page.getByRole("heading", { name: /^In ly$/i })).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: new RegExp(["Theo dõi", "lệnh in"].join(" "), "i"),
+    }),
+  ).toHaveCount(0);
+  await page.getByRole("row", { name: /CUP-BLANK-500/i }).click();
+  await page.getByLabel("Mã vị trí").fill("A1-S02");
+  await page.getByRole("button", { name: /^Tiêu thụ ly chưa in$/i }).click();
+  await expect(page.getByText(/Đã ghi nhận tiêu thụ ly chưa in/i)).toBeVisible();
+  expect(postBodies[0]).toMatchObject({
+    itemBarcode: "CUP-BLANK-500",
+    quantity: 10,
+    shelfCode: "A1-S02",
+  });
+
+  await page.getByLabel("Mã vị trí").fill("A1-S03");
+  await page.getByRole("button", { name: /^Xác nhận in xong$/i }).click();
+  await expect(page.getByText(/Đã xác nhận in xong/i)).toBeVisible();
+  expect(postBodies[1]).toMatchObject({
+    quantity: 10,
+    shelfCode: "A1-S03",
+  });
+
+  await page.goto("/purchases");
+  await expect(
+    page.getByRole("heading", { name: /Không có quyền truy cập/i }),
+  ).toBeVisible();
+});
+
+test("manager can view print jobs without processing controls", async ({ page }) => {
+  await seedWmsSession(page, ["MANAGER"], "Manager User");
+  const printJob = {
+    createdAt: "2026-07-04T00:00:00.000Z",
+    id: "pj-1",
+    items: [
+      {
+        inputItemId: "blank-1",
+        lineStatus: "PENDING",
+        outputItemId: "printed-1",
+        quantity: 10,
+        remainingQty: 10,
+        reservedQty: 10,
+        sku: "CUP-BLANK-500",
+      },
+    ],
+    orderId: "order-1",
+    status: "PENDING",
+    updatedAt: "2026-07-04T00:00:00.000Z",
+    warehouseId: "central",
+  };
+
+  await page.route("**/api/wms/print-jobs**", async (route) => {
+    const url = route.request().url();
+
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: url.includes("/print-jobs/pj-1") ? printJob : [printJob],
+        meta: { requestId: "print-job-manager" },
+      }),
+    });
+  });
+
+  await page.goto("/print-jobs");
+  await expect(page.getByRole("heading", { name: /^In ly$/i })).toBeVisible();
+  await expect(
+    page.getByRole("cell", { name: /^CUP-BLANK-500$/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /^Tiêu thụ ly chưa in$/i }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /^Xác nhận in xong$/i }),
+  ).toHaveCount(0);
+});
+
+test("picker mobile drawer exposes picker routes", async ({ page }) => {
+  await seedWmsSession(page, ["PICKER"], "Picker User");
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  await page.goto("/dashboard");
+  await expect(
+    page.getByRole("heading", { name: /Khu vực soạn hàng/i }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /Mở menu/i }).click();
+  await expect(page.getByRole("link", { name: /Xuất kho/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Chuyển kho/i })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Nhập hàng/i })).toHaveCount(0);
+});
+
+test("admin sees warehouse structure without layout API calls", async ({ page }) => {
+  await seedWmsSession(page, ["ADMIN"], "Admin User");
+  let layoutCalled = false;
+
+  await page.route("**/api/wms/warehouses/*/layout**", async (route) => {
+    layoutCalled = true;
+    await route.fulfill({
+      status: 404,
+      contentType: "application/json",
+      body: JSON.stringify({ error: { code: "NOT_FOUND", message: "missing" } }),
+    });
+  });
+  await page.route("**/api/wms/warehouse", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: [
+          {
+            address: "Kho trung tâm",
+            createdAt: "2026-07-01T00:00:00.000Z",
+            id: "wh-1",
+            isActive: true,
+            name: "Kho trung tâm",
+            updatedAt: "2026-07-01T00:00:00.000Z",
+          },
+        ],
+        meta: { requestId: "warehouse-list" },
+      }),
+    });
+  });
+  await page.route("**/api/wms/warehouse/zones**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ data: [], meta: { requestId: "zones-list" } }),
+    });
+  });
+  await page.route("**/api/wms/warehouse/racks**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ data: [], meta: { requestId: "racks-list" } }),
+    });
+  });
+  await page.route("**/api/wms/warehouse/shelves**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ data: [], meta: { requestId: "shelves-list" } }),
     });
   });
 
   await page.goto("/warehouses");
   await expect(
-    page.getByRole("heading", { name: /Bố trí mặt bằng kho/i }),
+    page.getByRole("heading", { name: /^Kho$/i }),
   ).toBeVisible();
-
-  await page.getByRole("button", { name: /Mở Rack A1/i }).click();
-  await page.getByLabel("Số khoang").fill("4");
-  await page.getByTestId("sync-rack-configuration").click();
-  await expect(page.getByTestId("apply-rack-configuration")).toBeDisabled();
-  await page.getByTestId("rack-scope-warehouse").click();
-  await expect(page.getByTestId("apply-rack-configuration")).toContainText("2");
-  await page.getByTestId("apply-rack-configuration").click();
-
-  await page.getByRole("button", { name: /Mở Rack B1/i }).click();
-  await expect(page.getByLabel("Số khoang")).toHaveValue("4");
-  await page.getByRole("button", { name: /Hoàn tác/i }).click();
-  await expect(page.getByLabel("Số khoang")).toHaveValue("3");
-
-  await page.getByRole("button", { name: /Mở Rack A1/i }).click();
-  await page.getByTestId("sync-rack-configuration").click();
-  await page.getByTestId("rack-scope-warehouse").click();
-  await page.getByTestId("apply-rack-configuration").click();
-  await page.getByLabel("Tên").fill("Rack A1 cập nhật");
-  await page.getByRole("button", { name: /Lưu draft/i }).click();
-  await expect(page.getByText("Revision 2", { exact: true })).toBeVisible();
-
-  await page.getByRole("button", { name: /^Publish$/i }).click();
-  await expect(page.getByText(/Đã publish layout revision 2/i)).toBeVisible();
+  await expect(page.getByText("Danh sách kho", { exact: true })).toBeVisible();
+  expect(layoutCalled).toBe(false);
 });
 
-test("receiver sees put-away route and shelf contents on warehouse navigation", async ({
+test("receiver confirms put-away task through warehouse navigation", async ({
   page,
 }) => {
   await seedWmsSession(page, ["RECEIVER"], "Receiver User");
+  const putawayTask = {
+    grnId: "grn-1",
+    id: "task-1",
+    items: [
+      {
+        itemId: "item-1",
+        lotId: "lot-1",
+        lotNumber: "LOT-A",
+        quantity: 80,
+        remainingQty: 80,
+        sku: "CUP-BLANK-500",
+        unit: "cái",
+      },
+    ],
+    status: "PENDING",
+    warehouseId: "central",
+  };
 
-  await page.route("**/api/wms/warehouses/central/layout**", async (route) => {
+  await page.route("**/api/wms/putaway-tasks**", async (route) => {
+    const url = route.request().url();
+    const method = route.request().method();
+    if (method === "POST") {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: { ...putawayTask, status: "COMPLETED" },
+          meta: { requestId: "putaway-confirm" },
+        }),
+      });
+      return;
+    }
+    if (url.includes("/putaway-tasks/task-1")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: putawayTask,
+          meta: { requestId: "putaway-detail" },
+        }),
+      });
+      return;
+    }
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
-        data: warehouseLayoutFixture(),
-        meta: { requestId: "e2e-layout" },
+        data: [putawayTask],
+        meta: { requestId: "putaway-list" },
       }),
     });
   });
@@ -367,95 +546,24 @@ test("receiver sees put-away route and shelf contents on warehouse navigation", 
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
-        data: [
-          {
-            shelf: {
-              id: "central-a1-s02",
-              warehouseId: "central",
-              warehouseCode: "CENTRAL",
-              zoneCode: "A",
-              zoneName: "Zone A",
-              rackCode: "A1",
-              rackName: "Rack A1",
-              level: 2,
-              code: "A1-S02",
-              barcode: "A1-S02",
-              x: 72,
-              y: 160,
-              width: 132,
-              height: 46,
-              innerDepth: 52,
-              innerWidth: 118,
-              innerHeight: 38,
-              fillFactor: 0.76,
-            },
-            capacity: 132,
-            reason: "same SKU cluster + gần staging + đủ chỗ",
-            advisory: true,
-            pathLabel: "CENTRAL / Zone A / Rack A1 / A1-S02",
-            route: {
-              from: { code: "GATE-01", label: "Cổng vào", x: 34, y: 318 },
-              to: { code: "A1-S02", label: "A1-S02", x: 138, y: 183 },
-              waypoints: [
-                { code: "GATE-01", label: "Cổng vào", x: 34, y: 318 },
-                { code: "AISLE-A1", label: "Lối Rack A1", x: 138, y: 250 },
-                { code: "A1-S02", label: "A1-S02", x: 138, y: 183 },
-              ],
-              distanceMeters: 28,
-              estimatedSeconds: 70,
-              instructions: ["Bắt đầu tại cổng", "Đi tới Rack A1", "Dừng ở A1-S02"],
-            },
-          },
-        ],
+        data: {
+          suggestions: [{ capacity: 132, shelfCode: "A1-S02" }],
+          warning: null,
+        },
         meta: { requestId: "e2e-putaway" },
       }),
     });
   });
 
-  await page.route("**/api/wms/warehouse/shelves/*/contents**", async (route) => {
-    const url = route.request().url();
-    const isTargetShelf = url.includes("/A1-S02/");
-
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: isTargetShelf
-          ? [
-              {
-                id: "stock-1",
-                sku: "CUP-BLANK-500",
-                itemName: "Ly trắng 500ml",
-                quantity: 24,
-                unit: "cái",
-                containerType: "box",
-                placement: {
-                  x: 8,
-                  y: 14,
-                  width: 34,
-                  height: 32,
-                  depth: 12,
-                  label: "LOT-A",
-                },
-                status: "AVAILABLE",
-              },
-            ]
-          : [],
-        meta: { requestId: "e2e-contents" },
-      }),
-    });
-  });
-
   await page.goto("/warehouse-navigation");
-  await page.getByRole("button", { name: /Tính gợi ý/i }).click();
-
-  await expect(page.getByText("GATE-01").first()).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Điều hướng kệ" }).last(),
+  ).toBeVisible();
+  await page.getByRole("row", { name: /CUP-BLANK-500/i }).click();
+  await page.getByRole("button", { name: /Tìm vị trí/i }).click();
   await expect(page.getByText("A1-S02").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: /Mở Rack A1/i })).toBeVisible();
-
-  await page.getByRole("button", { name: /Mở Rack A1/i }).click();
-
-  await expect(page.getByRole("heading", { name: /Rack A1/i })).toBeVisible();
-  await expect(page.getByText("LOT-A")).toBeVisible();
-  await expect(page.getByText("CUP-BLANK-500").first()).toBeVisible();
-  await expect(page.getByText("24 cái")).toBeVisible();
+  await page.getByRole("button", { name: /A1-S02/i }).click();
+  await expect(page.getByLabel("Mã vị trí")).toHaveValue("A1-S02");
+  await page.getByRole("button", { name: /^Xác nhận$/i }).click();
+  await expect(page.getByText(/Đã xác nhận dòng cất hàng/i)).toBeVisible();
 });

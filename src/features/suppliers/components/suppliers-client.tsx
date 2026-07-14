@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -34,8 +33,10 @@ import {
 } from "@/components/ui/select";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -49,9 +50,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  EntityDrawer,
+  PageHeader,
+  PermissionNotice,
+  StatusBadge,
+  TableSkeleton,
+} from "@/features/admin-shell/components/operations-ui";
 import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
+import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
 import { useSessionUser } from "@/hooks/use-session-user";
 
 import {
@@ -98,7 +107,7 @@ const defaultSupplierItemForm = {
 };
 
 function formatError(error: unknown) {
-  return getApiErrorMessage(error) ?? "Không gọi được WMS API.";
+  return getApiErrorMessage(error) ?? "Không kết nối được WMS.";
 }
 
 function optionalText(value: string) {
@@ -148,12 +157,6 @@ function supplierItemPayload(
     supplierId,
     supplierItemCode: optionalText(form.supplierItemCode),
   };
-}
-
-function statusVariant(status: SupplierStatus) {
-  if (status === "ACTIVE") return "default";
-  if (status === "BLACKLIST") return "destructive";
-  return "outline";
 }
 
 function ErrorBanner({ error }: { error: unknown }) {
@@ -241,16 +244,10 @@ export function SuppliersClient() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-semibold tracking-normal">
-            Nhà cung cấp
-          </h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Quản lý nhà cung cấp và các mặt hàng cung ứng.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Nhà cung cấp"
+        actions={
+          <>
           <Button
             disabled={!canManage}
             onClick={() =>
@@ -271,54 +268,35 @@ export function SuppliersClient() {
             <DialogTrigger asChild>
               <Button disabled={!canManage}>
                 <Plus data-icon="inline-start" />
-                Tạo NCC
+                Tạo nhà cung cấp
               </Button>
             </DialogTrigger>
             <DialogContent size="lg" className="max-h-[90vh] overflow-y-auto p-6">
               <DialogHeader className="mb-5">
-                <DialogTitle>Tạo NCC</DialogTitle>
-                <DialogDescription>Thêm nhà cung cấp mới vào hệ thống</DialogDescription>
+                <DialogTitle>Tạo nhà cung cấp</DialogTitle>
+                <DialogDescription>Thêm nhà cung cấp mới</DialogDescription>
               </DialogHeader>
               <SupplierForm
                 busy={createSupplierMutation.isPending}
                 disabled={!canManage}
                 form={createForm}
-                submitLabel="Tạo NCC"
+                submitLabel="Tạo nhà cung cấp"
                 onChange={setCreateForm}
                 onSubmit={handleCreateSupplier}
               />
             </DialogContent>
           </Dialog>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {!canManage ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Bạn cần quyền Quản lý để sử dụng tính năng này.
-        </div>
+        <PermissionNotice>
+          Bạn cần quyền phù hợp để quản lý nhà cung cấp.
+        </PermissionNotice>
       ) : null}
 
       {suppliersQuery.error ? <ErrorBanner error={suppliersQuery.error} /> : null}
-
-      <Card>
-
-        <CardContent className="pt-4">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-              <div className="text-sm font-semibold text-foreground">Tổng số NCC</div>
-              <div className="mt-1 text-2xl font-bold">{total}</div>
-            </div>
-            <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-              <div className="text-sm font-semibold text-foreground">Phân tích danh mục</div>
-              <div className="mt-1 text-xs text-muted-foreground">Theo dõi mặt hàng từ các NCC</div>
-            </div>
-            <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-              <div className="text-sm font-semibold text-foreground">Chính sách mua hàng</div>
-              <div className="mt-1 text-xs text-muted-foreground">Quản lý MOQ và Lead time</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       <div className="grid gap-4">
         <Card>
@@ -361,7 +339,7 @@ export function SuppliersClient() {
                     <SelectItem value="ALL">Tất cả</SelectItem>
                     {SUPPLIER_STATUSES.map((status) => (
                       <SelectItem key={status} value={status}>
-                        {status}
+                        {statusLabel(status)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -373,6 +351,9 @@ export function SuppliersClient() {
               </Button>
             </form>
 
+            {suppliersQuery.isLoading ? (
+              <TableSkeleton columns={4} />
+            ) : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -403,15 +384,16 @@ export function SuppliersClient() {
                         {supplier.contactName || supplier.phone || "Chưa khai"}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={statusVariant(supplier.status)}>
-                          {supplier.status}
-                        </Badge>
+                        <StatusBadge tone={statusTone(supplier.status)}>
+                          {statusLabel(supplier.status)}
+                        </StatusBadge>
                       </TableCell>
                     </TableRow>
                   ))
                 )}
               </TableBody>
             </Table>
+            )}
 
             <div className="flex items-center justify-between gap-3">
               <Button
@@ -441,25 +423,22 @@ export function SuppliersClient() {
 
       </div>
 
-      <Dialog
-        open={Boolean(selectedSupplierId)}
-        onOpenChange={(open) => !open && setSelectedSupplierId("")}
-      >
-        <DialogContent size="4xl" className="max-h-[90vh] overflow-y-auto p-6">
-          <DialogHeader className="mb-5">
-            <DialogTitle>Chi tiết & Mặt hàng NCC</DialogTitle>
-          </DialogHeader>
-          {selectedSupplier ? (
-            <SupplierDetailSection
-              canDelete={canDelete}
-              canManage={canManage}
-              key={selectedSupplier.id}
-              supplier={selectedSupplier}
-              onDeleted={() => setSelectedSupplierId("")}
-            />
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      {selectedSupplier ? (
+        <EntityDrawer
+          open
+          title={selectedSupplier.name}
+          description={selectedSupplier.code}
+          onOpenChange={(open) => !open && setSelectedSupplierId("")}
+        >
+          <SupplierDetailSection
+            canDelete={canDelete}
+            canManage={canManage}
+            key={selectedSupplier.id}
+            supplier={selectedSupplier}
+            onDeleted={() => setSelectedSupplierId("")}
+          />
+        </EntityDrawer>
+      ) : null}
     </div>
   );
 }
@@ -490,6 +469,8 @@ function SupplierDetailSection({
   const [itemForm, setItemForm] = useState(defaultSupplierItemForm);
   const [itemEdit, setItemEdit] = useState(defaultSupplierItemForm);
   const [editingItemId, setEditingItemId] = useState("");
+  const [blacklistConfirmOpen, setBlacklistConfirmOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const itemsQuery = useQuery({
     enabled: canManage,
@@ -534,7 +515,7 @@ function SupplierDetailSection({
       void queryClient.invalidateQueries({
         queryKey: supplierKeys.items(supplier.id),
       });
-      toast.success("Đã lưu SupplierItem");
+      toast.success("Đã lưu mặt hàng NCC");
     },
   });
 
@@ -554,7 +535,7 @@ function SupplierDetailSection({
       void queryClient.invalidateQueries({
         queryKey: supplierKeys.items(supplier.id),
       });
-      toast.success("Đã cập nhật SupplierItem");
+      toast.success("Đã cập nhật mặt hàng NCC");
     },
   });
 
@@ -565,6 +546,11 @@ function SupplierDetailSection({
 
   function handleChangeStatus(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (supplier.status !== "BLACKLIST" && nextStatus === "BLACKLIST") {
+      setBlacklistConfirmOpen(true);
+      return;
+    }
+
     changeStatusMutation.mutate();
   }
 
@@ -590,7 +576,7 @@ function SupplierDetailSection({
             busy={updateSupplierMutation.isPending}
             disabled={!canManage}
             form={editForm}
-            submitLabel="Lưu NCC"
+            submitLabel="Lưu nhà cung cấp"
             onChange={setEditForm}
             onSubmit={handleUpdateSupplier}
           />
@@ -619,7 +605,7 @@ function SupplierDetailSection({
                       key={status}
                       value={status}
                     >
-                      {status}
+                      {statusLabel(status)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -642,28 +628,89 @@ function SupplierDetailSection({
             <Button
               className="self-end"
               disabled={!canDelete || deleteSupplierMutation.isPending}
-              onClick={() => deleteSupplierMutation.mutate()}
+              onClick={() => setDeleteConfirmOpen(true)}
               type="button"
               variant="destructive"
             >
               <Trash2 data-icon="inline-start" />
-              Xóa NCC
+              Xóa nhà cung cấp
             </Button>
           </form>
+          <Dialog
+            open={blacklistConfirmOpen}
+            onOpenChange={setBlacklistConfirmOpen}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Đưa nhà cung cấp vào blacklist?</DialogTitle>
+                <DialogDescription>
+                  Nhà cung cấp sẽ không còn được ưu tiên cho đơn mua mới.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">
+                    Hủy
+                  </Button>
+                </DialogClose>
+                <Button
+                  disabled={changeStatusMutation.isPending}
+                  onClick={() => {
+                    changeStatusMutation.mutate();
+                    setBlacklistConfirmOpen(false);
+                  }}
+                  type="button"
+                  variant="destructive"
+                >
+                  Xác nhận
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Xóa nhà cung cấp?</DialogTitle>
+                <DialogDescription>
+                  Hành động này chỉ dùng khi dữ liệu nhà cung cấp không còn cần
+                  quản lý trong WMS.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">
+                    Hủy
+                  </Button>
+                </DialogClose>
+                <Button
+                  disabled={deleteSupplierMutation.isPending}
+                  onClick={() => {
+                    deleteSupplierMutation.mutate();
+                    setDeleteConfirmOpen(false);
+                  }}
+                  type="button"
+                  variant="destructive"
+                >
+                  <Trash2 data-icon="inline-start" />
+                  Xóa nhà cung cấp
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="border-b bg-muted/20">
-          <CardTitle className="text-base">SupplierItem</CardTitle>
-          <CardDescription>Danh mục giá theo WarehouseItem id</CardDescription>
+          <CardTitle className="text-base">Mặt hàng NCC</CardTitle>
+          <CardDescription>Danh mục giá theo mã mặt hàng kho</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 pt-4">
           {itemsQuery.error ? <ErrorBanner error={itemsQuery.error} /> : null}
           <form className="grid gap-3 md:grid-cols-3" onSubmit={handleUpsertItem}>
             <TextField
               id="supplier-item-id"
-              label="WarehouseItem id"
+              label="Mã mặt hàng kho"
               value={itemForm.itemId}
               onChange={(value) =>
                 setItemForm((current) => ({ ...current, itemId: value }))
@@ -694,7 +741,7 @@ function SupplierDetailSection({
             />
             <TextField
               id="supplier-item-lead-time"
-              label="Lead time"
+              label="Thời gian giao"
               required={false}
               value={itemForm.leadTimeDays}
               onChange={(value) =>
@@ -706,7 +753,7 @@ function SupplierDetailSection({
             />
             <TextField
               id="supplier-item-moq"
-              label="MOQ"
+              label="SL đặt tối thiểu"
               required={false}
               value={itemForm.minOrderQty}
               onChange={(value) =>
@@ -726,7 +773,7 @@ function SupplierDetailSection({
               type="submit"
             >
               <Plus data-icon="inline-start" />
-              Lưu item
+              Lưu mặt hàng
             </Button>
           </form>
 
@@ -895,16 +942,16 @@ function SupplierItemTable({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>WarehouseItem</TableHead>
+          <TableHead>Mã mặt hàng kho</TableHead>
           <TableHead>Giá</TableHead>
-          <TableHead>Lead/MOQ</TableHead>
-          <TableHead>Active</TableHead>
+          <TableHead>Giao hàng / SL tối thiểu</TableHead>
+          <TableHead>Trạng thái</TableHead>
           <TableHead className="w-32"></TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {items.length === 0 ? (
-          <EmptyRow colSpan={5} label="Chưa có SupplierItem." />
+          <EmptyRow colSpan={5} label="Chưa có mặt hàng NCC." />
         ) : (
           items.map((item) => {
             const isEditing = editingItemId === item.id;
@@ -914,7 +961,7 @@ function SupplierItemTable({
                 <TableCell className="font-medium">
                   <div>{item.itemId}</div>
                   <div className="text-xs text-muted-foreground">
-                    {item.supplierItemCode ?? "Không có mã NCC"}
+                    {item.supplierItemCode ?? "Chưa có mã NCC"}
                   </div>
                 </TableCell>
                 <TableCell>
@@ -936,7 +983,7 @@ function SupplierItemTable({
                   {isEditing ? (
                     <div className="grid gap-2">
                       <Input
-                        placeholder="Lead time"
+                        placeholder="Thời gian giao"
                         value={editForm.leadTimeDays}
                         onChange={(event) =>
                           onEditChange({
@@ -946,7 +993,7 @@ function SupplierItemTable({
                         }
                       />
                       <Input
-                        placeholder="MOQ"
+                        placeholder="SL đặt tối thiểu"
                         value={editForm.minOrderQty}
                         onChange={(event) =>
                           onEditChange({
@@ -972,12 +1019,12 @@ function SupplierItemTable({
                           })
                         }
                       />
-                      Active
+                      Đang dùng
                     </Label>
                   ) : (
-                    <Badge variant={item.isActive ? "default" : "outline"}>
-                      {item.isActive ? "ACTIVE" : "INACTIVE"}
-                    </Badge>
+                    <StatusBadge tone={item.isActive ? "success" : "neutral"}>
+                      {item.isActive ? "Đang dùng" : "Ngưng dùng"}
+                    </StatusBadge>
                   )}
                 </TableCell>
                 <TableCell>

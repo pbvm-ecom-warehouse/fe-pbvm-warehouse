@@ -2,26 +2,25 @@
 
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
-import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   Barcode,
-  CheckCircle2,
-  Loader2,
+  ClipboardCheck,
+  LoaderCircle,
   MapPinned,
-  Navigation,
   PackageCheck,
-  RotateCcw,
-  Ruler,
-  ShieldCheck,
+  RefreshCw,
+  Save,
+  Search,
   Warehouse,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -29,684 +28,672 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getWarehouseLayout } from "@/features/warehouse-layout/services/warehouse-layout.service";
-import { buildLayoutRoute } from "@/features/warehouse-layout/utils/warehouse-layout";
-import { useSessionUser } from "@/hooks/use-session-user";
-import { isMissingBackendEndpoint } from "@/lib/api-contract";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  EmptyState,
+  PageHeader,
+  PermissionNotice,
+  StatusBadge,
+  TableSkeleton,
+} from "@/features/admin-shell/components/operations-ui";
+import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
-import type { PutawaySuggestion, ShelfContentItem, WarehouseShelf } from "@/types/api";
+import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
+import { useSessionUser } from "@/hooks/use-session-user";
 
-import { RouteGuidance } from "./route-guidance";
-import {
-  WarehouseArchitectureScene,
-  type WarehouseSceneMode,
-} from "./warehouse-architecture-scene";
 import {
   listPutawaySuggestionResult,
-  listShelfContents,
+  type PutawayShelfSuggestion,
+  type PutawaySuggestionWarning,
 } from "../services/putaway-navigation.service";
 import {
-  buildNavigationPath,
-  buildRouteToShelf,
-  describeShelfGranularity,
-  getRackCodesForZone,
-  getShelfDimensionsLabel,
-  getZoneCodes,
-  groupShelvesByRack,
-  selectSuggestedShelf,
-} from "../utils/putaway-navigation";
+  confirmPutawayLine,
+  getPutawayTask,
+  listPutawayTasks,
+  PUTAWAY_TASK_STATUSES,
+  type PutawayTask,
+  type PutawayTaskItem,
+  type PutawayTaskStatus,
+} from "../services/putaway-task.service";
 
-const defaultPutawayInput = {
-  sku: "CUP-BLANK-500",
-  quantity: 80,
-  warehouseId: "central",
+const PAGE_SIZE = 20;
+
+const putawayKeys = {
+  detail: (taskId: string) => ["putaway-tasks", "detail", taskId] as const,
+  list: (params: { page: number; status: PutawayTaskStatus | "ALL" }) =>
+    ["putaway-tasks", "list", params] as const,
 };
 
-function uniqueShelves(shelves: WarehouseShelf[]) {
-  const byCode = new Map<string, WarehouseShelf>();
+const defaultConfirmForm = {
+  itemBarcode: "",
+  lotId: "",
+  quantity: "1",
+  shelfCode: "",
+};
 
-  shelves.forEach((shelf) => {
-    byCode.set(shelf.code, shelf);
-  });
-
-  return Array.from(byCode.values());
+function formatError(error: unknown) {
+  return getApiErrorMessage(error) ?? "Không kết nối được WMS.";
 }
 
-function FilterChip({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean;
-  children: React.ReactNode;
-  onClick: () => void;
-}) {
+function parsePositiveNumber(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function optionalText(value: string) {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function warningLabel(warning: PutawaySuggestionWarning | null | undefined) {
+  if (warning === "ITEM_NO_DIMENSIONS") {
+    return "Mặt hàng chưa có kích thước nên hệ thống chưa tính được vị trí tối ưu.";
+  }
+
+  if (warning === "NO_SHELF_FITS") {
+    return "Chưa tìm thấy vị trí kệ phù hợp với kích thước mặt hàng.";
+  }
+
+  if (warning === "INSUFFICIENT_CAPACITY") {
+    return "Có vị trí phù hợp nhưng chưa đủ sức chứa cho toàn bộ số lượng.";
+  }
+
+  return null;
+}
+
+function EmptyRow({ colSpan, label }: { colSpan: number; label: string }) {
   return (
-    <button
-      aria-pressed={active}
-      className="rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/30 data-[active=true]:border-primary/40 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground"
-      data-active={active}
-      onClick={onClick}
-      type="button"
-    >
-      {children}
-    </button>
+    <TableRow>
+      <TableCell
+        className="h-20 text-center text-sm text-muted-foreground"
+        colSpan={colSpan}
+      >
+        {label}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function ErrorBanner({ error }: { error: unknown }) {
+  return (
+    <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+      {formatError(error)}
+    </div>
   );
 }
 
 export function WarehouseNavigationClient() {
   const user = useSessionUser();
-  const [sku, setSku] = useState(defaultPutawayInput.sku);
-  const [quantity, setQuantity] = useState(defaultPutawayInput.quantity);
-  const [suggestions, setSuggestions] = useState<PutawaySuggestion[]>([]);
-  const [selectedCode, setSelectedCode] = useState<string | null>(null);
-  const [selectedRackCode, setSelectedRackCode] = useState<string | null>(null);
-  const [sceneMode, setSceneMode] = useState<WarehouseSceneMode>("map");
-  const [scanSku, setScanSku] = useState(defaultPutawayInput.sku);
-  const [scanShelf, setScanShelf] = useState("");
-  const [confirmed, setConfirmed] = useState(false);
-  const [zoneFilter, setZoneFilter] = useState<string | "ALL">("ALL");
-  const [rackFilter, setRackFilter] = useState<string | "ALL">("ALL");
-
-  const allShelves = useMemo(
-    () => uniqueShelves(suggestions.map((item) => item.shelf)),
-    [suggestions],
-  );
-  const layoutQuery = useQuery({
-    queryFn: () =>
-      getWarehouseLayout(defaultPutawayInput.warehouseId, "published"),
-    queryKey: [
-      "warehouse-layout",
-      defaultPutawayInput.warehouseId,
-      "published",
-    ],
-    retry: false,
-  });
-  const layoutUnsupported =
-    layoutQuery.isError && isMissingBackendEndpoint(layoutQuery.error);
-  const publishedLayout = layoutQuery.isError ? null : (layoutQuery.data ?? null);
-  const layoutSource = layoutUnsupported
-    ? "unsupported"
-    : publishedLayout
-      ? "api"
-      : "missing";
-  const displayLayout = useMemo(() => {
-    if (!publishedLayout) {
-      return null;
-    }
-
-    const zoneIds = new Set(
-      publishedLayout.zones
-        .filter((zone) => zoneFilter === "ALL" || zone.code === zoneFilter)
-        .map((zone) => zone.id),
-    );
-
-    return {
-      ...publishedLayout,
-      zones: publishedLayout.zones.filter((zone) => zoneIds.has(zone.id)),
-      racks: publishedLayout.racks.filter(
-        (rack) =>
-          zoneIds.has(rack.zoneId) &&
-          (rackFilter === "ALL" || rack.code === rackFilter),
-      ),
-    };
-  }, [publishedLayout, rackFilter, zoneFilter]);
-  const zoneCodes = useMemo(() => getZoneCodes(allShelves), [allShelves]);
-  const rackCodes = useMemo(
-    () => getRackCodesForZone(allShelves, zoneFilter),
-    [allShelves, zoneFilter],
-  );
-  const primarySuggestion = useMemo(
-    () => selectSuggestedShelf(suggestions),
-    [suggestions],
-  );
-  const exactSelectedSuggestion = useMemo(
-    () =>
-      selectedCode
-        ? suggestions.find((suggestion) => suggestion.shelf.code === selectedCode) ??
-          null
-        : null,
-    [selectedCode, suggestions],
-  );
-  const selectedShelf = useMemo(
-    () =>
-      allShelves.find((shelf) => shelf.code === selectedCode) ??
-      primarySuggestion?.shelf ??
-      null,
-    [allShelves, primarySuggestion, selectedCode],
-  );
-  const selectedRoute = selectedShelf
-    ? publishedLayout
-      ? buildLayoutRoute(
-          publishedLayout,
-          selectedShelf.rackCode,
-          selectedShelf.code,
-        ) ?? exactSelectedSuggestion?.route ?? buildRouteToShelf(selectedShelf)
-      : exactSelectedSuggestion?.route ?? buildRouteToShelf(selectedShelf)
-    : primarySuggestion?.route ?? null;
-  const selectedPath = selectedShelf
-    ? buildNavigationPath(selectedShelf).join(" / ")
-    : "Chưa chọn shelf";
-  const capacityUsage =
-    exactSelectedSuggestion && exactSelectedSuggestion.capacity > 0
-      ? Math.min(
-          100,
-          Math.round((quantity / exactSelectedSuggestion.capacity) * 100),
-        )
-      : 0;
-  const suggestedShelfCodes = useMemo(
-    () => new Set(suggestions.map((suggestion) => suggestion.shelf.code)),
-    [suggestions],
-  );
-  const selectedRackGroup = useMemo(
-    () =>
-      groupShelvesByRack(allShelves).find(
-        (group) => group.rackCode === selectedRackCode,
-      ) ?? null,
-    [allShelves, selectedRackCode],
-  );
-  const selectedRackShelves = useMemo(
-    () => selectedRackGroup?.shelves ?? [],
-    [selectedRackGroup],
-  );
+  const queryClient = useQueryClient();
+  const canUsePutawayApi = hasAnyRole(user?.roles, [
+    "ADMIN",
+    "MANAGER",
+    "RECEIVER",
+  ]);
   const canManageStructure = hasAnyRole(user?.roles, ["MANAGER"]);
+  const [statusFilter, setStatusFilter] = useState<PutawayTaskStatus | "ALL">(
+    "PENDING",
+  );
+  const [page, setPage] = useState(1);
+  const [selectedTaskId, setSelectedTaskId] = useState("");
+  const [selectedItemId, setSelectedItemId] = useState("");
+  const [confirmForm, setConfirmForm] = useState(defaultConfirmForm);
+  const [suggestionSku, setSuggestionSku] = useState("");
+  const [suggestionQty, setSuggestionQty] = useState("1");
 
-  const shelfContentQueries = useQueries({
-    queries: selectedRackShelves.map((shelf) => ({
-      enabled: sceneMode === "rack" && Boolean(selectedRackGroup),
-      queryFn: () =>
-        listShelfContents({
-          shelfCode: shelf.code,
-          warehouseId: defaultPutawayInput.warehouseId,
-        }),
-      queryKey: [
-        "warehouse-navigation",
-        "shelf-contents",
-        defaultPutawayInput.warehouseId,
-        shelf.code,
-      ],
-    })),
+  const tasksQuery = useQuery({
+    enabled: canUsePutawayApi,
+    queryFn: () =>
+      listPutawayTasks({
+        limit: PAGE_SIZE,
+        page,
+        status: statusFilter,
+      }),
+    queryKey: putawayKeys.list({ page, status: statusFilter }),
   });
 
-  const contentsByShelf = useMemo(() => {
-    const next: Record<string, ShelfContentItem[] | undefined> = {};
+  const tasks = useMemo(() => tasksQuery.data?.data ?? [], [tasksQuery.data]);
+  const selectedTask =
+    tasks.find((task) => task.id === selectedTaskId) ?? tasks[0];
+  const activeTaskId = selectedTask?.id ?? "";
+  const total = tasksQuery.data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-    selectedRackShelves.forEach((shelf, index) => {
-      next[shelf.code] = shelfContentQueries[index]?.data;
-    });
-
-    return next;
-  }, [selectedRackShelves, shelfContentQueries]);
-  const loadingShelfCodes = useMemo(
-    () =>
-      new Set(
-        selectedRackShelves
-          .filter((_, index) => shelfContentQueries[index]?.isLoading)
-          .map((shelf) => shelf.code),
-      ),
-    [selectedRackShelves, shelfContentQueries],
-  );
-  const erroredShelfCodes = useMemo(
-    () =>
-      new Set(
-        selectedRackShelves
-          .filter((_, index) => shelfContentQueries[index]?.isError)
-          .map((shelf) => shelf.code),
-      ),
-    [selectedRackShelves, shelfContentQueries],
-  );
-  const unsupportedShelfCodes = useMemo(
-    () =>
-      new Set(
-        selectedRackShelves
-          .filter((_, index) =>
-            isMissingBackendEndpoint(shelfContentQueries[index]?.error),
-          )
-          .map((shelf) => shelf.code),
-      ),
-    [selectedRackShelves, shelfContentQueries],
-  );
+  const detailQuery = useQuery({
+    enabled: canUsePutawayApi && Boolean(activeTaskId),
+    queryFn: () => getPutawayTask(activeTaskId),
+    queryKey: putawayKeys.detail(activeTaskId),
+  });
+  const detail = detailQuery.data ?? selectedTask;
+  const selectedItem = selectedItemId
+    ? detail?.items.find((item) => item.itemId === selectedItemId)
+    : undefined;
+  const activeWarehouseId = detail?.warehouseId ?? "";
 
   const suggestionMutation = useMutation({
-    mutationFn: listPutawaySuggestionResult,
-    onError: () => {
-      setSuggestions([]);
-      setSelectedCode(null);
-      setSelectedRackCode(null);
-      setScanShelf("");
-      setConfirmed(false);
-      setSceneMode("map");
-    },
-    onSuccess: (result, variables) => {
-      const nextSuggestions = result.suggestions;
-      const nextSelected = selectSuggestedShelf(nextSuggestions);
+    mutationFn: () =>
+      listPutawaySuggestionResult({
+        quantity: parsePositiveNumber(suggestionQty),
+        sku: suggestionSku.trim(),
+        warehouseId: activeWarehouseId,
+      }),
+    onError: (error) => toast.error(formatError(error)),
+  });
 
-      setSuggestions(nextSuggestions);
-      setSelectedCode(nextSelected?.shelf.code ?? null);
-      setSelectedRackCode(nextSelected?.shelf.rackCode ?? null);
-      setScanSku(variables.sku);
-      setScanShelf(nextSelected?.shelf.barcode ?? "");
-      setConfirmed(false);
-      setSceneMode("map");
-      setZoneFilter("ALL");
-      setRackFilter("ALL");
+  const confirmMutation = useMutation({
+    mutationFn: () =>
+      confirmPutawayLine(activeTaskId, {
+        itemBarcode: confirmForm.itemBarcode.trim(),
+        lotId: optionalText(confirmForm.lotId),
+        quantity: parsePositiveNumber(confirmForm.quantity),
+        shelfCode: confirmForm.shelfCode.trim(),
+      }),
+    onError: (error) => toast.error(formatError(error)),
+    onSuccess: () => {
+      setConfirmForm(defaultConfirmForm);
+      void queryClient.invalidateQueries({ queryKey: ["putaway-tasks"] });
+      toast.success("Đã xác nhận dòng cất hàng");
     },
   });
 
-  function handleSelectShelf(shelfCode: string) {
-    const nextShelf = allShelves.find((shelf) => shelf.code === shelfCode);
-
-    setSelectedCode(shelfCode);
-    setSelectedRackCode(nextShelf?.rackCode ?? selectedRackCode);
-    setScanShelf(nextShelf?.barcode ?? "");
-    setConfirmed(false);
-  }
-
-  function handleFocusRack(rackCode: string, shelfCode: string) {
-    const nextShelf = allShelves.find((shelf) => shelf.code === shelfCode);
-
-    setSelectedRackCode(rackCode);
-    setSelectedCode(shelfCode);
-    setScanShelf(nextShelf?.barcode ?? "");
-    setConfirmed(false);
-  }
-
-  function handleOpenRack(rackCode: string, shelfCode: string) {
-    handleFocusRack(rackCode, shelfCode);
-    setSceneMode("rack");
-  }
-
-  function handleRetryShelf(shelfCode: string) {
-    const index = selectedRackShelves.findIndex((shelf) => shelf.code === shelfCode);
-
-    void shelfContentQueries[index]?.refetch();
-  }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleFilter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    suggestionMutation.mutate({
-      sku,
-      quantity,
-      warehouseId: defaultPutawayInput.warehouseId,
-    });
+    setPage(1);
   }
+
+  function handleSuggestion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!activeWarehouseId || !suggestionSku.trim()) {
+      toast.error("Cần chọn dòng cất hàng và nhập SKU.");
+      return;
+    }
+
+    suggestionMutation.mutate();
+  }
+
+  function handleConfirm(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!activeTaskId || !confirmForm.itemBarcode || !confirmForm.shelfCode) {
+      toast.error("Cần nhập mã vạch SKU và mã vị trí.");
+      return;
+    }
+
+    confirmMutation.mutate();
+  }
+
+  function selectTask(task: PutawayTask) {
+    setSelectedTaskId(task.id);
+    setSelectedItemId("");
+    setConfirmForm(defaultConfirmForm);
+    setSuggestionSku("");
+    setSuggestionQty("1");
+    suggestionMutation.reset();
+  }
+
+  function selectItem(item: PutawayTaskItem) {
+    const qty = item.remainingQty ?? item.quantity;
+
+    setSelectedItemId(item.itemId);
+    setConfirmForm({
+      itemBarcode: item.sku,
+      lotId: item.lotId ?? "",
+      quantity: String(Math.max(1, qty)),
+      shelfCode: "",
+    });
+    setSuggestionSku(item.sku);
+    setSuggestionQty(String(Math.max(1, qty)));
+    suggestionMutation.reset();
+  }
+
+  function selectSuggestion(suggestion: PutawayShelfSuggestion) {
+    setConfirmForm((current) => ({
+      ...current,
+      quantity: String(
+        Math.min(parsePositiveNumber(current.quantity), suggestion.capacity),
+      ),
+      shelfCode: suggestion.shelfCode,
+    }));
+  }
+
+  const warning = warningLabel(suggestionMutation.data?.warning);
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
-      <div className="space-y-4">
-        <Card>
-          <CardHeader className="border-b bg-muted/20">
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <MapPinned className="size-5 text-primary" />
-              Điều hướng put-away
-            </CardTitle>
-            <CardDescription>
-              Sơ đồ 2.5D từ cổng vào đến target shelf; receiver vẫn xác nhận
-              bằng barcode.
-            </CardDescription>
-            <CardAction>
-              <Badge variant="secondary">
-                <Navigation data-icon="inline-start" />
-                {selectedShelf?.code ?? "No target"}
-              </Badge>
-            </CardAction>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <FilterChip
-                active={zoneFilter === "ALL"}
-                onClick={() => {
-                  setZoneFilter("ALL");
-                  setRackFilter("ALL");
-                }}
-              >
-                Tất cả zone
-              </FilterChip>
-              {zoneCodes.map((zoneCode) => (
-                <FilterChip
-                  active={zoneFilter === zoneCode}
-                  key={zoneCode}
-                  onClick={() => {
-                    setZoneFilter(zoneCode);
-                    setRackFilter("ALL");
-                  }}
-                >
-                  Zone {zoneCode}
-                </FilterChip>
-              ))}
-            </div>
+    <div className="space-y-5">
+      <PageHeader
+        title="Điều hướng kệ"
+        actions={
+          <>
+          <Button
+            disabled={!canUsePutawayApi}
+            onClick={() =>
+              void queryClient.invalidateQueries({ queryKey: ["putaway-tasks"] })
+            }
+            type="button"
+            variant="outline"
+          >
+            {tasksQuery.isFetching || detailQuery.isFetching ? (
+              <LoaderCircle className="animate-spin" data-icon="inline-start" />
+            ) : (
+              <RefreshCw data-icon="inline-start" />
+            )}
+            Làm mới
+          </Button>
+          {canManageStructure ? (
+            <Button asChild variant="outline">
+              <Link href="/warehouses">
+                <Warehouse data-icon="inline-start" />
+                Quản lý kệ
+                <ArrowRight data-icon="inline-end" />
+              </Link>
+            </Button>
+          ) : null}
+          </>
+        }
+      />
 
-            <div className="flex flex-wrap gap-2">
-              <FilterChip
-                active={rackFilter === "ALL"}
-                onClick={() => setRackFilter("ALL")}
-              >
-                Tất cả rack
-              </FilterChip>
-              {rackCodes.map((rackCode) => {
-                const rackGroup = groupShelvesByRack(allShelves, {
-                  rackCode,
-                  zoneCode: zoneFilter,
-                })[0];
-                const shelfCode = rackGroup?.shelves[0]?.code;
+      {!canUsePutawayApi ? (
+        <PermissionNotice>
+          Bạn cần quyền phù hợp để xử lý cất hàng.
+        </PermissionNotice>
+      ) : null}
 
-                return (
-                  <FilterChip
-                    active={rackFilter === rackCode}
-                    key={rackCode}
-                    onClick={() => {
-                      setRackFilter(rackCode);
-                      if (shelfCode) {
-                        handleFocusRack(rackCode, shelfCode);
-                      }
+      {tasksQuery.error ? <ErrorBanner error={tasksQuery.error} /> : null}
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="border-b bg-muted/20">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ClipboardCheck className="size-4 text-primary" />
+                Phiếu cất hàng
+              </CardTitle>
+              <CardDescription>
+                {total} bản ghi · trang {page}/{totalPages}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-4">
+              <form
+                className="grid gap-3 md:grid-cols-[220px_auto]"
+                onSubmit={handleFilter}
+              >
+                <div className="space-y-2">
+                  <Label>Trạng thái</Label>
+                  <Select
+                    value={statusFilter}
+                    onValueChange={(value) => {
+                      setPage(1);
+                      setStatusFilter(value as PutawayTaskStatus | "ALL");
                     }}
                   >
-                    Rack {rackCode}
-                  </FilterChip>
-                );
-              })}
-            </div>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">Tất cả</SelectItem>
+                      {PUTAWAY_TASK_STATUSES.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {statusLabel(status)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button className="self-end" disabled={!canUsePutawayApi} type="submit">
+                  <Search data-icon="inline-start" />
+                  Lọc
+                </Button>
+              </form>
 
-            <WarehouseArchitectureScene
-              contentsByShelf={contentsByShelf}
-              erroredShelfCodes={erroredShelfCodes}
-              layout={displayLayout}
-              layoutSource={layoutSource}
-              loadingShelfCodes={loadingShelfCodes}
-              onBackToMap={() => setSceneMode("map")}
-              onOpenRack={handleOpenRack}
-              onRetryShelf={handleRetryShelf}
-              onSelectShelf={handleSelectShelf}
-              rackGroup={selectedRackGroup}
-              route={selectedRoute}
-              sceneMode={sceneMode}
-              selectedRackCode={selectedRackCode}
-              selectedShelfCode={selectedShelf?.code ?? null}
-              suggestions={suggestions}
-              suggestedShelfCodes={suggestedShelfCodes}
-              unsupportedShelfCodes={unsupportedShelfCodes}
-            />
-          </CardContent>
-        </Card>
+              {tasksQuery.isLoading ? (
+                <TableSkeleton columns={5} />
+              ) : (
+                <PutawayTaskTable
+                  selectedId={activeTaskId}
+                  tasks={tasks}
+                  onSelect={selectTask}
+                />
+              )}
 
-        <RouteGuidance route={selectedRoute} />
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Gợi ý kệ</CardTitle>
-            <CardDescription>
-              Advisory only: receiver có thể override, miễn quét đúng barcode
-              shelf trước khi xác nhận.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            {suggestionMutation.isError &&
-            isMissingBackendEndpoint(suggestionMutation.error) ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                Chưa có gợi ý vị trí cho yêu cầu này.
-              </div>
-            ) : null}
-
-            {suggestions.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
-                Không có shelf đủ sức chứa cho SKU và số lượng này.
-              </div>
-            ) : (
-              suggestions.map((suggestion) => (
-                <button
-                  className="grid gap-2 rounded-lg border border-border/70 bg-card p-3 text-left text-sm transition hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/40 data-[active=true]:border-primary/50 data-[active=true]:bg-primary/5"
-                  data-active={selectedShelf?.code === suggestion.shelf.code}
-                  key={suggestion.shelf.code}
-                  onClick={() => handleSelectShelf(suggestion.shelf.code)}
+              <div className="flex items-center justify-between gap-3">
+                <Button
+                  disabled={page <= 1}
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
                   type="button"
+                  variant="outline"
                 >
-                  <span className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-semibold">
-                      {suggestion.shelf.code} · level {suggestion.shelf.level}
+                  Trang trước
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  {page}/{totalPages}
+                </span>
+                <Button
+                  disabled={page >= totalPages}
+                  onClick={() =>
+                    setPage((current) => Math.min(totalPages, current + 1))
+                  }
+                  type="button"
+                  variant="outline"
+                >
+                  Trang sau
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {detail ? (
+            <PutawayTaskDetail
+              detail={detail}
+              selectedItemId={selectedItem?.itemId ?? ""}
+              onSelectItem={selectItem}
+            />
+          ) : null}
+        </div>
+
+        <aside className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <MapPinned className="size-4 text-primary" />
+                Gợi ý mã vị trí
+              </CardTitle>
+              <CardDescription>
+                {selectedItem?.sku ?? "Chọn dòng hàng để xem vị trí."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {selectedItem ? (
+              <form className="grid gap-3" onSubmit={handleSuggestion}>
+                <TextField
+                  id="putaway-suggestion-sku"
+                  label="SKU"
+                  value={suggestionSku}
+                  onChange={setSuggestionSku}
+                />
+                <TextField
+                  id="putaway-suggestion-qty"
+                  label="Số lượng"
+                  type="number"
+                  value={suggestionQty}
+                  onChange={setSuggestionQty}
+                />
+                <Button
+                  disabled={
+                    !canUsePutawayApi ||
+                    !activeWarehouseId ||
+                    suggestionMutation.isPending
+                  }
+                  type="submit"
+                >
+                  {suggestionMutation.isPending ? (
+                    <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                  ) : (
+                    <Search data-icon="inline-start" />
+                  )}
+                  Tìm vị trí
+                </Button>
+              </form>
+              ) : (
+                <EmptyState title="Chưa chọn dòng cất hàng" />
+              )}
+
+              {suggestionMutation.error ? (
+                <ErrorBanner error={suggestionMutation.error} />
+              ) : null}
+              {warning ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  {warning}
+                </div>
+              ) : null}
+              {(suggestionMutation.data?.suggestions ?? []).length === 0 &&
+              suggestionMutation.isSuccess ? (
+                <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                  Chưa có vị trí phù hợp cho mặt hàng và số lượng này.
+                </div>
+              ) : null}
+              <div className="grid gap-2">
+                {(suggestionMutation.data?.suggestions ?? []).map((suggestion) => (
+                  <button
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border/70 p-3 text-left text-sm transition hover:bg-accent/60"
+                    key={suggestion.shelfCode}
+                    onClick={() => selectSuggestion(suggestion)}
+                    type="button"
+                  >
+                    <span className="font-mono font-semibold">
+                      {suggestion.shelfCode}
                     </span>
-                    <Badge
-                      variant={
-                        selectedShelf?.code === suggestion.shelf.code
-                          ? "default"
-                          : "outline"
-                      }
-                    >
-                      {suggestion.capacity} còn trống
+                    <Badge variant="outline">
+                      {suggestion.capacity.toLocaleString("vi-VN")} còn trống
                     </Badge>
-                  </span>
-                  <span className="text-muted-foreground">
-                    {suggestion.pathLabel}
-                  </span>
-                  <span className="text-xs">{suggestion.reason}</span>
-                </button>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {selectedItem ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Barcode className="size-4 text-primary" />
+                Xác nhận cất hàng
+              </CardTitle>
+              <CardDescription>
+                Quét SKU, quét mã vị trí và nhập số lượng thực cất.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form className="space-y-3" onSubmit={handleConfirm}>
+                <TextField
+                  id="putaway-confirm-barcode"
+                  label="Mã vạch SKU"
+                  value={confirmForm.itemBarcode}
+                  onChange={(itemBarcode) =>
+                    setConfirmForm((current) => ({ ...current, itemBarcode }))
+                  }
+                />
+                <TextField
+                  id="putaway-confirm-shelf"
+                  label="Mã vị trí"
+                  value={confirmForm.shelfCode}
+                  onChange={(shelfCode) =>
+                    setConfirmForm((current) => ({ ...current, shelfCode }))
+                  }
+                />
+                <TextField
+                  id="putaway-confirm-qty"
+                  label="Số lượng"
+                  type="number"
+                  value={confirmForm.quantity}
+                  onChange={(quantity) =>
+                    setConfirmForm((current) => ({ ...current, quantity }))
+                  }
+                />
+                <TextField
+                  id="putaway-confirm-lot"
+                  label="Mã lô"
+                  required={false}
+                  value={confirmForm.lotId}
+                  onChange={(lotId) =>
+                    setConfirmForm((current) => ({ ...current, lotId }))
+                  }
+                />
+                <Button
+                  className="w-full"
+                  disabled={
+                    !canUsePutawayApi ||
+                    !activeTaskId ||
+                    confirmMutation.isPending
+                  }
+                  type="submit"
+                >
+                  {confirmMutation.isPending ? (
+                    <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                  ) : (
+                    <Save data-icon="inline-start" />
+                  )}
+                  Xác nhận
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+          ) : null}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function PutawayTaskTable({
+  onSelect,
+  selectedId,
+  tasks,
+}: {
+  onSelect: (task: PutawayTask) => void;
+  selectedId: string;
+  tasks: PutawayTask[];
+}) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Mã phiếu</TableHead>
+          <TableHead>Mã phiếu nhập</TableHead>
+          <TableHead>Kho</TableHead>
+          <TableHead>Trạng thái</TableHead>
+          <TableHead>Số dòng</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {tasks.length === 0 ? (
+          <EmptyRow colSpan={5} label="Chưa có phiếu cất hàng." />
+        ) : (
+          tasks.map((task) => (
+            <TableRow
+              className={cn(
+                "cursor-pointer",
+                selectedId === task.id && "bg-primary/5",
+              )}
+              key={task.id}
+              onClick={() => onSelect(task)}
+            >
+              <TableCell className="font-mono font-semibold">{task.id}</TableCell>
+              <TableCell>{task.grnId}</TableCell>
+              <TableCell>{task.warehouseId}</TableCell>
+              <TableCell>
+                <StatusBadge tone={statusTone(task.status)}>
+                  {statusLabel(task.status)}
+                </StatusBadge>
+              </TableCell>
+              <TableCell>{task.items.length}</TableCell>
+            </TableRow>
+          ))
+        )}
+      </TableBody>
+    </Table>
+  );
+}
+
+function PutawayTaskDetail({
+  detail,
+  onSelectItem,
+  selectedItemId,
+}: {
+  detail: PutawayTask;
+  onSelectItem: (item: PutawayTaskItem) => void;
+  selectedItemId: string;
+}) {
+  return (
+    <Card>
+      <CardHeader className="border-b bg-muted/20">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <PackageCheck className="size-4 text-primary" />
+          Dòng cần cất hàng
+        </CardTitle>
+        <CardDescription>
+          Phiếu nhập {detail.grnId} · Kho {detail.warehouseId}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="pt-4">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>SKU</TableHead>
+              <TableHead>Số lượng</TableHead>
+              <TableHead>Còn lại</TableHead>
+              <TableHead>Mã lô</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {detail.items.length === 0 ? (
+              <EmptyRow colSpan={4} label="Phiếu cất hàng chưa có dòng hàng." />
+            ) : (
+              detail.items.map((item) => (
+                <TableRow
+                  className={cn(
+                    "cursor-pointer",
+                    selectedItemId === item.itemId && "bg-primary/5",
+                  )}
+                  key={`${item.itemId}-${item.lotId ?? "none"}`}
+                  onClick={() => onSelectItem(item)}
+                >
+                  <TableCell className="font-mono font-semibold">
+                    {item.sku}
+                  </TableCell>
+                  <TableCell>{item.quantity}</TableCell>
+                  <TableCell>{item.remainingQty ?? item.quantity}</TableCell>
+                  <TableCell>{item.lotNumber ?? item.lotId ?? "Chưa khai"}</TableCell>
+                </TableRow>
               ))
             )}
-          </CardContent>
-        </Card>
-      </div>
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
 
-      <aside className="space-y-4">
-        <Card>
-          <CardHeader className="border-b bg-muted/20">
-            <CardTitle className="text-lg">Phiếu put-away</CardTitle>
-            <CardDescription>
-              Nhập SKU và số lượng để tìm vị trí put-away phù hợp.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="grid gap-4" onSubmit={handleSubmit}>
-              <div className="grid gap-2">
-                <Label htmlFor="putawaySku">SKU</Label>
-                <Input
-                  autoComplete="off"
-                  id="putawaySku"
-                  name="putawaySku"
-                  onChange={(event) => {
-                    setSku(event.target.value);
-                    setScanSku(event.target.value);
-                  }}
-                  value={sku}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="putawayQty">Số lượng</Label>
-                <Input
-                  id="putawayQty"
-                  inputMode="numeric"
-                  min={1}
-                  name="putawayQty"
-                  onChange={(event) =>
-                    setQuantity(Math.max(Number(event.target.value), 1))
-                  }
-                  type="number"
-                  value={quantity}
-                />
-              </div>
-              <Button disabled={suggestionMutation.isPending} type="submit">
-                {suggestionMutation.isPending ? (
-                  <Loader2 className="animate-spin" data-icon="inline-start" />
-                ) : (
-                  <RotateCcw data-icon="inline-start" />
-                )}
-                {suggestionMutation.isPending ? "Đang tính…" : "Tính gợi ý"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Target shelf</CardTitle>
-            <CardDescription>{selectedPath}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold">
-                    {selectedShelf?.code ?? "No shelf"}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {exactSelectedSuggestion?.reason ??
-                      "Vị trí do người dùng chọn"}
-                  </div>
-                </div>
-                <Badge variant="secondary">
-                  <ShieldCheck data-icon="inline-start" />
-                  Advisory
-                </Badge>
-              </div>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-background">
-                <div
-                  className={cn(
-                    "h-full rounded-full bg-primary",
-                    !exactSelectedSuggestion && "bg-muted-foreground/40",
-                  )}
-                  style={{ width: `${capacityUsage}%` }}
-                />
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                {exactSelectedSuggestion
-                  ? `Dự kiến dùng ${capacityUsage}% sức chứa gợi ý của shelf.`
-                  : "Shelf override không có capacity usage từ gợi ý AI."}
-              </div>
-            </div>
-
-            {selectedShelf ? (
-              <div className="grid gap-3">
-                <div className="rounded-lg border border-border/70 bg-card p-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold">
-                    <PackageCheck className="size-4 text-primary" />
-                    Thông tin shelf
-                  </div>
-                  <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-                    <div>
-                      <span className="font-semibold text-foreground">Rack:</span>{" "}
-                      {selectedShelf.rackName}
-                    </div>
-                    <div>
-                      <span className="font-semibold text-foreground">Level:</span>{" "}
-                      {selectedShelf.level}
-                    </div>
-                    <div>
-                      <span className="font-semibold text-foreground">
-                        Barcode:
-                      </span>{" "}
-                      {selectedShelf.barcode}
-                    </div>
-                    <div>
-                      <span className="font-semibold text-foreground">
-                        Kích thước:
-                      </span>{" "}
-                      {getShelfDimensionsLabel(selectedShelf)}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-border/70 bg-card p-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold">
-                    <Ruler className="size-4 text-primary" />
-                    Từng ngăn / granularity
-                  </div>
-                  <div className="mt-2 text-sm leading-6 text-muted-foreground">
-                    {describeShelfGranularity(selectedShelf)}
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Xác nhận scan</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-2">
-              <Label htmlFor="scanSku">Barcode SKU</Label>
-              <Input
-                autoComplete="off"
-                id="scanSku"
-                name="scanSku"
-                onChange={(event) => setScanSku(event.target.value)}
-                value={scanSku}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="scanShelf">Barcode shelf</Label>
-              <Input
-                autoComplete="off"
-                id="scanShelf"
-                name="scanShelf"
-                onChange={(event) => setScanShelf(event.target.value)}
-                value={scanShelf}
-              />
-            </div>
-            <Button
-              className="w-full"
-              disabled={!selectedShelf || !scanSku || !scanShelf}
-              onClick={() => setConfirmed(true)}
-            >
-              <Barcode data-icon="inline-start" />
-              Kiểm tra barcode
-            </Button>
-            {confirmed ? (
-              <div
-                className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm"
-                role="status"
-              >
-                <CheckCircle2 className="size-4 text-primary" />
-                Barcode đã khớp trên giao diện.
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Cấu trúc vị trí</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-                <div className="text-xs font-semibold text-muted-foreground">
-                  Zone
-                </div>
-                <div className="font-mono text-lg font-bold">
-                  {zoneCodes.length}
-                </div>
-              </div>
-              <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-                <div className="text-xs font-semibold text-muted-foreground">
-                  Rack
-                </div>
-                <div className="font-mono text-lg font-bold">
-                  {groupShelvesByRack(allShelves).length}
-                </div>
-              </div>
-              <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-                <div className="text-xs font-semibold text-muted-foreground">
-                  Shelf
-                </div>
-                <div className="font-mono text-lg font-bold">
-                  {allShelves.filter((shelf) => !shelf.isStaging).length}
-                </div>
-              </div>
-            </div>
-
-            {canManageStructure ? (
-              <Button asChild className="w-full" variant="outline">
-                <Link href="/warehouses">
-                  <Warehouse data-icon="inline-start" />
-                  Mở module Kho
-                  <ArrowRight data-icon="inline-end" />
-                </Link>
-              </Button>
-            ) : null}
-          </CardContent>
-        </Card>
-      </aside>
+function TextField({
+  id,
+  label,
+  onChange,
+  required = true,
+  type = "text",
+  value,
+}: {
+  id: string;
+  label: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+  type?: string;
+  value: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        required={required}
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
     </div>
   );
 }

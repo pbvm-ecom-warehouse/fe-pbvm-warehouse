@@ -80,7 +80,7 @@ export function LoginPageClient() {
           newPassword: "",
         });
         setNeedsPasswordChange(true);
-        toast.message("Tài khoản cần đổi mật khẩu trước khi vào dashboard.");
+        toast.message("Tài khoản cần đổi mật khẩu trước khi vào hệ thống.");
         return;
       }
 
@@ -90,7 +90,7 @@ export function LoginPageClient() {
         const apiMessage = getApiErrorMessage(error);
         setErrorMessage(apiMessage ?? "Đăng nhập thất bại. Kiểm tra lại username và mật khẩu.");
       } else {
-        setErrorMessage("Không thể kết nối WMS API.");
+        setErrorMessage("Không kết nối được WMS.");
       }
     } finally {
       setIsSubmitting(false);
@@ -129,7 +129,7 @@ export function LoginPageClient() {
         const apiMessage = getApiErrorMessage(error);
         setErrorMessage(apiMessage ?? "Không đổi được mật khẩu.");
       } else {
-        setErrorMessage("Không thể kết nối WMS API.");
+        setErrorMessage("Không kết nối được WMS.");
       }
     } finally {
       setIsChangingPassword(false);
@@ -165,7 +165,7 @@ export function LoginPageClient() {
               Đổi mật khẩu tạm
             </CardTitle>
             <CardDescription>
-              Cập nhật mật khẩu mới trước khi vào dashboard.
+              Cập nhật mật khẩu mới trước khi vào hệ thống.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -230,7 +230,7 @@ export function LoginPageClient() {
               Phiên WMS hiện tại
             </CardTitle>
             <CardDescription>
-              Bạn đã có phiên đăng nhập. Có thể vào dashboard hoặc đăng xuất để
+              Bạn đã có phiên đăng nhập. Có thể vào trang tổng quan hoặc đăng xuất để
               đổi tài khoản.
             </CardDescription>
           </CardHeader>
@@ -238,7 +238,7 @@ export function LoginPageClient() {
             <div className="rounded-lg border border-border/70 bg-muted/25 p-4">
               <div className="text-sm font-semibold">{user.name}</div>
               <div className="mt-1 text-xs text-muted-foreground">
-                Warehouse scope: {user.warehouseId ?? "chưa gán"} · Tenant:{" "}
+                Kho phụ trách: {user.warehouseId ?? "chưa gán"} · Đơn vị:{" "}
                 {user.tenantId}
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -253,7 +253,7 @@ export function LoginPageClient() {
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button className="sm:flex-1" onClick={() => router.replace("/dashboard")}>
                 <ArrowRight data-icon="inline-start" />
-                Vào dashboard
+                Vào trang tổng quan
               </Button>
               <Button
                 className="sm:flex-1"
@@ -274,7 +274,7 @@ export function LoginPageClient() {
       <div className="grid w-full max-w-6xl overflow-hidden rounded-xl border bg-card shadow-[0_28px_70px_-46px_rgba(15,23,42,0.55)] lg:grid-cols-[0.92fr_1fr]">
         <section className="hidden border-r bg-muted/25 p-8 lg:flex lg:flex-col lg:justify-between">
           <div>
-            <WmsLogo className="mb-8" subtitle="Warehouse operations" />
+            <WmsLogo className="mb-8" subtitle="Vận hành kho" />
             <h1 className="text-3xl font-bold tracking-normal">
               Đăng nhập nội bộ bằng username và mật khẩu.
             </h1>
@@ -294,7 +294,7 @@ export function LoginPageClient() {
             <CardContent className="px-0 pb-0">
               <form className="space-y-4" noValidate onSubmit={handleLogin}>
                 <div className="space-y-2">
-                  <Label htmlFor="username">Username</Label>
+                  <Label htmlFor="username">Tên đăng nhập</Label>
                   <Input
                     autoComplete="username"
                     id="username"
@@ -335,7 +335,7 @@ export function LoginPageClient() {
                   ) : (
                     <LogIn data-icon="inline-start" />
                   )}
-                  Vào dashboard
+                  Vào trang tổng quan
                 </Button>
               </form>
             </CardContent>

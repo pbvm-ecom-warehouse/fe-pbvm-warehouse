@@ -26,10 +26,10 @@ describe("login page", () => {
   it("renders username/password login without Google or Firebase entry points", () => {
     render(<LoginPageClient />);
 
-    expect(screen.getByLabelText("Username")).toBeInTheDocument();
+    expect(screen.getByLabelText("Tên đăng nhập")).toBeInTheDocument();
     expect(screen.getByLabelText("Mật khẩu")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Vào dashboard/i }),
+      screen.getByRole("button", { name: /Vào trang tổng quan/i }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/google/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/firebase/i)).not.toBeInTheDocument();

@@ -4,6 +4,8 @@ import { FormEvent, type ReactNode, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Eye,
+  CheckCircle2,
+  ClipboardCheck,
   LoaderCircle,
   Plus,
   RefreshCw,
@@ -14,7 +16,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -49,9 +50,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  PageHeader,
+  PermissionNotice,
+  StatusBadge,
+  TableSkeleton,
+} from "@/features/admin-shell/components/operations-ui";
 import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
+import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
 import { useSessionUser } from "@/hooks/use-session-user";
 import {
   listSuppliers,
@@ -71,12 +79,22 @@ import {
   type PurchaseOrderItem,
   type PurchaseOrderStatus,
 } from "../services/purchase-order.service";
+import {
+  approveGoodsReceiptNote,
+  confirmGoodsReceiptNote,
+  createGoodsReceiptNote,
+  listGoodsReceiptNotes,
+  type GoodsReceiptNote,
+  type GoodsReceiptNoteItem,
+} from "../services/goods-receipt-note.service";
 
 const PAGE_SIZE = 20;
 
 const purchaseKeys = {
   detail: (purchaseOrderId: string) =>
     ["purchase-orders", "detail", purchaseOrderId] as const,
+  grns: (purchaseOrderId: string) =>
+    ["goods-receipt-notes", "purchase-order", purchaseOrderId] as const,
   list: (params: { page: number; status: string; supplierId: string }) =>
     ["purchase-orders", "list", params] as const,
   suppliers: ["purchase-orders", "suppliers"] as const,
@@ -89,6 +107,16 @@ type PurchaseOrderItemForm = {
   sku: string;
   unit: string;
   unitPrice: string;
+};
+
+type GoodsReceiptItemForm = {
+  actualQty: string;
+  expiryDate: string;
+  itemId: string;
+  lotNumber: string;
+  note: string;
+  sku: string;
+  unit: string;
 };
 
 const defaultItemForm: PurchaseOrderItemForm = {
@@ -107,7 +135,7 @@ const defaultCreateForm = {
 };
 
 function formatError(error: unknown) {
-  return getApiErrorMessage(error) ?? "Không gọi được WMS API.";
+  return getApiErrorMessage(error) ?? "Không kết nối được WMS.";
 }
 
 function optionalText(value: string) {
@@ -119,51 +147,79 @@ function parsePositiveNumber(value: string, fallback: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
+function formatDate(value?: string | null) {
+  if (!value) {
+    return "Chưa có";
+  }
 
-function statusVariant(status: PurchaseOrderStatus) {
-  if (status === "CANCELLED") return "destructive";
-  if (status === "COMPLETED") return "default";
-  return "outline";
-}
-
-function formatDate(value: string | undefined) {
-  if (!value) return "Chưa khai";
   const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat("vi-VN").format(date);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("vi-VN").format(date);
 }
 
-function toPurchaseOrderItems(items: PurchaseOrderItemForm[]) {
-  return items
-    .filter((item) => item.itemId.trim() && item.sku.trim())
-    .map<PurchaseOrderItem>((item) => ({
-      expectedQty: parsePositiveNumber(item.expectedQty, 1),
-      itemId: item.itemId.trim(),
-      sku: item.sku.trim(),
-      unit: item.unit.trim() || "cái",
-      unitPrice: parsePositiveNumber(item.unitPrice, 0),
-    }));
+function toPurchaseOrderItems(forms: PurchaseOrderItemForm[]): PurchaseOrderItem[] {
+  return forms
+    .map((form) => ({
+      expectedQty: parsePositiveNumber(form.expectedQty, 0),
+      itemId: form.itemId.trim(),
+      sku: form.sku.trim(),
+      unit: form.unit.trim() || "cái",
+      unitPrice: parsePositiveNumber(form.unitPrice, 0),
+    }))
+    .filter((item) => item.itemId && item.sku && item.expectedQty > 0);
+}
+
+function toGoodsReceiptItems(forms: GoodsReceiptItemForm[]): GoodsReceiptNoteItem[] {
+  return forms
+    .map((form) => ({
+      actualQty: parsePositiveNumber(form.actualQty, 0),
+      expiryDate: optionalText(form.expiryDate),
+      itemId: form.itemId.trim(),
+      lotNumber: optionalText(form.lotNumber),
+      note: optionalText(form.note),
+      sku: form.sku.trim(),
+      unit: form.unit.trim() || "cái",
+    }))
+    .filter((item) => item.itemId && item.sku && item.actualQty > 0);
+}
+
+function buildGoodsReceiptForms(
+  purchaseOrder: PurchaseOrder | undefined,
+): GoodsReceiptItemForm[] {
+  return (
+    purchaseOrder?.items?.map((item) => ({
+      actualQty: String(item.expectedQty),
+      expiryDate: "",
+      itemId: item.itemId,
+      lotNumber: "",
+      note: "",
+      sku: item.sku,
+      unit: item.unit,
+    })) ?? []
+  );
+}
+
+function ErrorBanner({ error }: { error: unknown }) {
+  return (
+    <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+      {formatError(error)}
+    </div>
+  );
 }
 
 function EmptyRow({ colSpan, label }: { colSpan: number; label: string }) {
   return (
     <TableRow>
       <TableCell
-        className="h-20 text-center text-sm text-muted-foreground"
+        className="h-24 text-center text-sm text-muted-foreground"
         colSpan={colSpan}
       >
         {label}
       </TableCell>
     </TableRow>
-  );
-}
-
-function ErrorBanner({ error }: { error: unknown }) {
-  return (
-    <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-      {formatError(error)}
-    </div>
   );
 }
 
@@ -182,6 +238,8 @@ export function PurchaseOrdersClient() {
     defaultItemForm,
   ]);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [grnDialogOpen, setGrnDialogOpen] = useState(false);
+  const [grnItemForms, setGrnItemForms] = useState<GoodsReceiptItemForm[]>([]);
 
   const purchaseOrdersQuery = useQuery({
     enabled: canUsePurchaseOrderApi,
@@ -236,6 +294,20 @@ export function PurchaseOrdersClient() {
     queryKey: purchaseKeys.detail(activePurchaseOrderId),
   });
   const detail = detailQuery.data ?? selectedPurchaseOrder;
+  const grnsQuery = useQuery({
+    enabled: canUsePurchaseOrderApi && Boolean(activePurchaseOrderId),
+    queryFn: () =>
+      listGoodsReceiptNotes({
+        limit: 50,
+        page: 1,
+        purchaseOrderId: activePurchaseOrderId,
+      }),
+    queryKey: purchaseKeys.grns(activePurchaseOrderId),
+  });
+  const goodsReceiptNotes = useMemo(
+    () => grnsQuery.data?.data ?? [],
+    [grnsQuery.data?.data],
+  );
 
   const supplierById = useMemo(
     () => new Map(suppliers.map((supplier) => [supplier.id, supplier])),
@@ -262,7 +334,45 @@ export function PurchaseOrdersClient() {
       setSelectedPurchaseOrderId(purchaseOrder.id);
       void queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
       setDialogOpen(false);
-      toast.success("Đã tạo PO");
+      toast.success("Đã tạo đơn mua");
+    },
+  });
+
+  const createGrnMutation = useMutation({
+    mutationFn: () =>
+      createGoodsReceiptNote({
+        items: toGoodsReceiptItems(grnItemForms),
+        purchaseOrderId: activePurchaseOrderId,
+      }),
+    onError: (error) => toast.error(formatError(error)),
+    onSuccess: () => {
+      setGrnItemForms([]);
+      setGrnDialogOpen(false);
+      void queryClient.invalidateQueries({ queryKey: ["goods-receipt-notes"] });
+      void queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
+      toast.success("Đã tạo phiếu nhập");
+    },
+  });
+
+  const confirmGrnMutation = useMutation({
+    mutationFn: (goodsReceiptNoteId: string) =>
+      confirmGoodsReceiptNote(goodsReceiptNoteId),
+    onError: (error) => toast.error(formatError(error)),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["goods-receipt-notes"] });
+      void queryClient.invalidateQueries({ queryKey: ["putaway-tasks"] });
+      toast.success("Đã xác nhận nhận hàng");
+    },
+  });
+
+  const approveGrnMutation = useMutation({
+    mutationFn: (goodsReceiptNoteId: string) =>
+      approveGoodsReceiptNote(goodsReceiptNoteId),
+    onError: (error) => toast.error(formatError(error)),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["goods-receipt-notes"] });
+      void queryClient.invalidateQueries({ queryKey: ["putaway-tasks"] });
+      toast.success("Đã duyệt phiếu nhập");
     },
   });
 
@@ -276,11 +386,28 @@ export function PurchaseOrdersClient() {
 
     const items = toPurchaseOrderItems(itemForms);
     if (items.length === 0) {
-      toast.error("PO cần ít nhất một dòng hàng hợp lệ.");
+      toast.error("Đơn mua cần ít nhất một dòng hàng hợp lệ.");
       return;
     }
 
     createMutation.mutate();
+  }
+
+  function handleCreateGrn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const items = toGoodsReceiptItems(grnItemForms);
+    if (!activePurchaseOrderId || items.length === 0) {
+      toast.error("Phiếu nhập cần ít nhất một dòng hàng hợp lệ.");
+      return;
+    }
+
+    createGrnMutation.mutate();
+  }
+
+  function openGrnDialog() {
+    setGrnItemForms(buildGoodsReceiptForms(detail));
+    setGrnDialogOpen(true);
   }
 
   function updateItemForm(index: number, next: PurchaseOrderItemForm) {
@@ -303,16 +430,10 @@ export function PurchaseOrdersClient() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-semibold tracking-normal">
-            Nhập hàng
-          </h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Tạo và theo dõi đơn đặt hàng từ nhà cung cấp.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Nhập hàng"
+        actions={
+          <>
           <Button
             disabled={!canUsePurchaseOrderApi}
             onClick={() =>
@@ -333,12 +454,12 @@ export function PurchaseOrdersClient() {
             <DialogTrigger asChild>
               <Button disabled={!canUsePurchaseOrderApi}>
                 <Plus data-icon="inline-start" />
-                Tạo PO
+                Tạo đơn mua
               </Button>
             </DialogTrigger>
             <DialogContent size="2xl" className="max-h-[90vh] overflow-y-auto">
               <DialogHeader className="mb-5">
-                <DialogTitle>Tạo PO</DialogTitle>
+                <DialogTitle>Tạo đơn mua</DialogTitle>
                 <DialogDescription>
                   Thêm đơn đặt hàng mới vào hệ thống.
                 </DialogDescription>
@@ -441,50 +562,31 @@ export function PurchaseOrdersClient() {
                   ) : (
                     <Save data-icon="inline-start" />
                   )}
-                  Tạo PO
+                  Tạo đơn mua
                 </Button>
               </form>
             </DialogContent>
           </Dialog>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {!canUsePurchaseOrderApi ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Bạn cần quyền Quản lý để tạo và chỉnh sửa đơn đặt hàng.
-        </div>
+        <PermissionNotice>
+          Bạn cần quyền phù hợp để tạo và chỉnh sửa đơn mua.
+        </PermissionNotice>
       ) : null}
 
       {purchaseOrdersQuery.error ? (
         <ErrorBanner error={purchaseOrdersQuery.error} />
       ) : null}
 
-      <Card>
-
-        <CardContent className="pt-4">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-              <div className="text-sm font-semibold text-foreground">Tổng số PO</div>
-              <div className="mt-1 text-2xl font-bold">{total}</div>
-            </div>
-            <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-              <div className="text-sm font-semibold text-foreground">PO đang xử lý</div>
-              <div className="mt-1 text-xs text-muted-foreground">Admin quản lý duyệt đơn</div>
-            </div>
-            <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-              <div className="text-sm font-semibold text-foreground">Hoàn thành</div>
-              <div className="mt-1 text-xs text-muted-foreground">Theo dõi nhập kho thành công</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       <div className="grid gap-4">
         <Card>
           <CardHeader className="border-b bg-muted/20">
             <CardTitle className="flex items-center gap-2 text-base">
               <ShoppingCart className="size-4 text-primary" />
-              Purchase Orders
+              Đơn mua
             </CardTitle>
             <CardDescription>
               {total} bản ghi · trang {page}/{totalPages}
@@ -511,7 +613,7 @@ export function PurchaseOrdersClient() {
                     <SelectItem value="ALL">Tất cả</SelectItem>
                     {PURCHASE_ORDER_STATUSES.map((status) => (
                       <SelectItem key={status} value={status}>
-                        {status}
+                        {statusLabel(status)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -545,15 +647,19 @@ export function PurchaseOrdersClient() {
               </Button>
             </form>
 
-            <PurchaseOrderTable
-              purchaseOrders={purchaseOrders}
-              selectedId={activePurchaseOrderId}
-              supplierById={supplierById}
-              warehouseById={warehouseById}
-              onSelect={(purchaseOrder) =>
-                setSelectedPurchaseOrderId(purchaseOrder.id)
-              }
-            />
+            {purchaseOrdersQuery.isLoading ? (
+              <TableSkeleton columns={5} />
+            ) : (
+              <PurchaseOrderTable
+                purchaseOrders={purchaseOrders}
+                selectedId={activePurchaseOrderId}
+                supplierById={supplierById}
+                warehouseById={warehouseById}
+                onSelect={(purchaseOrder) =>
+                  setSelectedPurchaseOrderId(purchaseOrder.id)
+                }
+              />
+            )}
 
             <div className="flex items-center justify-between gap-3">
               <Button
@@ -584,12 +690,48 @@ export function PurchaseOrdersClient() {
       </div>
 
       {detail ? (
-        <PurchaseOrderDetail
-          detail={detail}
-          loading={detailQuery.isFetching}
-          supplier={supplierById.get(detail.supplierId)}
-          warehouse={warehouseById.get(detail.warehouseId)}
-        />
+        <>
+          <PurchaseOrderDetail
+            detail={detail}
+            loading={detailQuery.isFetching}
+            supplier={supplierById.get(detail.supplierId)}
+            warehouse={warehouseById.get(detail.warehouseId)}
+          />
+          <GoodsReceiptNotesPanel
+            approveBusyId={
+              approveGrnMutation.isPending
+                ? approveGrnMutation.variables
+                : undefined
+            }
+            canManage={canUsePurchaseOrderApi}
+            confirmBusyId={
+              confirmGrnMutation.isPending
+                ? confirmGrnMutation.variables
+                : undefined
+            }
+            createBusy={createGrnMutation.isPending}
+            dialogOpen={grnDialogOpen}
+            grnItemForms={grnItemForms}
+            grns={goodsReceiptNotes}
+            loading={grnsQuery.isFetching}
+            purchaseOrder={detail}
+            onApprove={(goodsReceiptNoteId) =>
+              approveGrnMutation.mutate(goodsReceiptNoteId)
+            }
+            onConfirm={(goodsReceiptNoteId) =>
+              confirmGrnMutation.mutate(goodsReceiptNoteId)
+            }
+            onCreate={handleCreateGrn}
+            onDialogOpenChange={(open) => {
+              if (open) {
+                openGrnDialog();
+              } else {
+                setGrnDialogOpen(false);
+              }
+            }}
+            onFormChange={setGrnItemForms}
+          />
+        </>
       ) : null}
     </div>
   );
@@ -638,7 +780,7 @@ function PurchaseOrderTable({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Số PO</TableHead>
+          <TableHead>Số đơn mua</TableHead>
           <TableHead>NCC</TableHead>
           <TableHead>Kho</TableHead>
           <TableHead>Trạng thái</TableHead>
@@ -647,7 +789,7 @@ function PurchaseOrderTable({
       </TableHeader>
       <TableBody>
         {purchaseOrders.length === 0 ? (
-          <EmptyRow colSpan={5} label="Chưa có PO." />
+          <EmptyRow colSpan={5} label="Chưa có đơn mua." />
         ) : (
           purchaseOrders.map((purchaseOrder) => (
             <TableRow
@@ -670,9 +812,9 @@ function PurchaseOrderTable({
                   purchaseOrder.warehouseId}
               </TableCell>
               <TableCell>
-                <Badge variant={statusVariant(purchaseOrder.status)}>
-                  {purchaseOrder.status}
-                </Badge>
+                <StatusBadge tone={statusTone(purchaseOrder.status)}>
+                  {statusLabel(purchaseOrder.status)}
+                </StatusBadge>
               </TableCell>
               <TableCell>{formatDate(purchaseOrder.orderDate)}</TableCell>
             </TableRow>
@@ -697,8 +839,8 @@ function PurchaseOrderItemFields({
   return (
     <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-3 md:grid-cols-[1fr_1fr_90px_90px_110px_auto]">
       <Input
-        aria-label={`Item id dòng ${index + 1}`}
-        placeholder="WarehouseItem id"
+        aria-label={`Mã mặt hàng dòng ${index + 1}`}
+        placeholder="Mã mặt hàng kho"
         required
         value={item.itemId}
         onChange={(event) => onChange({ ...item, itemId: event.target.value })}
@@ -713,7 +855,7 @@ function PurchaseOrderItemFields({
       <Input
         aria-label={`Số lượng dòng ${index + 1}`}
         min="0"
-        placeholder="Qty"
+        placeholder="Số lượng"
         required
         type="number"
         value={item.expectedQty}
@@ -723,7 +865,7 @@ function PurchaseOrderItemFields({
       />
       <Input
         aria-label={`Đơn vị dòng ${index + 1}`}
-        placeholder="Unit"
+        placeholder="Đơn vị"
         required
         value={item.unit}
         onChange={(event) => onChange({ ...item, unit: event.target.value })}
@@ -757,6 +899,8 @@ function PurchaseOrderDetail({
   supplier: Supplier | undefined;
   warehouse: WarehouseStructureWarehouse | undefined;
 }) {
+  const items = detail.items ?? [];
+
   return (
     <Card>
       <CardHeader className="border-b bg-muted/20">
@@ -772,10 +916,10 @@ function PurchaseOrderDetail({
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
         <div className="grid gap-3 md:grid-cols-4">
-          <InfoBox label="Trạng thái" value={detail.status} />
+          <InfoBox label="Trạng thái" value={statusLabel(detail.status)} />
           <InfoBox label="Ngày tạo" value={formatDate(detail.orderDate)} />
           <InfoBox label="Ngày dự kiến" value={formatDate(detail.expectedDate)} />
-          <InfoBox label="Số dòng" value={detail.items.length.toString()} />
+          <InfoBox label="Số dòng" value={items.length.toString()} />
         </div>
         {detail.note ? (
           <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm">
@@ -785,27 +929,267 @@ function PurchaseOrderDetail({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Item id</TableHead>
+              <TableHead>Mã mặt hàng</TableHead>
               <TableHead>SKU</TableHead>
-              <TableHead>Qty</TableHead>
-              <TableHead>Unit</TableHead>
-              <TableHead>Unit price</TableHead>
+              <TableHead>Số lượng</TableHead>
+              <TableHead>Đơn vị</TableHead>
+              <TableHead>Đơn giá</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {detail.items.map((item) => (
+            {items.map((item) => (
               <TableRow key={`${item.itemId}-${item.sku}`}>
                 <TableCell className="font-medium">{item.itemId}</TableCell>
                 <TableCell>{item.sku}</TableCell>
                 <TableCell>{item.expectedQty}</TableCell>
                 <TableCell>{item.unit}</TableCell>
-                <TableCell>{item.unitPrice.toLocaleString("vi-VN")}</TableCell>
+                <TableCell>{(item.unitPrice ?? 0).toLocaleString("vi-VN")}</TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </CardContent>
     </Card>
+  );
+}
+
+function GoodsReceiptNotesPanel({
+  approveBusyId,
+  canManage,
+  confirmBusyId,
+  createBusy,
+  dialogOpen,
+  grnItemForms,
+  grns,
+  loading,
+  onApprove,
+  onConfirm,
+  onCreate,
+  onDialogOpenChange,
+  onFormChange,
+  purchaseOrder,
+}: {
+  approveBusyId?: string;
+  canManage: boolean;
+  confirmBusyId?: string;
+  createBusy: boolean;
+  dialogOpen: boolean;
+  grnItemForms: GoodsReceiptItemForm[];
+  grns: GoodsReceiptNote[];
+  loading: boolean;
+  onApprove: (goodsReceiptNoteId: string) => void;
+  onConfirm: (goodsReceiptNoteId: string) => void;
+  onCreate: (event: FormEvent<HTMLFormElement>) => void;
+  onDialogOpenChange: (open: boolean) => void;
+  onFormChange: (forms: GoodsReceiptItemForm[]) => void;
+  purchaseOrder: PurchaseOrder;
+}) {
+  function updateItemForm(index: number, next: GoodsReceiptItemForm) {
+    onFormChange(
+      grnItemForms.map((item, itemIndex) => (itemIndex === index ? next : item)),
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="border-b bg-muted/20">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ClipboardCheck className="size-4 text-primary" />
+              Phiếu nhập
+            </CardTitle>
+            <CardDescription>
+              Tạo phiếu nhập từ đơn mua, xác nhận nhận hàng rồi duyệt phiếu.
+            </CardDescription>
+          </div>
+          <Dialog open={dialogOpen} onOpenChange={onDialogOpenChange}>
+            <DialogTrigger asChild>
+              <Button disabled={!canManage || (purchaseOrder.items?.length ?? 0) === 0}>
+                <Plus data-icon="inline-start" />
+                Tạo phiếu nhập
+              </Button>
+            </DialogTrigger>
+            <DialogContent size="2xl" className="max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Tạo phiếu nhập</DialogTitle>
+                <DialogDescription>
+                  Dữ liệu lấy từ các dòng hàng của đơn mua đang chọn.
+                </DialogDescription>
+              </DialogHeader>
+              <form className="space-y-4" onSubmit={onCreate}>
+                <div className="grid gap-3">
+                  {grnItemForms.length === 0 ? (
+                    <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                      Đơn mua chưa có dòng hàng để tạo phiếu nhập.
+                    </div>
+                  ) : null}
+                  {grnItemForms.map((item, index) => (
+                    <GoodsReceiptItemFields
+                      index={index}
+                      item={item}
+                      key={`${item.itemId}-${index}`}
+                      onChange={(next) => updateItemForm(index, next)}
+                    />
+                  ))}
+                </div>
+                <Button
+                  disabled={!canManage || createBusy || grnItemForms.length === 0}
+                  type="submit"
+                >
+                  {createBusy ? (
+                    <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                  ) : (
+                    <Save data-icon="inline-start" />
+                  )}
+                  Tạo phiếu nhập
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4 pt-4">
+        {loading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <LoaderCircle className="size-4 animate-spin" />
+            Đang tải phiếu nhập...
+          </div>
+        ) : null}
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Mã phiếu</TableHead>
+              <TableHead>Trạng thái</TableHead>
+              <TableHead>Số dòng</TableHead>
+              <TableHead>Cập nhật</TableHead>
+              <TableHead className="w-52"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {grns.length === 0 ? (
+              <EmptyRow colSpan={5} label="Chưa có phiếu nhập cho đơn mua này." />
+            ) : (
+              grns.map((grn) => (
+                <TableRow key={grn.id}>
+                  <TableCell className="font-mono font-semibold">
+                    {grn.grnNumber}
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge tone={statusTone(grn.status)}>
+                      {statusLabel(grn.status)}
+                    </StatusBadge>
+                  </TableCell>
+                  <TableCell>{grn.items.length}</TableCell>
+                  <TableCell>{formatDate(grn.updatedAt)}</TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Button
+                        disabled={
+                          !canManage ||
+                          grn.status !== "DRAFT" ||
+                          confirmBusyId === grn.id
+                        }
+                        onClick={() => onConfirm(grn.id)}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        {confirmBusyId === grn.id ? (
+                          <LoaderCircle
+                            className="animate-spin"
+                            data-icon="inline-start"
+                          />
+                        ) : (
+                          <CheckCircle2 data-icon="inline-start" />
+                        )}
+                        Xác nhận
+                      </Button>
+                      <Button
+                        disabled={
+                          !canManage ||
+                          grn.status !== "CONFIRMED" ||
+                          approveBusyId === grn.id
+                        }
+                        onClick={() => onApprove(grn.id)}
+                        size="sm"
+                        type="button"
+                      >
+                        {approveBusyId === grn.id ? (
+                          <LoaderCircle
+                            className="animate-spin"
+                            data-icon="inline-start"
+                          />
+                        ) : (
+                          <ClipboardCheck data-icon="inline-start" />
+                        )}
+                        Duyệt
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+function GoodsReceiptItemFields({
+  index,
+  item,
+  onChange,
+}: {
+  index: number;
+  item: GoodsReceiptItemForm;
+  onChange: (item: GoodsReceiptItemForm) => void;
+}) {
+  return (
+    <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-3 md:grid-cols-[1fr_1fr_100px_90px_130px_1fr]">
+      <Input
+        aria-label={`Mã mặt hàng phiếu nhập dòng ${index + 1}`}
+        readOnly
+        value={item.itemId}
+      />
+      <Input
+        aria-label={`SKU phiếu nhập dòng ${index + 1}`}
+        readOnly
+        value={item.sku}
+      />
+      <Input
+        aria-label={`Số lượng thực nhập dòng ${index + 1}`}
+        min="0"
+        type="number"
+        value={item.actualQty}
+        onChange={(event) => onChange({ ...item, actualQty: event.target.value })}
+      />
+      <Input
+        aria-label={`Đơn vị phiếu nhập dòng ${index + 1}`}
+        value={item.unit}
+        onChange={(event) => onChange({ ...item, unit: event.target.value })}
+      />
+      <Input
+        aria-label={`Mã lô phiếu nhập dòng ${index + 1}`}
+        placeholder="Mã lô"
+        value={item.lotNumber}
+        onChange={(event) => onChange({ ...item, lotNumber: event.target.value })}
+      />
+      <Input
+        aria-label={`Hạn sử dụng phiếu nhập dòng ${index + 1}`}
+        type="date"
+        value={item.expiryDate}
+        onChange={(event) => onChange({ ...item, expiryDate: event.target.value })}
+      />
+      <Input
+        aria-label={`Ghi chú phiếu nhập dòng ${index + 1}`}
+        className="md:col-span-6"
+        placeholder="Ghi chú"
+        value={item.note}
+        onChange={(event) => onChange({ ...item, note: event.target.value })}
+      />
+    </div>
   );
 }
 

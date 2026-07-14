@@ -83,7 +83,7 @@ export function WarehouseLayoutInspector({
   if (!selection) {
     return (
       <aside className="border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-muted-foreground">
-        Chọn zone, rack, aisle hoặc gate trên mặt bằng để xem thông số.
+        Chọn khu vực, dãy kệ, lối đi hoặc cổng trên mặt bằng để xem thông số.
       </aside>
     );
   }
@@ -105,11 +105,17 @@ export function WarehouseLayoutInspector({
     selection.kind === "rack"
       ? layout.racks.find((rack) => rack.id === selection.id)
       : undefined;
+  const selectionLabel = {
+    aisle: "lối đi",
+    gate: "cổng",
+    rack: "dãy kệ",
+    zone: "khu vực",
+  }[selection.kind];
 
   return (
     <aside className="border border-slate-300 bg-white">
       <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-        <div className="text-sm font-semibold">Thuộc tính {selection.kind}</div>
+        <div className="text-sm font-semibold">Thuộc tính {selectionLabel}</div>
         <div className="mt-1 font-mono text-xs text-muted-foreground">
           {item.code}
         </div>
@@ -253,7 +259,7 @@ export function WarehouseLayoutInspector({
                 onClick={() => onPatch({ type: "RACK" })}
                 variant={item.type === "RACK" ? "default" : "outline"}
               >
-                Lối rack
+                Lối giữa kệ
               </Button>
             </div>
           </>

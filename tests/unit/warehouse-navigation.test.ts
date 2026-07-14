@@ -21,7 +21,7 @@ describe("warehouse put-away navigation", () => {
 
     expect(suggestions[0]?.advisory).toBe(true);
     expect(suggestions[0]?.capacity).toBeGreaterThanOrEqual(80);
-    expect(suggestions[0]?.reason).toMatch(/best-fit|same SKU/i);
+    expect(suggestions[0]?.reason).toMatch(/Vừa sức chứa|same SKU/i);
   });
 
   it("builds a scan path to the suggested shelf", () => {
@@ -43,7 +43,7 @@ describe("warehouse put-away navigation", () => {
     expect(suggestion!.shelf.level).toBe(2);
   });
 
-  it("documents shelf as the smallest barcode location for current model", () => {
+  it("documents shelf as the smallest barcode-scanned location for current model", () => {
     const suggestion = selectSuggestedShelf(
       fallbackPutawaySuggestions({
         sku: "CUP-BLANK-500",
@@ -52,7 +52,7 @@ describe("warehouse put-away navigation", () => {
       }),
     );
 
-    expect(describeShelfGranularity(suggestion!.shelf)).toMatch(/barcode location nhỏ nhất/i);
+    expect(describeShelfGranularity(suggestion!.shelf)).toMatch(/đơn vị nhỏ nhất có mã vạch/i);
   });
 
   it("builds a fallback route from gate to the shelf center", () => {

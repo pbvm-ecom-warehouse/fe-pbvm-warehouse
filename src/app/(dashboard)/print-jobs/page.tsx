@@ -1,5 +1,5 @@
-import { ModulePage } from "@/features/admin-shell/components/module-page";
+import { PrintJobsClient } from "@/features/print-jobs/components/print-jobs-client";
 
 export default function PrintJobsPage() {
-  return <ModulePage moduleKey="print-jobs" />;
+  return <PrintJobsClient />;
 }

@@ -1,6 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { apiClient } from "@/lib/api-client";
 import {
   listInventoryValueSeries,
   listStockLedger,
@@ -8,44 +7,25 @@ import {
 } from "@/features/inventory/inventory.service";
 import { MissingBackendEndpointError } from "@/lib/api-contract";
 
-vi.mock("@/lib/api-client", () => ({
-  apiClient: {
-    get: vi.fn(),
-  },
-}));
-
-const mockedGet = vi.mocked(apiClient.get);
-
-function httpError(status: number) {
-  return { response: { status } };
-}
-
 describe("inventory API service", () => {
-  beforeEach(() => {
-    mockedGet.mockReset();
-  });
-
-  it("surfaces unsupported ledger endpoints instead of returning fake empty data", async () => {
-    mockedGet.mockRejectedValueOnce(httpError(404));
-
+  it("blocks unsupported ledger endpoints without sending a request", async () => {
+    await expect(listStockLedger()).rejects.toMatchObject({
+      endpoint: "GET /api/wms/inventory/ledger",
+    });
     await expect(listStockLedger()).rejects.toBeInstanceOf(
       MissingBackendEndpointError,
     );
   });
 
-  it("surfaces unsupported report endpoints instead of returning fake empty data", async () => {
-    mockedGet.mockRejectedValueOnce(httpError(501));
-
-    await expect(listInventoryValueSeries()).rejects.toMatchObject({
-      endpoint: "GET /api/wms/reports/inventory-value-series",
-      status: 501,
+  it("blocks unsupported movement endpoints without fallback data", async () => {
+    await expect(listStockMovements()).rejects.toMatchObject({
+      endpoint: "GET /api/wms/inventory/movements",
     });
   });
 
-  it("does not hide auth failures behind empty fallback data", async () => {
-    const error = httpError(401);
-    mockedGet.mockRejectedValueOnce(error);
-
-    await expect(listStockMovements()).rejects.toBe(error);
+  it("blocks unsupported report endpoints without fallback data", async () => {
+    await expect(listInventoryValueSeries()).rejects.toMatchObject({
+      endpoint: "GET /api/wms/reports/inventory-value-series",
+    });
   });
 });

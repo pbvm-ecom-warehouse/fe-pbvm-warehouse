@@ -98,7 +98,7 @@ const defaultShelfForm = {
 };
 
 function formatError(error: unknown) {
-  return getApiErrorMessage(error) ?? "Không gọi được WMS API.";
+  return getApiErrorMessage(error) ?? "Không kết nối được WMS.";
 }
 
 function requiredText(value: string) {
@@ -124,7 +124,7 @@ function positiveInteger(value: string) {
 function StatusBadge({ active }: { active: boolean }) {
   return (
     <Badge variant={active ? "default" : "outline"}>
-      {active ? "ACTIVE" : "INACTIVE"}
+      {active ? "Đang dùng" : "Ngưng dùng"}
     </Badge>
   );
 }
@@ -293,7 +293,7 @@ export function WarehouseStructureClient() {
       void queryClient.invalidateQueries({
         queryKey: warehouseKeys.zones(activeWarehouseId),
       });
-      toast.success("Đã tạo zone");
+      toast.success("Đã tạo khu vực");
     },
   });
 
@@ -308,7 +308,7 @@ export function WarehouseStructureClient() {
       void queryClient.invalidateQueries({
         queryKey: warehouseKeys.zones(activeWarehouseId),
       });
-      toast.success("Đã cập nhật zone");
+      toast.success("Đã cập nhật khu vực");
     },
   });
 
@@ -321,7 +321,7 @@ export function WarehouseStructureClient() {
       void queryClient.invalidateQueries({
         queryKey: warehouseKeys.zones(activeWarehouseId),
       });
-      toast.success("Đã xóa zone");
+      toast.success("Đã xóa khu vực");
     },
   });
 
@@ -339,7 +339,7 @@ export function WarehouseStructureClient() {
       void queryClient.invalidateQueries({
         queryKey: warehouseKeys.racks(activeZoneId),
       });
-      toast.success("Đã tạo rack");
+      toast.success("Đã tạo dãy kệ");
     },
   });
 
@@ -354,7 +354,7 @@ export function WarehouseStructureClient() {
       void queryClient.invalidateQueries({
         queryKey: warehouseKeys.racks(activeZoneId),
       });
-      toast.success("Đã cập nhật rack");
+      toast.success("Đã cập nhật dãy kệ");
     },
   });
 
@@ -366,7 +366,7 @@ export function WarehouseStructureClient() {
       void queryClient.invalidateQueries({
         queryKey: warehouseKeys.racks(activeZoneId),
       });
-      toast.success("Đã xóa rack");
+      toast.success("Đã xóa dãy kệ");
     },
   });
 
@@ -388,7 +388,7 @@ export function WarehouseStructureClient() {
       void queryClient.invalidateQueries({
         queryKey: warehouseKeys.shelves(activeRackId),
       });
-      toast.success("Đã tạo shelf");
+      toast.success("Đã tạo vị trí kệ");
     },
   });
 
@@ -408,7 +408,7 @@ export function WarehouseStructureClient() {
       void queryClient.invalidateQueries({
         queryKey: warehouseKeys.shelves(activeRackId),
       });
-      toast.success("Đã cập nhật shelf");
+      toast.success("Đã cập nhật vị trí kệ");
     },
   });
 
@@ -419,7 +419,7 @@ export function WarehouseStructureClient() {
       void queryClient.invalidateQueries({
         queryKey: warehouseKeys.shelves(activeRackId),
       });
-      toast.success("Đã xóa shelf");
+      toast.success("Đã xóa vị trí kệ");
     },
   });
 
@@ -461,7 +461,7 @@ export function WarehouseStructureClient() {
             Kho
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Quản lý cấu trúc kho theo Warehouse, Zone, Rack và Shelf.
+            Quản lý kho, khu vực, dãy kệ và mã vị trí.
           </p>
         </div>
         <Button
@@ -481,7 +481,7 @@ export function WarehouseStructureClient() {
 
       {!canManage ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          API cấu trúc kho chỉ mở cho Manager/Admin.
+          Bạn cần quyền quản lý để chỉnh cấu trúc kho.
         </div>
       ) : null}
 
@@ -492,8 +492,8 @@ export function WarehouseStructureClient() {
           <SectionTitle
             count={warehouses.length}
             icon={<Warehouse className="size-4 text-primary" />}
-            subtitle="Master data kho"
-            title="Warehouse"
+            subtitle="Danh sách kho"
+            title="Kho"
           />
           <CardContent className="space-y-4 pt-4">
             <form className="grid gap-3 md:grid-cols-2" onSubmit={handleCreateWarehouse}>
@@ -582,15 +582,15 @@ export function WarehouseStructureClient() {
           <SectionTitle
             count={zones.length}
             icon={<Boxes className="size-4 text-primary" />}
-            subtitle={selectedWarehouse?.name ?? "Chọn warehouse"}
-            title="Zone"
+            subtitle={selectedWarehouse?.name ?? "Chọn kho"}
+            title="Khu vực"
           />
           <CardContent className="space-y-4 pt-4">
             {zonesQuery.error ? <ErrorBanner error={zonesQuery.error} /> : null}
             <form className="grid gap-3 md:grid-cols-3" onSubmit={handleCreateZone}>
               <TextField
                 id="zone-name"
-                label="Tên zone"
+                label="Tên khu vực"
                 value={zoneForm.name}
                 onChange={(value) =>
                   setZoneForm((current) => ({ ...current, name: value }))
@@ -598,7 +598,7 @@ export function WarehouseStructureClient() {
               />
               <TextField
                 id="zone-code"
-                label="Mã zone"
+                label="Mã khu vực"
                 value={zoneForm.code}
                 onChange={(value) =>
                   setZoneForm((current) => ({ ...current, code: value }))
@@ -610,7 +610,7 @@ export function WarehouseStructureClient() {
                 type="submit"
               >
                 <Plus data-icon="inline-start" />
-                Tạo zone
+                Tạo khu vực
               </Button>
             </form>
             <ZoneTable
@@ -640,15 +640,15 @@ export function WarehouseStructureClient() {
           <SectionTitle
             count={racks.length}
             icon={<Boxes className="size-4 text-primary" />}
-            subtitle={selectedZone?.name ?? "Chọn zone"}
-            title="Rack"
+            subtitle={selectedZone?.name ?? "Chọn khu vực"}
+            title="Dãy kệ"
           />
           <CardContent className="space-y-4 pt-4">
             {racksQuery.error ? <ErrorBanner error={racksQuery.error} /> : null}
             <form className="grid gap-3 md:grid-cols-3" onSubmit={handleCreateRack}>
               <TextField
                 id="rack-name"
-                label="Tên rack"
+                label="Tên dãy kệ"
                 value={rackForm.name}
                 onChange={(value) =>
                   setRackForm((current) => ({ ...current, name: value }))
@@ -656,7 +656,7 @@ export function WarehouseStructureClient() {
               />
               <TextField
                 id="rack-code"
-                label="Mã rack"
+                label="Mã dãy kệ"
                 value={rackForm.code}
                 onChange={(value) =>
                   setRackForm((current) => ({ ...current, code: value }))
@@ -668,7 +668,7 @@ export function WarehouseStructureClient() {
                 type="submit"
               >
                 <Plus data-icon="inline-start" />
-                Tạo rack
+                Tạo dãy kệ
               </Button>
             </form>
             <RackTable
@@ -695,8 +695,8 @@ export function WarehouseStructureClient() {
           <SectionTitle
             count={shelves.length}
             icon={<CheckCircle2 className="size-4 text-primary" />}
-            subtitle={selectedRack?.name ?? "Chọn rack"}
-            title="Shelf"
+            subtitle={selectedRack?.name ?? "Chọn dãy kệ"}
+            title="Vị trí kệ"
           />
           <CardContent className="space-y-4 pt-4">
             {shelvesQuery.error ? <ErrorBanner error={shelvesQuery.error} /> : null}
@@ -704,7 +704,7 @@ export function WarehouseStructureClient() {
               busy={createShelfMutation.isPending}
               disabled={!canManage || !activeRackId}
               form={shelfForm}
-              submitLabel="Tạo shelf"
+              submitLabel="Tạo vị trí"
               onChange={setShelfForm}
               onSubmit={handleCreateShelf}
             />
@@ -881,7 +881,7 @@ function WarehouseEditForm({
           ) : (
             <Save data-icon="inline-start" />
           )}
-          Lưu kho
+          Lưu
         </Button>
         <Button
           disabled={!canManage || deleteBusy}
@@ -971,7 +971,7 @@ function WarehouseTable({
       </TableHeader>
       <TableBody>
         {warehouses.length === 0 ? (
-          <EmptyRow colSpan={3} label="Chưa có warehouse." />
+          <EmptyRow colSpan={3} label="Chưa có kho." />
         ) : (
           warehouses.map((warehouse) => (
             <TableRow
@@ -1006,7 +1006,7 @@ function ZoneTable({
 }) {
   return (
     <SimpleCodeTable
-      emptyLabel="Chưa có zone."
+      emptyLabel="Chưa có khu vực."
       rows={zones}
       selectedId={selectedId}
       onSelect={onSelect}
@@ -1025,7 +1025,7 @@ function RackTable({
 }) {
   return (
     <SimpleCodeTable
-      emptyLabel="Chưa có rack."
+      emptyLabel="Chưa có dãy kệ."
       rows={racks}
       selectedId={selectedId}
       onSelect={onSelect}
@@ -1094,7 +1094,7 @@ function ShelfForm({
     <form className="grid gap-3 md:grid-cols-4" onSubmit={onSubmit}>
       <TextField
         id="shelf-code"
-        label="Mã shelf"
+        label="Mã vị trí"
         value={form.code}
         onChange={(value) => onChange({ ...form, code: value })}
       />
@@ -1127,7 +1127,7 @@ function ShelfForm({
       />
       <TextField
         id="shelf-fill-factor"
-        label="Fill factor"
+        label="Mức chứa"
         required={false}
         value={form.fillFactor}
         onChange={(value) => onChange({ ...form, fillFactor: value })}
@@ -1143,7 +1143,7 @@ function ShelfForm({
             onChange({ ...form, isStaging: checked === true })
           }
         />
-        Staging
+        Khu trung chuyển
       </Label>
       <Button className="self-end" disabled={disabled || busy} type="submit">
         {busy ? (
@@ -1193,7 +1193,7 @@ function ShelfTable({
       </TableHeader>
       <TableBody>
         {shelves.length === 0 ? (
-          <EmptyRow colSpan={5} label="Chưa có shelf." />
+          <EmptyRow colSpan={5} label="Chưa có vị trí kệ." />
         ) : (
           shelves.map((shelf) => {
             const isEditing = editingShelfId === shelf.id;
@@ -1277,7 +1277,7 @@ function ShelfTable({
                       shelf.innerHeight,
                     ]
                       .filter((value) => value !== undefined)
-                      .join(" x ") || "Chưa khai"
+                      .join(" x ") || "Chưa nhập"
                   )}
                 </TableCell>
                 <TableCell>
@@ -1292,12 +1292,12 @@ function ShelfTable({
                           })
                         }
                       />
-                      Staging
+                      Khu trung chuyển
                     </Label>
                   ) : shelf.isStaging ? (
-                    <Badge>STAGING</Badge>
+                    <Badge>Trung chuyển</Badge>
                   ) : (
-                    <Badge variant="outline">STORAGE</Badge>
+                    <Badge variant="outline">Lưu kho</Badge>
                   )}
                 </TableCell>
                 <TableCell>
@@ -1333,7 +1333,7 @@ function ShelfTable({
                         variant="outline"
                       >
                         <Save />
-                        <span className="sr-only">Sửa shelf</span>
+                        <span className="sr-only">Sửa vị trí kệ</span>
                       </Button>
                       <Button
                         disabled={!canManage || busyId === shelf.id}
@@ -1343,7 +1343,7 @@ function ShelfTable({
                         variant="destructive"
                       >
                         <Trash2 />
-                        <span className="sr-only">Xóa shelf</span>
+                        <span className="sr-only">Xóa vị trí kệ</span>
                       </Button>
                     </div>
                   )}
