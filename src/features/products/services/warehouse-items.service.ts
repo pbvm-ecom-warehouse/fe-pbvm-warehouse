@@ -11,16 +11,30 @@ export const WAREHOUSE_ITEM_TYPES = [
 
 export type WarehouseItemType = (typeof WAREHOUSE_ITEM_TYPES)[number];
 
+export type WarehouseItemAltUnit = {
+  unit: string;
+  factor?: number;
+  quantity?: number;
+  [key: string]: unknown;
+};
+
+export type WarehouseItemAttribute = {
+  name?: string;
+  value?: string;
+  code?: string;
+  [key: string]: unknown;
+};
+
 export type WarehouseItem = {
   id: string;
   sku: string;
   barcode?: string | null;
-  altBarcodes?: unknown[];
+  altBarcodes?: string[];
   name: string;
   type: WarehouseItemType;
   unit: string;
-  altUnits?: unknown[];
-  attributes?: unknown[];
+  altUnits?: WarehouseItemAltUnit[];
+  attributes?: WarehouseItemAttribute[];
   isPerishable: boolean;
   nearExpiryDays?: number | null;
   depth?: number | null;
@@ -46,8 +60,8 @@ export type CreateWarehouseItemInput = {
   unit: string;
   barcode?: string;
   altBarcodes?: string[];
-  altUnits?: string[];
-  attributes?: string[];
+  altUnits?: WarehouseItemAltUnit[];
+  attributes?: WarehouseItemAttribute[];
   isPerishable?: boolean;
   nearExpiryDays?: number;
   depth?: number;
@@ -55,7 +69,9 @@ export type CreateWarehouseItemInput = {
   height?: number;
 };
 
-export type UpdateWarehouseItemInput = Partial<CreateWarehouseItemInput> & {
+export type UpdateWarehouseItemInput = Partial<
+  Omit<CreateWarehouseItemInput, "sku">
+> & {
   isActive?: boolean;
 };
 

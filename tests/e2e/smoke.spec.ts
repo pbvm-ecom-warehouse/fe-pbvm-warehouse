@@ -51,12 +51,12 @@ test("manager sees management dashboard and inventory route", async ({ page }) =
   ).toBeVisible();
 });
 
-test("admin edits a product from the item drawer", async ({ page }) => {
+test("admin edits a product from row actions", async ({ page }) => {
   await seedWmsSession(page, ["ADMIN"], "Admin User");
   const item = {
     altBarcodes: ["8938501234567"],
-    altUnits: [{ quantity: 24, unit: "thùng" }],
-    attributes: [{ color: "đỏ", size: "500ml" }],
+    altUnits: [{ factor: 24, unit: "thùng" }],
+    attributes: [{ code: "COL", name: "Màu", value: "Đỏ" }],
     barcode: "8938501234567",
     createdAt: "2026-07-01T00:00:00.000Z",
     height: 12,
@@ -108,17 +108,26 @@ test("admin edits a product from the item drawer", async ({ page }) => {
 
   await page.goto("/products");
   await expect(page.getByRole("heading", { name: /^Sản phẩm$/i })).toBeVisible();
-  await page.getByRole("row", { name: /CUP-500ML-RED/i }).click();
+  await page
+    .getByRole("row", { name: /CUP-500ML-RED/i })
+    .getByRole("button", { name: /^Sửa$/i })
+    .click();
   await expect(page.getByRole("dialog", { name: /CUP-500ML-RED/i })).toBeVisible();
-  await expect(page.getByLabel("Đơn vị phụ")).toHaveValue(
-    "quantity: 24, unit: thùng",
-  );
+  await expect(page.getByText(/unit:/i)).toHaveCount(0);
+  await expect(page.getByText(/factor:/i)).toHaveCount(0);
+  await expect(page.getByLabel("Hệ số")).toHaveValue("24");
+  await expect(page.getByLabel("Tên", { exact: true })).toHaveValue("Màu");
+  await expect(page.getByLabel("Giá trị")).toHaveValue("Đỏ");
   await page.getByLabel("Tên mặt hàng").fill("Ly nhựa 500ml đỏ");
   await page.getByRole("button", { name: /^Lưu mặt hàng$/i }).click();
   await expect(page.getByText(/Đã cập nhật mặt hàng/i)).toBeVisible();
   expect(patchBody).toMatchObject({ name: "Ly nhựa 500ml đỏ" });
+  expect(patchBody).not.toMatchObject({ sku: "CUP-500ML-RED" });
 
-  await page.getByRole("button", { name: /^Ngưng dùng$/i }).click();
+  await page
+    .getByRole("row", { name: /CUP-500ML-RED/i })
+    .getByRole("button", { name: /^Ngưng dùng$/i })
+    .click();
   await page
     .getByRole("dialog", { name: /Ngưng dùng mặt hàng/i })
     .getByRole("button", { name: /^Ngưng dùng$/i })
@@ -146,6 +155,7 @@ test("receiver gets inbound navigation and forbidden settings", async ({ page })
 
 test("manager opens purchases when purchase order items are missing", async ({ page }) => {
   await seedWmsSession(page, ["MANAGER"], "Manager User");
+  let purchaseOrderPostBody: unknown;
   const purchaseOrderWithoutItems = {
     createdAt: "2026-07-13T00:00:00.000Z",
     expectedDate: "2026-07-18T00:00:00.000Z",
@@ -159,7 +169,7 @@ test("manager opens purchases when purchase order items are missing", async ({ p
     warehouseId: "wh-1",
   };
 
-  await page.route("**/api/wms/suppliers**", async (route) => {
+  await page.route("**/api/wms/supplier?**", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -194,8 +204,61 @@ test("manager opens purchases when purchase order items are missing", async ({ p
       }),
     });
   });
+  await page.route("**/api/wms/stock/items**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: [
+          {
+            altBarcodes: [],
+            altUnits: [],
+            attributes: [],
+            barcode: "8938501234567",
+            createdAt: "2026-07-01T00:00:00.000Z",
+            id: "item-1",
+            isActive: true,
+            isPerishable: false,
+            name: "Ly nhựa 500ml",
+            sku: "CUP-500ML-RED",
+            type: "CUP_BLANK",
+            unit: "cái",
+            updatedAt: "2026-07-01T00:00:00.000Z",
+          },
+        ],
+        limit: 200,
+        page: 1,
+        total: 1,
+      }),
+    });
+  });
   await page.route("**/api/wms/purchase-orders**", async (route) => {
     const url = route.request().url();
+    const method = route.request().method();
+
+    if (method === "POST") {
+      purchaseOrderPostBody = route.request().postDataJSON();
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            ...purchaseOrderWithoutItems,
+            id: "po-created",
+            items: [
+              {
+                expectedQty: 12,
+                itemId: "item-1",
+                sku: "CUP-500ML-RED",
+                unit: "cái",
+                unitPrice: 1500,
+              },
+            ],
+            poNumber: "PO-NEW",
+          },
+          meta: { requestId: "po-create" },
+        }),
+      });
+      return;
+    }
 
     await route.fulfill({
       contentType: "application/json",
@@ -220,6 +283,31 @@ test("manager opens purchases when purchase order items are missing", async ({ p
 
   await expect(page.getByRole("heading", { name: /^Nhập hàng$/i })).toBeVisible();
   await expect(page.getByRole("cell", { name: "PO-20260713-0002" })).toBeVisible();
+  await page.getByRole("button", { name: /^Tạo đơn mua$/i }).click();
+  const dialog = page.getByRole("dialog", { name: /^Tạo đơn mua$/i });
+  await dialog.getByRole("combobox").nth(0).click();
+  await page.getByText(/NCC-001/i).last().click();
+  await dialog.getByRole("combobox").nth(1).click();
+  await page.getByText(/^Kho A$/i).last().click();
+  await dialog
+    .getByRole("combobox", { name: /Mặt hàng dòng 1/i })
+    .click();
+  await page.getByText(/CUP-500ML-RED/i).click();
+  await dialog.getByLabel(/Số lượng dòng 1/i).fill("12");
+  await dialog.getByLabel(/Đơn giá dòng 1/i).fill("1500");
+  await dialog.getByRole("button", { name: /^Tạo đơn mua$/i }).click();
+  await expect(page.getByText(/Đã tạo đơn mua/i)).toBeVisible();
+  expect(purchaseOrderPostBody).toMatchObject({
+    items: [
+      {
+        expectedQty: 12,
+        itemId: "item-1",
+        sku: "CUP-500ML-RED",
+        unit: "cái",
+        unitPrice: 1500,
+      },
+    ],
+  });
 });
 
 test("admin edits and removes supplier items from row actions", async ({ page }) => {

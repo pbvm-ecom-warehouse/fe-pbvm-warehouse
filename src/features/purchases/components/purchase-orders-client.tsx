@@ -3,6 +3,8 @@
 import { FormEvent, type ReactNode, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Check,
+  ChevronsUpDown,
   Eye,
   CheckCircle2,
   ClipboardCheck,
@@ -17,6 +19,14 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Card,
   CardContent,
@@ -51,6 +61,11 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   PageHeader,
   PermissionNotice,
   StatusBadge,
@@ -69,6 +84,10 @@ import {
   listWarehouses,
   type WarehouseStructureWarehouse,
 } from "@/features/warehouse-structure/services/warehouse-structure.service";
+import {
+  listWarehouseItems,
+  type WarehouseItem,
+} from "@/features/products/services/warehouse-items.service";
 
 import {
   createPurchaseOrder,
@@ -97,6 +116,7 @@ const purchaseKeys = {
     ["goods-receipt-notes", "purchase-order", purchaseOrderId] as const,
   list: (params: { page: number; status: string; supplierId: string }) =>
     ["purchase-orders", "list", params] as const,
+  stockItems: ["purchase-orders", "stock-items"] as const,
   suppliers: ["purchase-orders", "suppliers"] as const,
   warehouses: ["purchase-orders", "warehouses"] as const,
 };
@@ -269,6 +289,17 @@ export function PurchaseOrdersClient() {
     queryKey: purchaseKeys.warehouses,
   });
 
+  const stockItemsQuery = useQuery({
+    enabled: canUsePurchaseOrderApi,
+    queryFn: () =>
+      listWarehouseItems({
+        isActive: true,
+        limit: 200,
+        page: 1,
+      }),
+    queryKey: purchaseKeys.stockItems,
+  });
+
   const purchaseOrders = useMemo(
     () => purchaseOrdersQuery.data?.data ?? [],
     [purchaseOrdersQuery.data?.data],
@@ -280,6 +311,10 @@ export function PurchaseOrdersClient() {
   const warehouses = useMemo(
     () => warehousesQuery.data ?? [],
     [warehousesQuery.data],
+  );
+  const stockItems = useMemo(
+    () => stockItemsQuery.data?.data ?? [],
+    [stockItemsQuery.data?.data],
   );
   const total = purchaseOrdersQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -542,6 +577,7 @@ export function PurchaseOrdersClient() {
                       index={index}
                       item={item}
                       key={index}
+                      stockItems={stockItems}
                       onChange={(next) => updateItemForm(index, next)}
                       onRemove={() => removeItemRow(index)}
                     />
@@ -553,6 +589,7 @@ export function PurchaseOrdersClient() {
                     !canUsePurchaseOrderApi ||
                     !createForm.supplierId ||
                     !createForm.warehouseId ||
+                    itemForms.some((item) => !item.itemId || !item.sku || !item.unit) ||
                     createMutation.isPending
                   }
                   type="submit"
@@ -830,27 +867,38 @@ function PurchaseOrderItemFields({
   item,
   onChange,
   onRemove,
+  stockItems,
 }: {
   index: number;
   item: PurchaseOrderItemForm;
   onChange: (item: PurchaseOrderItemForm) => void;
   onRemove: () => void;
+  stockItems: WarehouseItem[];
 }) {
+  const selectedItem = stockItems.find((stockItem) => stockItem.id === item.itemId);
+
   return (
-    <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-3 md:grid-cols-[1fr_1fr_90px_90px_110px_auto]">
-      <Input
-        aria-label={`Mã mặt hàng dòng ${index + 1}`}
-        placeholder="Mã mặt hàng kho"
-        required
-        value={item.itemId}
-        onChange={(event) => onChange({ ...item, itemId: event.target.value })}
+    <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-3 md:grid-cols-[minmax(240px,1.5fr)_minmax(140px,1fr)_90px_80px_110px_auto]">
+      <WarehouseItemCombobox
+        items={stockItems}
+        label={`Mặt hàng dòng ${index + 1}`}
+        selectedItem={selectedItem}
+        onSelect={(stockItem) =>
+          onChange({
+            ...item,
+            itemId: stockItem.id,
+            sku: stockItem.sku,
+            unit: stockItem.unit,
+          })
+        }
       />
       <Input
         aria-label={`SKU dòng ${index + 1}`}
+        className="bg-muted/50 font-mono text-muted-foreground"
         placeholder="SKU"
+        readOnly
         required
         value={item.sku}
-        onChange={(event) => onChange({ ...item, sku: event.target.value })}
       />
       <Input
         aria-label={`Số lượng dòng ${index + 1}`}
@@ -863,13 +911,9 @@ function PurchaseOrderItemFields({
           onChange({ ...item, expectedQty: event.target.value })
         }
       />
-      <Input
-        aria-label={`Đơn vị dòng ${index + 1}`}
-        placeholder="Đơn vị"
-        required
-        value={item.unit}
-        onChange={(event) => onChange({ ...item, unit: event.target.value })}
-      />
+      <div className="flex items-center rounded-md border border-input bg-muted/50 px-3 text-sm text-muted-foreground">
+        {item.unit || "Đơn vị"}
+      </div>
       <Input
         aria-label={`Đơn giá dòng ${index + 1}`}
         min="0"
@@ -885,6 +929,75 @@ function PurchaseOrderItemFields({
         <span className="sr-only">Xóa dòng</span>
       </Button>
     </div>
+  );
+}
+
+function WarehouseItemCombobox({
+  items,
+  label,
+  onSelect,
+  selectedItem,
+}: {
+  items: WarehouseItem[];
+  label: string;
+  onSelect: (item: WarehouseItem) => void;
+  selectedItem: WarehouseItem | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          aria-label={label}
+          className="justify-between bg-background font-normal"
+          role="combobox"
+          type="button"
+          variant="outline"
+        >
+          <span className="min-w-0 truncate text-left">
+            {selectedItem
+              ? `${selectedItem.sku} - ${selectedItem.name}`
+              : "Chọn mặt hàng"}
+          </span>
+          <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[420px] p-0">
+        <Command>
+          <CommandInput placeholder="Tìm SKU hoặc tên mặt hàng" />
+          <CommandList>
+            <CommandEmpty>Không có mặt hàng phù hợp.</CommandEmpty>
+            <CommandGroup>
+              {items.map((item) => (
+                <CommandItem
+                  key={item.id}
+                  value={`${item.sku} ${item.name} ${item.barcode ?? ""}`}
+                  onSelect={() => {
+                    onSelect(item);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "size-4",
+                      selectedItem?.id === item.id ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  <span className="min-w-0 flex-1 truncate">
+                    <span className="font-mono font-medium">{item.sku}</span>
+                    <span className="text-muted-foreground"> - {item.name}</span>
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {item.unit}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 

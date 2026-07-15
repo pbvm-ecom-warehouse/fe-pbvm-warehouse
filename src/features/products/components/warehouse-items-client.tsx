@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Pencil,
   LoaderCircle,
   PackageSearch,
   Plus,
@@ -44,7 +45,6 @@ import {
 } from "@/components/ui/table";
 import {
   EmptyState,
-  EntityDrawer,
   PageHeader,
   PermissionNotice,
   StatusBadge,
@@ -53,7 +53,6 @@ import {
 } from "@/features/admin-shell/components/operations-ui";
 import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
-import { cn } from "@/lib/utils";
 import { useSessionUser } from "@/hooks/use-session-user";
 
 import {
@@ -63,12 +62,27 @@ import {
   updateWarehouseItem,
   WAREHOUSE_ITEM_TYPES,
   type CreateWarehouseItemInput,
+  type UpdateWarehouseItemInput,
+  type WarehouseItemAltUnit,
+  type WarehouseItemAttribute,
   type WarehouseItem,
   type WarehouseItemType,
 } from "../services/warehouse-items.service";
 import { formatWarehouseItemListValue } from "../utils/warehouse-item-format";
 
 const PAGE_SIZE = 20;
+const WAREHOUSE_UNITS = ["cái", "thùng", "hộp", "kg", "g", "lít", "ml", "m"];
+
+type AltUnitForm = {
+  factor: string;
+  unit: string;
+};
+
+type AttributeForm = {
+  code: string;
+  name: string;
+  value: string;
+};
 
 type ItemForm = {
   sku: string;
@@ -77,24 +91,22 @@ type ItemForm = {
   type: WarehouseItemType;
   unit: string;
   altBarcodes: string;
-  altUnits: string;
-  attributes: string;
+  altUnits: AltUnitForm[];
+  attributes: AttributeForm[];
   isPerishable: boolean;
   nearExpiryDays: string;
   depth: string;
   width: string;
   height: string;
-  isActive: boolean;
 };
 
 const defaultItemForm: ItemForm = {
   altBarcodes: "",
-  altUnits: "",
-  attributes: "",
+  altUnits: [],
+  attributes: [],
   barcode: "",
   depth: "",
   height: "",
-  isActive: true,
   isPerishable: false,
   name: "",
   nearExpiryDays: "",
@@ -140,15 +152,90 @@ function optionalNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function optionalPositiveNumber(value: string) {
+  const parsed = optionalNumber(value);
+  return parsed && parsed > 0 ? parsed : undefined;
+}
+
+function stringValue(value: unknown) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  return String(value);
+}
+
+function altUnitToForm(unit: WarehouseItemAltUnit): AltUnitForm | null {
+  const unitName = stringValue(unit.unit).trim();
+  const factor = stringValue(unit.factor ?? unit.quantity).trim();
+
+  if (!unitName && !factor) {
+    return null;
+  }
+
+  return {
+    factor,
+    unit: unitName,
+  };
+}
+
+function attributeToForm(attribute: WarehouseItemAttribute): AttributeForm | null {
+  const name = stringValue(attribute.name).trim();
+  const value = stringValue(attribute.value).trim();
+  const code = stringValue(attribute.code).trim();
+
+  if (!name && !value && !code) {
+    return null;
+  }
+
+  return { code, name, value };
+}
+
+function normalizeAltUnits(units: WarehouseItemAltUnit[] | undefined) {
+  return (units ?? []).map(altUnitToForm).filter(Boolean) as AltUnitForm[];
+}
+
+function normalizeAttributes(attributes: WarehouseItemAttribute[] | undefined) {
+  return (attributes ?? [])
+    .map(attributeToForm)
+    .filter(Boolean) as AttributeForm[];
+}
+
+function altUnitsToPayload(units: AltUnitForm[]): WarehouseItemAltUnit[] {
+  const payload: WarehouseItemAltUnit[] = [];
+
+  units.forEach((unit) => {
+    const factor = optionalPositiveNumber(unit.factor);
+    const unitName = unit.unit.trim();
+
+    if (factor && unitName) {
+      payload.push({ factor, unit: unitName });
+    }
+  });
+
+  return payload;
+}
+
+function attributesToPayload(attributes: AttributeForm[]): WarehouseItemAttribute[] {
+  return attributes
+    .map((attribute) => ({
+      code: optionalText(attribute.code),
+      name: optionalText(attribute.name),
+      value: optionalText(attribute.value),
+    }))
+    .filter((attribute) =>
+      Boolean(attribute.code || attribute.name || attribute.value),
+    );
+}
+
 function itemToForm(item: WarehouseItem): ItemForm {
   return {
     altBarcodes: formatWarehouseItemListValue(item.altBarcodes),
-    altUnits: formatWarehouseItemListValue(item.altUnits),
-    attributes: formatWarehouseItemListValue(item.attributes),
+    altUnits: normalizeAltUnits(item.altUnits),
+    attributes: normalizeAttributes(item.attributes),
     barcode: item.barcode ?? "",
     depth: item.depth?.toString() ?? "",
     height: item.height?.toString() ?? "",
-    isActive: item.isActive,
     isPerishable: item.isPerishable,
     name: item.name,
     nearExpiryDays: item.nearExpiryDays?.toString() ?? "",
@@ -159,11 +246,11 @@ function itemToForm(item: WarehouseItem): ItemForm {
   };
 }
 
-function formToPayload(form: ItemForm): CreateWarehouseItemInput {
+function formToCreatePayload(form: ItemForm): CreateWarehouseItemInput {
   return {
     altBarcodes: splitList(form.altBarcodes),
-    altUnits: splitList(form.altUnits),
-    attributes: splitList(form.attributes),
+    altUnits: altUnitsToPayload(form.altUnits),
+    attributes: attributesToPayload(form.attributes),
     barcode: optionalText(form.barcode),
     depth: optionalNumber(form.depth),
     height: optionalNumber(form.height),
@@ -174,6 +261,25 @@ function formToPayload(form: ItemForm): CreateWarehouseItemInput {
     type: form.type,
     unit: form.unit.trim(),
     width: optionalNumber(form.width),
+  };
+}
+
+function formToUpdatePayload(form: ItemForm): UpdateWarehouseItemInput {
+  const payload = formToCreatePayload(form);
+
+  return {
+    altBarcodes: payload.altBarcodes,
+    altUnits: payload.altUnits,
+    attributes: payload.attributes,
+    barcode: payload.barcode,
+    depth: payload.depth,
+    height: payload.height,
+    isPerishable: payload.isPerishable,
+    name: payload.name,
+    nearExpiryDays: payload.nearExpiryDays,
+    type: payload.type,
+    unit: payload.unit,
+    width: payload.width,
   };
 }
 
@@ -206,7 +312,8 @@ export function WarehouseItemsClient() {
   );
   const [activeFilter, setActiveFilter] = useState<boolean | "ALL">("ALL");
   const [page, setPage] = useState(1);
-  const [selectedItemId, setSelectedItemId] = useState("");
+  const [editingItem, setEditingItem] = useState<WarehouseItem | null>(null);
+  const [deletingItem, setDeletingItem] = useState<WarehouseItem | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [createForm, setCreateForm] = useState(defaultItemForm);
 
@@ -228,16 +335,14 @@ export function WarehouseItemsClient() {
   });
 
   const items = useMemo(() => itemsQuery.data?.data ?? [], [itemsQuery.data]);
-  const selectedItem = items.find((item) => item.id === selectedItemId);
   const total = itemsQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const createMutation = useMutation({
-    mutationFn: () => createWarehouseItem(formToPayload(createForm)),
+    mutationFn: () => createWarehouseItem(formToCreatePayload(createForm)),
     onError: (error) => toast.error(formatError(error)),
-    onSuccess: (item) => {
+    onSuccess: () => {
       setCreateForm(defaultItemForm);
-      setSelectedItemId(item.id);
       setDialogOpen(false);
       void queryClient.invalidateQueries({ queryKey: ["stock-items"] });
       toast.success("Đã tạo mặt hàng");
@@ -246,12 +351,10 @@ export function WarehouseItemsClient() {
 
   const updateMutation = useMutation({
     mutationFn: ({ form, itemId }: { form: ItemForm; itemId: string }) =>
-      updateWarehouseItem(itemId, {
-        ...formToPayload(form),
-        isActive: form.isActive,
-      }),
+      updateWarehouseItem(itemId, formToUpdatePayload(form)),
     onError: (error) => toast.error(formatError(error)),
     onSuccess: () => {
+      setEditingItem(null);
       void queryClient.invalidateQueries({ queryKey: ["stock-items"] });
       toast.success("Đã cập nhật mặt hàng");
     },
@@ -261,7 +364,7 @@ export function WarehouseItemsClient() {
     mutationFn: (itemId: string) => deleteWarehouseItem(itemId),
     onError: (error) => toast.error(formatError(error)),
     onSuccess: () => {
-      setSelectedItemId("");
+      setDeletingItem(null);
       void queryClient.invalidateQueries({ queryKey: ["stock-items"] });
       toast.success("Đã ngưng dùng mặt hàng");
     },
@@ -386,7 +489,7 @@ export function WarehouseItemsClient() {
         </form>
 
           {itemsQuery.isLoading ? (
-            <TableSkeleton columns={5} />
+            <TableSkeleton columns={6} />
           ) : items.length === 0 ? (
             <EmptyState title="Chưa có mặt hàng" />
           ) : (
@@ -398,25 +501,12 @@ export function WarehouseItemsClient() {
                   <TableHead>Loại</TableHead>
                   <TableHead>Đơn vị</TableHead>
                   <TableHead>Trạng thái</TableHead>
+                  <TableHead className="text-right">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {items.map((item) => (
-                  <TableRow
-                    className={cn(
-                      "cursor-pointer focus-within:bg-primary/5",
-                      selectedItem?.id === item.id && "bg-primary/5",
-                    )}
-                    key={item.id}
-                    onClick={() => setSelectedItemId(item.id)}
-                    tabIndex={0}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        setSelectedItemId(item.id);
-                      }
-                    }}
-                  >
+                  <TableRow key={item.id} className="focus-within:bg-primary/5">
                     <TableCell className="font-mono font-semibold">
                       {item.sku}
                     </TableCell>
@@ -427,6 +517,30 @@ export function WarehouseItemsClient() {
                       <StatusBadge tone={item.isActive ? "success" : "neutral"}>
                         {item.isActive ? "Đang dùng" : "Ngưng dùng"}
                       </StatusBadge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          disabled={!canManage}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                          onClick={() => setEditingItem(item)}
+                        >
+                          <Pencil data-icon="inline-start" />
+                          Sửa
+                        </Button>
+                        <Button
+                          disabled={!canManage || !item.isActive}
+                          size="sm"
+                          type="button"
+                          variant="destructive"
+                          onClick={() => setDeletingItem(item)}
+                        >
+                          <Trash2 data-icon="inline-start" />
+                          Ngưng dùng
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -457,24 +571,37 @@ export function WarehouseItemsClient() {
         </div>
       </TablePanel>
 
-      {selectedItem ? (
-        <ItemDrawer
+      {editingItem ? (
+        <ItemEditDialog
           busy={updateMutation.isPending}
           canManage={canManage}
-          deleteBusy={deleteMutation.isPending}
-          item={selectedItem}
-          key={selectedItem.id}
-          onDelete={() => deleteMutation.mutate(selectedItem.id)}
+          item={editingItem}
+          key={editingItem.id}
           onOpenChange={(open) => {
             if (!open) {
-              setSelectedItemId("");
+              setEditingItem(null);
             }
           }}
           onSave={(form) =>
-            updateMutation.mutate({ form, itemId: selectedItem.id })
+            updateMutation.mutate({ form, itemId: editingItem.id })
           }
         />
       ) : null}
+
+      <DeleteItemDialog
+        busy={deleteMutation.isPending}
+        item={deletingItem}
+        onDelete={() => {
+          if (deletingItem) {
+            deleteMutation.mutate(deletingItem.id);
+          }
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeletingItem(null);
+          }
+        }}
+      />
     </div>
   );
 }
@@ -509,6 +636,7 @@ function ItemFormFields({
   form,
   onChange,
   onSubmit,
+  skuReadOnly = false,
   submitLabel,
 }: {
   busy: boolean;
@@ -516,6 +644,7 @@ function ItemFormFields({
   form: ItemForm;
   onChange: (form: ItemForm) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  skuReadOnly?: boolean;
   submitLabel: string;
 }) {
   return (
@@ -524,6 +653,7 @@ function ItemFormFields({
         <TextField
           id="item-sku"
           label="SKU"
+          readOnly={skuReadOnly}
           value={form.sku}
           onChange={(sku) => onChange({ ...form, sku })}
         />
@@ -553,8 +683,7 @@ function ItemFormFields({
             </SelectContent>
           </Select>
         </div>
-        <TextField
-          id="item-unit"
+        <UnitSelectField
           label="Đơn vị"
           value={form.unit}
           onChange={(unit) => onChange({ ...form, unit })}
@@ -573,17 +702,11 @@ function ItemFormFields({
           value={form.altBarcodes}
           onChange={(altBarcodes) => onChange({ ...form, altBarcodes })}
         />
-        <TextField
-          id="item-alt-units"
-          label="Đơn vị phụ"
-          required={false}
+        <AltUnitsField
           value={form.altUnits}
           onChange={(altUnits) => onChange({ ...form, altUnits })}
         />
-        <TextField
-          id="item-attributes"
-          label="Thuộc tính"
-          required={false}
+        <AttributesField
           value={form.attributes}
           onChange={(attributes) => onChange({ ...form, attributes })}
         />
@@ -638,19 +761,6 @@ function ItemFormFields({
           />
           Có hạn sử dụng
         </Label>
-        <Label
-          className="flex items-center gap-2 rounded-lg border border-border/70 px-3 py-2 text-sm font-medium"
-          htmlFor="item-active"
-        >
-          <Checkbox
-            checked={form.isActive}
-            id="item-active"
-            onCheckedChange={(checked) =>
-              onChange({ ...form, isActive: checked === true })
-            }
-          />
-          Đang dùng
-        </Label>
       </div>
 
       <Button disabled={!canManage || busy} type="submit">
@@ -669,6 +779,7 @@ function TextField({
   id,
   label,
   onChange,
+  readOnly = false,
   required = true,
   type = "text",
   value,
@@ -676,6 +787,7 @@ function TextField({
   id: string;
   label: string;
   onChange: (value: string) => void;
+  readOnly?: boolean;
   required?: boolean;
   type?: string;
   value: string;
@@ -685,6 +797,8 @@ function TextField({
       <Label htmlFor={id}>{label}</Label>
       <Input
         id={id}
+        className={readOnly ? "bg-muted/50 text-muted-foreground" : undefined}
+        readOnly={readOnly}
         required={required}
         type={type}
         value={value}
@@ -694,25 +808,196 @@ function TextField({
   );
 }
 
-function ItemDrawer({
+function UnitSelectField({
+  label,
+  onChange,
+  value,
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {WAREHOUSE_UNITS.map((unit) => (
+            <SelectItem key={unit} value={unit}>
+              {unit}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function AltUnitsField({
+  onChange,
+  value,
+}: {
+  onChange: (value: AltUnitForm[]) => void;
+  value: AltUnitForm[];
+}) {
+  function updateRow(index: number, next: AltUnitForm) {
+    onChange(value.map((row, rowIndex) => (rowIndex === index ? next : row)));
+  }
+
+  return (
+    <div className="space-y-2 md:col-span-2">
+      <div className="flex items-center justify-between gap-3">
+        <Label>Đơn vị phụ</Label>
+        <Button
+          size="sm"
+          type="button"
+          variant="outline"
+          onClick={() => onChange([...value, { factor: "", unit: "thùng" }])}
+        >
+          <Plus data-icon="inline-start" />
+          Thêm đơn vị
+        </Button>
+      </div>
+      {value.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
+          Chưa có đơn vị phụ.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {value.map((row, index) => (
+            <div
+              className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-2 md:grid-cols-[1fr_140px_auto]"
+              key={index}
+            >
+              <UnitSelectField
+                label="Đơn vị"
+                value={row.unit}
+                onChange={(unit) => updateRow(index, { ...row, unit })}
+              />
+              <TextField
+                id={`item-alt-unit-factor-${index}`}
+                label="Hệ số"
+                required={false}
+                type="number"
+                value={row.factor}
+                onChange={(factor) => updateRow(index, { ...row, factor })}
+              />
+              <Button
+                className="self-end"
+                size="icon-sm"
+                type="button"
+                variant="destructive"
+                onClick={() =>
+                  onChange(value.filter((_, rowIndex) => rowIndex !== index))
+                }
+              >
+                <Trash2 />
+                <span className="sr-only">Xóa đơn vị phụ</span>
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AttributesField({
+  onChange,
+  value,
+}: {
+  onChange: (value: AttributeForm[]) => void;
+  value: AttributeForm[];
+}) {
+  function updateRow(index: number, next: AttributeForm) {
+    onChange(value.map((row, rowIndex) => (rowIndex === index ? next : row)));
+  }
+
+  return (
+    <div className="space-y-2 md:col-span-2">
+      <div className="flex items-center justify-between gap-3">
+        <Label>Thuộc tính</Label>
+        <Button
+          size="sm"
+          type="button"
+          variant="outline"
+          onClick={() => onChange([...value, { code: "", name: "", value: "" }])}
+        >
+          <Plus data-icon="inline-start" />
+          Thêm thuộc tính
+        </Button>
+      </div>
+      {value.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
+          Chưa có thuộc tính.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {value.map((row, index) => (
+            <div
+              className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-2 md:grid-cols-[1fr_1fr_120px_auto]"
+              key={index}
+            >
+              <TextField
+                id={`item-attribute-name-${index}`}
+                label="Tên"
+                required={false}
+                value={row.name}
+                onChange={(name) => updateRow(index, { ...row, name })}
+              />
+              <TextField
+                id={`item-attribute-value-${index}`}
+                label="Giá trị"
+                required={false}
+                value={row.value}
+                onChange={(attributeValue) =>
+                  updateRow(index, { ...row, value: attributeValue })
+                }
+              />
+              <TextField
+                id={`item-attribute-code-${index}`}
+                label="Mã"
+                required={false}
+                value={row.code}
+                onChange={(code) => updateRow(index, { ...row, code })}
+              />
+              <Button
+                className="self-end"
+                size="icon-sm"
+                type="button"
+                variant="destructive"
+                onClick={() =>
+                  onChange(value.filter((_, rowIndex) => rowIndex !== index))
+                }
+              >
+                <Trash2 />
+                <span className="sr-only">Xóa thuộc tính</span>
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ItemEditDialog({
   busy,
   canManage,
-  deleteBusy,
   item,
-  onDelete,
   onOpenChange,
   onSave,
 }: {
   busy: boolean;
   canManage: boolean;
-  deleteBusy: boolean;
   item: WarehouseItem;
-  onDelete: () => void;
   onOpenChange: (open: boolean) => void;
   onSave: (form: ItemForm) => void;
 }) {
   const [form, setForm] = useState(() => itemToForm(item));
-  const [confirmOpen, setConfirmOpen] = useState(false);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -720,12 +1005,15 @@ function ItemDrawer({
   }
 
   return (
-    <EntityDrawer
+    <Dialog
       open
-      title={item.sku}
-      description={item.name}
       onOpenChange={onOpenChange}
     >
+      <DialogContent size="2xl" className="max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{item.sku}</DialogTitle>
+          <DialogDescription>{item.name}</DialogDescription>
+        </DialogHeader>
       <div className="space-y-5">
         <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-3 text-sm">
           <InfoRow label="Loại" value={typeLabel(item.type)} />
@@ -746,57 +1034,61 @@ function ItemDrawer({
           busy={busy}
           canManage={canManage}
           form={form}
+          skuReadOnly
           submitLabel="Lưu mặt hàng"
           onChange={setForm}
           onSubmit={handleSubmit}
         />
-
-        <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-          <DialogTrigger asChild>
-            <Button
-              disabled={!canManage || deleteBusy || !item.isActive}
-              type="button"
-              variant="destructive"
-            >
-              <Trash2 data-icon="inline-start" />
-              Ngưng dùng
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Ngưng dùng mặt hàng?</DialogTitle>
-              <DialogDescription>
-                Mặt hàng sẽ không còn dùng cho các thao tác mới. Dữ liệu cũ vẫn
-                được giữ để đối chiếu.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline">
-                  Hủy
-                </Button>
-              </DialogClose>
-              <Button
-                disabled={deleteBusy}
-                onClick={() => {
-                  onDelete();
-                  setConfirmOpen(false);
-                }}
-                type="button"
-                variant="destructive"
-              >
-                {deleteBusy ? (
-                  <LoaderCircle className="animate-spin" data-icon="inline-start" />
-                ) : (
-                  <Trash2 data-icon="inline-start" />
-                )}
-                Ngưng dùng
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
-    </EntityDrawer>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteItemDialog({
+  busy,
+  item,
+  onDelete,
+  onOpenChange,
+}: {
+  busy: boolean;
+  item: WarehouseItem | null;
+  onDelete: () => void;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <Dialog open={Boolean(item)} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Ngưng dùng mặt hàng?</DialogTitle>
+          <DialogDescription>
+            {item
+              ? `${item.sku} sẽ không còn dùng cho các thao tác mới. Dữ liệu cũ vẫn được giữ để đối chiếu.`
+              : "Mặt hàng sẽ không còn dùng cho các thao tác mới."}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button type="button" variant="outline">
+              Hủy
+            </Button>
+          </DialogClose>
+          <Button
+            disabled={busy || !item}
+            onClick={onDelete}
+            type="button"
+            variant="destructive"
+          >
+            {busy ? (
+              <LoaderCircle className="animate-spin" data-icon="inline-start" />
+            ) : (
+              <Trash2 data-icon="inline-start" />
+            )}
+            Ngưng dùng
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

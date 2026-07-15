@@ -12,13 +12,24 @@ function formatPrimitive(value: unknown): string {
   }
 
   if (typeof value === "object") {
-    return Object.entries(value)
-      .map(([key, entryValue]) => {
-        const formatted = formatPrimitive(entryValue);
-        return formatted ? `${key}: ${formatted}` : "";
-      })
-      .filter(Boolean)
-      .join(", ");
+    const record = value as Record<string, unknown>;
+    const unit = formatPrimitive(record.unit);
+    const factor = formatPrimitive(record.factor ?? record.quantity);
+
+    if (unit || factor) {
+      return [unit, factor ? `x${factor}` : ""].filter(Boolean).join(" ");
+    }
+
+    const name = formatPrimitive(record.name);
+    const entryValue = formatPrimitive(record.value);
+    const code = formatPrimitive(record.code);
+
+    if (name || entryValue || code) {
+      const label = name && entryValue ? `${name}: ${entryValue}` : name || entryValue;
+      return [label, code ? `(${code})` : ""].filter(Boolean).join(" ");
+    }
+
+    return Object.values(record).map(formatPrimitive).filter(Boolean).join(", ");
   }
 
   return String(value);
