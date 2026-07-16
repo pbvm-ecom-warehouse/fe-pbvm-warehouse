@@ -90,3 +90,10 @@
   - Header user chip is a real dropdown with `Nhân viên` for ADMIN, `Hệ thống`, and `Đăng xuất`.
   - Backend `CreateUserDto` does not accept `warehouseId`; do not add warehouse assignment UI until backend adds a contract.
   - Verification after this work: `pnpm typecheck`, `pnpm lint`, `pnpm test` (`97/97`), `pnpm build`, targeted Playwright (`3/3`), and full `pnpm test:e2e` (`13/13`) passed.
+- 2026-07-16: Staff list/profile menu follow-up compact:
+  - Header avatar dropdown no longer routes to `/staff` or `/settings`; it opens `Hồ sơ`, `Đổi mật khẩu`, and `Đăng xuất`.
+  - `Hồ sơ` is a dialog backed by the existing `/api/wms/auth/me` contract via `getCurrentUser()`. Do not add a separate `/profile` route for this flow.
+  - `Đổi mật khẩu` is a dashboard dialog using existing `/auth/change-password`.
+  - `/staff` remains ADMIN-only. The staff page now follows the list-first route pattern: header button `Tạo nhân viên`, table below, row actions for edit and lock/unlock, and edit dialog for roles/reset password.
+  - Backend still has no staff list endpoint. The staff table uses typed frontend mock rows and appends users created through existing admin auth endpoints until backend adds `GET /auth/users`.
+  - Verification after this work: `pnpm typecheck`, `pnpm lint`, `pnpm test` (`97/97`), and full `pnpm test:e2e` (`13/13`) passed.

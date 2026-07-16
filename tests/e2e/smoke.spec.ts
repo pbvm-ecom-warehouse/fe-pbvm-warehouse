@@ -444,7 +444,7 @@ test("admin edits and removes supplier items from row actions", async ({
   expect(patchBodies[1]).toMatchObject({ isActive: false });
 });
 
-test("admin sees system health and staff action forms", async ({ page }) => {
+test("admin sees system health and staff list management", async ({ page }) => {
   await seedWmsSession(page, ["ADMIN"], "Admin User");
   await page.route("**/api/wms/health", async (route) => {
     await route.fulfill({
@@ -478,24 +478,34 @@ test("admin sees system health and staff action forms", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: /^Nhân viên$/i }),
   ).toBeVisible();
-  await expect(page.getByText("Tạo tài khoản WMS")).toBeVisible();
+  await expect(page.getByText("Danh sách nhân viên")).toBeVisible();
+  await expect(page.getByText("Administrator")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Tạo nhân viên/i }),
+    page.getByRole("button", { name: /^Tạo nhân viên$/i }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Đặt lại mật khẩu/i }),
+    page.getByRole("button", { name: /Sửa/i }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /^Khóa$/i }).first(),
   ).toBeVisible();
 
   await expect(page.getByText("Phạm vi truy cập")).toBeVisible();
   await expect(page.getByText("Toàn hệ thống")).toBeVisible();
   await page.getByRole("button", { name: /Admin/i }).click();
+  await expect(page.getByRole("menuitem", { name: /Hồ sơ/i })).toBeVisible();
   await expect(
-    page.getByRole("menuitem", { name: /Nhân viên/i }),
+    page.getByRole("menuitem", { name: /Đổi mật khẩu/i }),
   ).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: /Hệ thống/i })).toBeVisible();
   await expect(
     page.getByRole("menuitem", { name: /Đăng xuất/i }),
   ).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: /Nhân viên/i })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole("menuitem", { name: /Hệ thống/i })).toHaveCount(
+    0,
+  );
 });
 
 test("manager sees settings API status without admin mutation controls", async ({

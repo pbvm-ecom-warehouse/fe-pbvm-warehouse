@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -15,6 +16,8 @@ vi.mock("@/hooks/use-session-user", () => ({
 }));
 
 vi.mock("@/features/auth/services/auth.service", () => ({
+  changePassword: vi.fn(),
+  getCurrentUser: vi.fn(),
   logout: vi.fn(),
 }));
 
@@ -33,6 +36,18 @@ function sessionUser(
     type: "user",
     warehouseId,
   };
+}
+
+function renderDashboardHeader() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <DashboardHeader />
+    </QueryClientProvider>,
+  );
 }
 
 describe("dashboard navigation chrome", () => {
@@ -65,21 +80,27 @@ describe("dashboard navigation chrome", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("opens admin user menu with staff, system, and logout actions", async () => {
+  it("opens user menu with profile, password, and logout actions", async () => {
     mockedUseSessionUser.mockReturnValue(sessionUser(["ADMIN"]));
 
-    render(<DashboardHeader />);
+    renderDashboardHeader();
 
     fireEvent.pointerDown(screen.getByRole("button", { name: /Admin/i }));
 
     expect(
-      await screen.findByRole("menuitem", { name: /Nhân viên/i }),
+      await screen.findByRole("menuitem", { name: /Hồ sơ/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("menuitem", { name: /Hệ thống/i }),
+      screen.getByRole("menuitem", { name: /Đổi mật khẩu/i }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("menuitem", { name: /Đăng xuất/i }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: /Nhân viên/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: /Hệ thống/i }),
+    ).not.toBeInTheDocument();
   });
 });

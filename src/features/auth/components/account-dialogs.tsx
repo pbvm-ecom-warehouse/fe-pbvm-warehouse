@@ -1,0 +1,314 @@
+"use client";
+
+import { FormEvent, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { KeyRound, LoaderCircle, RefreshCw, UserRound } from "lucide-react";
+import { toast } from "sonner";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { getApiErrorMessage } from "@/lib/api-contract";
+import { normalizeRoles, ROLE_LABELS } from "@/lib/rbac";
+import type { WmsUserResponse } from "@/types/api";
+
+import { changePassword, getCurrentUser } from "../services/auth.service";
+
+function formatError(error: unknown) {
+  return getApiErrorMessage(error) ?? "Không kết nối được WMS.";
+}
+
+function formatRoles(roles: WmsUserResponse["roles"]) {
+  const normalized = normalizeRoles(roles);
+
+  if (normalized.length > 0) {
+    return normalized.map((role) => ROLE_LABELS[role]).join(", ");
+  }
+
+  return roles.length > 0 ? roles.join(", ") : "Chưa phân quyền";
+}
+
+function formatDateTime(value: string | undefined) {
+  if (!value) {
+    return "Chưa có";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("vi-VN", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function ProfileRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | undefined;
+}) {
+  return (
+    <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/20 px-3 py-2 sm:grid-cols-[150px_1fr] sm:items-center">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="min-w-0 truncate text-sm font-semibold">
+        {value?.trim() || "Chưa khai báo"}
+      </span>
+    </div>
+  );
+}
+
+export function AccountProfileDialog({
+  onOpenChange,
+  open,
+}: {
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+}) {
+  const profileQuery = useQuery({
+    enabled: open,
+    queryFn: getCurrentUser,
+    queryKey: ["auth", "me"],
+  });
+  const profile = profileQuery.data;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent size="lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserRound className="size-4 text-primary" />
+            Hồ sơ nhân viên
+          </DialogTitle>
+          <DialogDescription>
+            Thông tin lấy từ endpoint /api/wms/auth/me.
+          </DialogDescription>
+        </DialogHeader>
+
+        {profileQuery.error ? (
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            {formatError(profileQuery.error)}
+          </div>
+        ) : null}
+
+        {profileQuery.isLoading ? (
+          <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
+            <LoaderCircle className="size-4 animate-spin" />
+            Đang tải hồ sơ...
+          </div>
+        ) : profile ? (
+          <div className="space-y-2">
+            <ProfileRow label="Mã nhân viên" value={profile.id} />
+            <ProfileRow label="Tên đăng nhập" value={profile.username} />
+            <ProfileRow label="Tên hiển thị" value={profile.name} />
+            <ProfileRow label="Email" value={profile.email} />
+            <ProfileRow label="Vai trò" value={formatRoles(profile.roles)} />
+            <ProfileRow label="Kho phụ trách" value={profile.warehouseId} />
+            <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/20 px-3 py-2 sm:grid-cols-[150px_1fr] sm:items-center">
+              <span className="text-xs font-medium text-muted-foreground">
+                Trạng thái
+              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  className={
+                    profile.status === "ACTIVE"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-rose-200 bg-rose-50 text-rose-700"
+                  }
+                  variant="outline"
+                >
+                  {profile.status === "ACTIVE" ? "Đang hoạt động" : "Đã khóa"}
+                </Badge>
+                {profile.mustChangePassword ? (
+                  <Badge
+                    className="border-amber-200 bg-amber-50 text-amber-700"
+                    variant="outline"
+                  >
+                    Cần đổi mật khẩu
+                  </Badge>
+                ) : null}
+              </div>
+            </div>
+            <ProfileRow
+              label="Ngày tạo"
+              value={formatDateTime(profile.createdAt)}
+            />
+            <ProfileRow
+              label="Cập nhật"
+              value={formatDateTime(profile.updatedAt)}
+            />
+          </div>
+        ) : null}
+
+        <DialogFooter>
+          <Button
+            disabled={profileQuery.isFetching}
+            onClick={() => void profileQuery.refetch()}
+            type="button"
+            variant="outline"
+          >
+            {profileQuery.isFetching ? (
+              <LoaderCircle className="animate-spin" data-icon="inline-start" />
+            ) : (
+              <RefreshCw data-icon="inline-start" />
+            )}
+            Làm mới
+          </Button>
+          <Button onClick={() => onOpenChange(false)} type="button">
+            Đóng
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function ChangePasswordDialog({
+  onOpenChange,
+  open,
+}: {
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+}) {
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const changePasswordMutation = useMutation({
+    mutationFn: () => changePassword({ newPassword, oldPassword }),
+    onError: (error) => setFormError(formatError(error)),
+    onSuccess: () => {
+      toast.success("Đã đổi mật khẩu WMS");
+      resetForm();
+      onOpenChange(false);
+    },
+  });
+
+  function resetForm() {
+    setOldPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setFormError(null);
+  }
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen) {
+      resetForm();
+    }
+    onOpenChange(nextOpen);
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError(null);
+
+    if (newPassword.length < 8) {
+      setFormError("Mật khẩu mới cần ít nhất 8 ký tự.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setFormError("Mật khẩu xác nhận không khớp.");
+      return;
+    }
+
+    changePasswordMutation.mutate();
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent size="md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <KeyRound className="size-4 text-primary" />
+            Đổi mật khẩu
+          </DialogTitle>
+          <DialogDescription>
+            Cập nhật mật khẩu đăng nhập nội bộ WMS.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          {formError ? (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {formError}
+            </div>
+          ) : null}
+
+          <div className="space-y-2">
+            <Label htmlFor="account-old-password">Mật khẩu hiện tại</Label>
+            <Input
+              autoComplete="current-password"
+              id="account-old-password"
+              required
+              type="password"
+              value={oldPassword}
+              onChange={(event) => setOldPassword(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="account-new-password">Mật khẩu mới</Label>
+            <Input
+              autoComplete="new-password"
+              id="account-new-password"
+              minLength={8}
+              required
+              type="password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="account-confirm-password">
+              Nhập lại mật khẩu mới
+            </Label>
+            <Input
+              autoComplete="new-password"
+              id="account-confirm-password"
+              minLength={8}
+              required
+              type="password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button
+              disabled={changePasswordMutation.isPending}
+              onClick={() => handleOpenChange(false)}
+              type="button"
+              variant="outline"
+            >
+              Hủy
+            </Button>
+            <Button disabled={changePasswordMutation.isPending} type="submit">
+              {changePasswordMutation.isPending ? (
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
+              ) : (
+                <KeyRound data-icon="inline-start" />
+              )}
+              Cập nhật mật khẩu
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
