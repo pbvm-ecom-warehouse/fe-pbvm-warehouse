@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
-import { Building2, ChevronDown, LogOut } from "lucide-react";
+import { Building2, LogOut } from "lucide-react";
 
 import { WmsLogo } from "@/components/brand/wms-logo";
 import { SheetClose } from "@/components/ui/sheet";
@@ -42,11 +42,7 @@ function NavLink({
   );
 
   if (closeOnNavigate) {
-    return (
-      <SheetClose asChild>
-        {link}
-      </SheetClose>
-    );
+    return <SheetClose asChild>{link}</SheetClose>;
   }
 
   return link;
@@ -61,13 +57,21 @@ export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
     dashboardRoutes.filter((route) => route.href !== "/login"),
     user?.roles,
   );
-  const settingsIndex = routes.findIndex((route) => route.href === "/settings");
-  const warehouseLabel = user?.warehouseId ? "Kho phụ trách" : "Phạm vi kho";
-  const warehouseName = user?.warehouseId ?? "Chưa gán kho";
 
   if (!user) {
     return null;
   }
+
+  const settingsIndex = routes.findIndex((route) => route.href === "/settings");
+  const isAdmin = user.roles.includes("ADMIN");
+  const warehouseLabel = isAdmin
+    ? "Phạm vi truy cập"
+    : user.warehouseId
+      ? "Kho phụ trách"
+      : "Phạm vi kho";
+  const warehouseName = isAdmin
+    ? "Toàn hệ thống"
+    : (user.warehouseId ?? "Chưa gán kho");
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-sidebar px-4 py-5 text-sidebar-foreground">
@@ -85,7 +89,9 @@ export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
 
           return (
             <React.Fragment key={route.href}>
-              {addDivider ? <div className="my-4 h-px bg-sidebar-border" /> : null}
+              {addDivider ? (
+                <div className="my-4 h-px bg-sidebar-border" />
+              ) : null}
               <NavLink
                 active={active}
                 closeOnNavigate={closeOnNavigate}
@@ -110,14 +116,13 @@ export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
             <Building2 className="size-3.5" />
             {warehouseLabel}
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="truncate text-sm font-semibold">{warehouseName}</div>
-              <div className="text-xs text-muted-foreground">
-                {user.name} · {ROLE_LABELS[primaryRole]}
-              </div>
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold">
+              {warehouseName}
             </div>
-            <ChevronDown className="size-4 text-muted-foreground" />
+            <div className="text-xs text-muted-foreground">
+              {user.name} · {ROLE_LABELS[primaryRole]}
+            </div>
           </div>
         </div>
         <button

@@ -36,6 +36,7 @@ describe("WMS RBAC helpers", () => {
 
   it("unions permissions for multi-role users", () => {
     expect(hasRouteAccess("/purchases", ["RECEIVER", "PICKER"])).toBe(false);
+    expect(hasRouteAccess("/goods-returns", ["RECEIVER", "PICKER"])).toBe(true);
     expect(hasRouteAccess("/goods-issues", ["RECEIVER", "PICKER"])).toBe(true);
     expect(hasRouteAccess("/transfers", ["RECEIVER", "PICKER"])).toBe(false);
     expect(hasRouteAccess("/print-jobs", ["RECEIVER", "PICKER"])).toBe(false);
@@ -51,9 +52,12 @@ describe("WMS RBAC helpers", () => {
 
     expect(receiverRoutes).not.toContain("/purchases");
     expect(receiverRoutes).not.toContain("/suppliers");
+    expect(receiverRoutes).toContain("/goods-returns");
     expect(receiverRoutes).toContain("/warehouse-navigation");
     expect(receiverRoutes).not.toContain("/transfers");
     expect(receiverRoutes).not.toContain("/settings");
+    expect(receiverRoutes).not.toContain("/staff");
+    expect(printerRoutes).not.toContain("/staff");
     expect(printerRoutes).not.toContain("/transfers");
     expect(printerRoutes).toContain("/print-jobs");
     expect(printerRoutes).not.toContain("/purchases");
@@ -62,10 +66,18 @@ describe("WMS RBAC helpers", () => {
   it("aligns exposed supplier and purchase APIs with backend roles", () => {
     expect(hasRouteAccess("/suppliers", ["RECEIVER"])).toBe(false);
     expect(hasRouteAccess("/purchases", ["RECEIVER"])).toBe(false);
+    expect(hasRouteAccess("/goods-returns", ["RECEIVER"])).toBe(true);
     expect(hasRouteAccess("/suppliers", ["MANAGER"])).toBe(true);
     expect(hasRouteAccess("/purchases", ["MANAGER"])).toBe(true);
+    expect(hasRouteAccess("/goods-returns", ["MANAGER"])).toBe(true);
+    expect(hasRouteAccess("/staff", ["ADMIN"])).toBe(true);
+    expect(hasRouteAccess("/staff", ["MANAGER"])).toBe(false);
     expect(hasModuleActionAccess("suppliers", ["RECEIVER"])).toBe(false);
     expect(hasModuleActionAccess("purchases", ["RECEIVER"])).toBe(false);
+    expect(hasModuleActionAccess("goods-returns", ["RECEIVER"])).toBe(true);
+    expect(hasModuleActionAccess("goods-returns", ["MANAGER"])).toBe(false);
+    expect(hasModuleActionAccess("staff", ["ADMIN"])).toBe(true);
+    expect(hasModuleActionAccess("staff", ["MANAGER"])).toBe(false);
     expect(hasModuleActionAccess("suppliers", ["MANAGER"])).toBe(true);
     expect(hasModuleActionAccess("purchases", ["MANAGER"])).toBe(true);
     expect(hasRouteAccess("/warehouses", ["RECEIVER"])).toBe(false);

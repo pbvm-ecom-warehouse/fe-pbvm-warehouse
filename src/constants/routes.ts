@@ -8,9 +8,11 @@ import {
   PackageCheck,
   PackageOpen,
   Repeat2,
-  Settings,
+  RotateCcw,
   ShoppingCart,
   SlidersHorizontal,
+  Server,
+  UsersRound,
   Warehouse,
 } from "lucide-react";
 
@@ -60,6 +62,12 @@ export const dashboardRoutes = [
     allowedRoles: getRouteAllowedRoles("/goods-issues"),
   },
   {
+    href: "/goods-returns",
+    label: "Hàng hoàn",
+    icon: RotateCcw,
+    allowedRoles: getRouteAllowedRoles("/goods-returns"),
+  },
+  {
     href: "/adjustments",
     label: "Kiểm kê",
     icon: SlidersHorizontal,
@@ -85,9 +93,15 @@ export const dashboardRoutes = [
   },
   {
     href: "/settings",
-    label: "Cài đặt",
-    icon: Settings,
+    label: "Hệ thống",
+    icon: Server,
     allowedRoles: getRouteAllowedRoles("/settings"),
+  },
+  {
+    href: "/staff",
+    label: "Nhân viên",
+    icon: UsersRound,
+    allowedRoles: getRouteAllowedRoles("/staff"),
   },
   {
     href: "/login",

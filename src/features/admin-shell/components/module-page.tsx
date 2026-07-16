@@ -4,12 +4,7 @@ import { Clock3, Eye, Plus } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -35,7 +30,8 @@ const moduleSummaries = {
     tableTitle: "Danh sách kho",
     columns: ["Tên kho", "Loại kho", "Trạng thái"],
     roleNotes: {
-      ADMIN: "Quản trị viên quản lý cấu trúc kho và phạm vi làm việc của nhân viên.",
+      ADMIN:
+        "Quản trị viên quản lý cấu trúc kho và phạm vi làm việc của nhân viên.",
       MANAGER: "Quản lý xem năng lực kho và điều phối vận hành.",
     },
   },
@@ -60,10 +56,12 @@ const moduleSummaries = {
     tableTitle: "Sổ tồn kho",
     columns: ["SKU", "Kho", "Khả dụng"],
     roleNotes: {
-      ADMIN: "Quản trị viên xem toàn bộ số lượng tồn, đã đặt trước và khả dụng.",
+      ADMIN:
+        "Quản trị viên xem toàn bộ số lượng tồn, đã đặt trước và khả dụng.",
       MANAGER: "Quản lý dùng sổ tồn kho để điều phối và duyệt điều chỉnh.",
       RECEIVER: "Nhân viên nhận hàng đối chiếu tồn sau khi nhập và cất hàng.",
-      PICKER: "Nhân viên soạn hàng xem vị trí và lượng khả dụng trước khi xuất.",
+      PICKER:
+        "Nhân viên soạn hàng xem vị trí và lượng khả dụng trước khi xuất.",
       PRINTER: "Nhân viên in kiểm tra tồn ly chưa in và ly đã in.",
       COUNTER: "Nhân viên kiểm kê dùng sổ tồn kho để đối chiếu số thực tế.",
     },
@@ -78,12 +76,14 @@ const moduleSummaries = {
     roleNotes: {
       ADMIN: "Quản trị viên theo dõi và xử lý toàn bộ quy trình nhập hàng.",
       MANAGER: "Quản lý tạo đơn mua, kiểm tra chênh lệch và duyệt phiếu nhập.",
-      RECEIVER: "Nhân viên nhận hàng tạo, xác nhận phiếu nhập và chuyển hàng đi cất.",
+      RECEIVER:
+        "Nhân viên nhận hàng tạo, xác nhận phiếu nhập và chuyển hàng đi cất.",
     },
   },
   "goods-issues": {
     title: "Xuất kho",
-    description: "Soạn hàng, quét SKU và vị trí kệ trước khi xác nhận xuất kho.",
+    description:
+      "Soạn hàng, quét SKU và vị trí kệ trước khi xác nhận xuất kho.",
     action: "Tạo phiếu xuất",
     highlights: ["Phiếu xuất", "Ưu tiên hạn dùng", "Quét mã xác nhận"],
     tableTitle: "Phiếu xuất kho",
@@ -91,7 +91,8 @@ const moduleSummaries = {
     roleNotes: {
       ADMIN: "Quản trị viên theo dõi toàn bộ quy trình xuất kho.",
       MANAGER: "Quản lý tạo phiếu xuất và theo dõi trạng thái xuất kho.",
-      PICKER: "Nhân viên soạn hàng quét SKU, quét vị trí kệ và xác nhận xuất kho.",
+      PICKER:
+        "Nhân viên soạn hàng quét SKU, quét vị trí kệ và xác nhận xuất kho.",
     },
   },
   adjustments: {
@@ -102,7 +103,8 @@ const moduleSummaries = {
     tableTitle: "Phiếu điều chỉnh",
     columns: ["Mã phiếu", "Kho", "Loại"],
     roleNotes: {
-      ADMIN: "Quản trị viên theo dõi toàn bộ quy trình kiểm kê và điều chỉnh tồn.",
+      ADMIN:
+        "Quản trị viên theo dõi toàn bộ quy trình kiểm kê và điều chỉnh tồn.",
       MANAGER: "Quản lý tạo phiếu kiểm và duyệt điều chỉnh.",
       COUNTER: "Nhân viên kiểm kê đếm thực tế và ghi nhận chênh lệch.",
     },
@@ -136,7 +138,11 @@ const moduleSummaries = {
     title: "In ly",
     description: "Xử lý các đơn in ly đã thanh toán.",
     action: "Làm mới",
-    highlights: ["Từ đơn đã thanh toán", "Tiêu thụ ly chưa in", "Xác nhận in xong"],
+    highlights: [
+      "Từ đơn đã thanh toán",
+      "Tiêu thụ ly chưa in",
+      "Xác nhận in xong",
+    ],
     tableTitle: "Đơn in ly",
     columns: ["Mã đơn in", "Mã đơn hàng", "Trạng thái"],
     roleNotes: {
@@ -147,22 +153,24 @@ const moduleSummaries = {
     },
   },
   settings: {
-    title: "Cài đặt",
-    description: "Người dùng, vai trò và cấu hình vận hành.",
-    action: "Cấu hình",
-    highlights: ["Đơn vị vận hành", "Vai trò", "Kết nối hệ thống"],
-    tableTitle: "Cấu hình",
+    title: "Hệ thống",
+    description: "Theo dõi trạng thái dịch vụ và kết nối WMS.",
+    action: "Làm mới",
+    highlights: ["MongoDB", "Redis", "Kết nối WMS"],
+    tableTitle: "Trạng thái hệ thống",
     columns: ["Nhóm", "Giá trị", "Trạng thái"],
     roleNotes: {
-      ADMIN: "Quản trị viên quản lý đơn vị vận hành, người dùng và phân quyền.",
-      MANAGER: "Quản lý xem cấu hình vận hành liên quan điều phối.",
+      ADMIN: "Quản trị viên theo dõi tình trạng hệ thống.",
+      MANAGER: "Quản lý xem trạng thái hệ thống liên quan điều phối.",
     },
   },
 } as const;
 
 type ModuleKey = keyof typeof moduleSummaries;
 
-const roleActionLabels: Partial<Record<ModuleKey, Partial<Record<WmsRole, string>>>> = {
+const roleActionLabels: Partial<
+  Record<ModuleKey, Partial<Record<WmsRole, string>>>
+> = {
   purchases: {
     RECEIVER: "Xác nhận phiếu nhập",
     MANAGER: "Tạo đơn mua",
@@ -192,7 +200,9 @@ function getRoleNote(moduleKey: ModuleKey, role: WmsRole) {
 }
 
 function getActionLabel(moduleKey: ModuleKey, role: WmsRole) {
-  return roleActionLabels[moduleKey]?.[role] ?? moduleSummaries[moduleKey].action;
+  return (
+    roleActionLabels[moduleKey]?.[role] ?? moduleSummaries[moduleKey].action
+  );
 }
 
 export function ModulePage({ moduleKey }: { moduleKey: ModuleKey }) {
@@ -213,12 +223,13 @@ export function ModulePage({ moduleKey }: { moduleKey: ModuleKey }) {
         <div>
           <h1 className="flex items-center gap-3 text-2xl font-bold tracking-normal">
             {summary.title}
-            <Badge variant="outline" className="text-xs">{ROLE_LABELS[primaryRole]}</Badge>
+            <Badge variant="outline" className="text-xs">
+              {ROLE_LABELS[primaryRole]}
+            </Badge>
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {summary.description}
           </p>
-
         </div>
         {canUsePrimaryAction ? (
           <Button disabled>
@@ -235,7 +246,6 @@ export function ModulePage({ moduleKey }: { moduleKey: ModuleKey }) {
       </div>
 
       <Card>
-
         <CardContent className="pt-4">
           <div className="grid gap-3 sm:grid-cols-3">
             {summary.highlights.map((item) => (

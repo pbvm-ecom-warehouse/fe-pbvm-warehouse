@@ -7,11 +7,15 @@ const statusLabels: Record<string, string> = {
   CONFIRMED: "Đã xác nhận",
   CONSUMED: "Đã lấy ly",
   DRAFT: "Nháp",
+  DAMAGED: "Hàng lỗi",
+  GOOD: "Hàng tốt",
   IN_PROGRESS: "Đang xử lý",
   INACTIVE: "Ngưng dùng",
+  INSPECTED: "Đã phân loại",
   PARTIALLY_RECEIVED: "Nhận một phần",
   PENDING: "Chờ xử lý",
   REJECTED: "Từ chối",
+  RESTOCKED: "Đã nhập lại",
   SENT: "Đã gửi",
 };
 
@@ -41,15 +45,33 @@ export function printJobLineStatusLabel(status: string) {
 }
 
 export function statusTone(status: string) {
-  if (["ACTIVE", "APPROVED", "COMPLETED", "CONFIRMED"].includes(status)) {
+  if (
+    [
+      "ACTIVE",
+      "APPROVED",
+      "COMPLETED",
+      "CONFIRMED",
+      "RESTOCKED",
+      "GOOD",
+    ].includes(status)
+  ) {
     return "success" as const;
   }
 
-  if (["CANCELLED", "BLACKLIST", "REJECTED"].includes(status)) {
+  if (["CANCELLED", "BLACKLIST", "REJECTED", "DAMAGED"].includes(status)) {
     return "danger" as const;
   }
 
-  if (["DRAFT", "PENDING", "IN_PROGRESS", "PARTIALLY_RECEIVED", "SENT"].includes(status)) {
+  if (
+    [
+      "DRAFT",
+      "PENDING",
+      "IN_PROGRESS",
+      "INSPECTED",
+      "PARTIALLY_RECEIVED",
+      "SENT",
+    ].includes(status)
+  ) {
     return "info" as const;
   }
 

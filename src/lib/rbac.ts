@@ -58,12 +58,14 @@ export const ROUTE_ACCESS_BY_HREF = {
   "/warehouse-navigation": ["ADMIN", "MANAGER", "RECEIVER", "PICKER"],
   "/purchases": ["ADMIN", "MANAGER"],
   "/goods-issues": ["ADMIN", "MANAGER", "PICKER"],
+  "/goods-returns": ["ADMIN", "MANAGER", "RECEIVER"],
   "/adjustments": ["ADMIN", "MANAGER", "COUNTER", "RECEIVER"],
   "/suppliers": ["ADMIN", "MANAGER"],
   "/print-jobs": ["ADMIN", "MANAGER", "PRINTER"],
   "/cup-conversions": ["ADMIN", "MANAGER", "PRINTER"],
   "/reports": ["ADMIN", "MANAGER"],
   "/settings": ["ADMIN", "MANAGER"],
+  "/staff": ["ADMIN"],
   "/login": ALL_STAFF_ROLES,
 } as const satisfies Record<string, readonly WmsRole[]>;
 
@@ -73,11 +75,13 @@ export const MODULE_PRIMARY_ACTION_ROLES = {
   inventory: ALL_STAFF_ROLES,
   purchases: ["ADMIN", "MANAGER"],
   "goods-issues": ["ADMIN", "MANAGER", "PICKER"],
+  "goods-returns": ["ADMIN", "RECEIVER"],
   adjustments: ["ADMIN", "MANAGER", "COUNTER", "RECEIVER"],
   suppliers: ["ADMIN", "MANAGER"],
   reports: ["ADMIN", "MANAGER"],
   "print-jobs": ["ADMIN", "MANAGER", "PRINTER"],
   settings: ["ADMIN", "MANAGER"],
+  staff: ["ADMIN"],
 } as const satisfies Record<string, readonly WmsRole[]>;
 
 export function isWmsRole(value: unknown): value is WmsRole {

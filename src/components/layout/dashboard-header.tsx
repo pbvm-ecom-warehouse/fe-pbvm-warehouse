@@ -1,9 +1,28 @@
 "use client";
 
-import { Bell, ChevronDown, Menu, ScanLine, Search } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import {
+  Bell,
+  ChevronDown,
+  LogOut,
+  Menu,
+  ScanLine,
+  Search,
+  Server,
+  UsersRound,
+} from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Sheet,
@@ -15,6 +34,7 @@ import {
 } from "@/components/ui/sheet";
 import { SidebarContent } from "@/components/layout/app-sidebar";
 import { useSessionUser } from "@/hooks/use-session-user";
+import { logout } from "@/features/auth/services/auth.service";
 import { getDefaultRoleFocus, ROLE_LABELS } from "@/lib/rbac";
 
 function initials(name: string) {
@@ -37,7 +57,9 @@ const roleSearchPlaceholder = {
 
 export function DashboardHeader() {
   const user = useSessionUser();
+  const router = useRouter();
   const primaryRole = getDefaultRoleFocus(user?.roles);
+  const isAdmin = user?.roles.includes("ADMIN") ?? false;
 
   if (!user) {
     return null;
@@ -97,15 +119,60 @@ export function DashboardHeader() {
             <Bell />
             <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary" />
           </Button>
-          <div className="hidden items-center gap-2 rounded-lg border bg-card py-1 pl-1 pr-2 text-sm font-semibold shadow-[0_10px_26px_-24px_rgba(15,23,42,0.45)] sm:flex">
-            <Avatar className="size-8">
-              <AvatarFallback className="bg-secondary text-secondary-foreground">
-                {initials(user.name) || "WM"}
-              </AvatarFallback>
-            </Avatar>
-            <span className="max-w-28 truncate">{ROLE_LABELS[primaryRole]}</span>
-            <ChevronDown className="size-4 text-muted-foreground" />
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="hidden items-center gap-2 rounded-lg border bg-card py-1 pl-1 pr-2 text-sm font-semibold shadow-[0_10px_26px_-24px_rgba(15,23,42,0.45)] transition-colors hover:bg-accent sm:flex"
+                type="button"
+              >
+                <Avatar className="size-8">
+                  <AvatarFallback className="bg-secondary text-secondary-foreground">
+                    {initials(user.name) || "WM"}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="max-w-28 truncate">
+                  {ROLE_LABELS[primaryRole]}
+                </span>
+                <ChevronDown className="size-4 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>
+                <span className="block truncate font-semibold text-foreground">
+                  {user.name}
+                </span>
+                <span className="block truncate text-xs font-normal">
+                  {ROLE_LABELS[primaryRole]}
+                </span>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {isAdmin ? (
+                <DropdownMenuItem asChild>
+                  <Link href="/staff">
+                    <UsersRound />
+                    Nhân viên
+                  </Link>
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem asChild>
+                <Link href="/settings">
+                  <Server />
+                  Hệ thống
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={async () => {
+                  await logout();
+                  router.replace("/login");
+                }}
+              >
+                <LogOut />
+                Đăng xuất
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>

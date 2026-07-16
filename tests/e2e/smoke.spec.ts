@@ -8,7 +8,11 @@ type SeedRole =
   | "PRINTER"
   | "COUNTER";
 
-async function seedWmsSession(page: Page, roles: SeedRole[], name = "Role User") {
+async function seedWmsSession(
+  page: Page,
+  roles: SeedRole[],
+  name = "Role User",
+) {
   await page.addInitScript(
     ({ name, roles }) => {
       window.localStorage.setItem(
@@ -32,7 +36,9 @@ async function seedWmsSession(page: Page, roles: SeedRole[], name = "Role User")
   );
 }
 
-test("manager sees management dashboard and inventory route", async ({ page }) => {
+test("manager sees management dashboard and inventory route", async ({
+  page,
+}) => {
   await seedWmsSession(page, ["MANAGER"], "Manager User");
 
   await page.goto("/dashboard");
@@ -43,9 +49,7 @@ test("manager sees management dashboard and inventory route", async ({ page }) =
   await expect(page.getByRole("link", { name: /Chuyển kho/i })).toHaveCount(0);
 
   await page.goto("/inventory");
-  await expect(
-    page.getByRole("heading", { name: /^Tồn kho$/i }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^Tồn kho$/i })).toBeVisible();
   await expect(
     page.getByText(/Tính năng tồn kho tổng hợp chưa sẵn sàng/i),
   ).toBeVisible();
@@ -92,7 +96,10 @@ test("admin edits a product from row actions", async ({ page }) => {
       deleteCalled = true;
       await route.fulfill({
         contentType: "application/json",
-        body: JSON.stringify({ data: {}, meta: { requestId: "product-delete" } }),
+        body: JSON.stringify({
+          data: {},
+          meta: { requestId: "product-delete" },
+        }),
       });
       return;
     }
@@ -107,12 +114,16 @@ test("admin edits a product from row actions", async ({ page }) => {
   });
 
   await page.goto("/products");
-  await expect(page.getByRole("heading", { name: /^Sản phẩm$/i })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /^Sản phẩm$/i }),
+  ).toBeVisible();
   await page
     .getByRole("row", { name: /CUP-500ML-RED/i })
     .getByRole("button", { name: /^Sửa$/i })
     .click();
-  await expect(page.getByRole("dialog", { name: /CUP-500ML-RED/i })).toBeVisible();
+  await expect(
+    page.getByRole("dialog", { name: /CUP-500ML-RED/i }),
+  ).toBeVisible();
   await expect(page.getByText(/unit:/i)).toHaveCount(0);
   await expect(page.getByText(/factor:/i)).toHaveCount(0);
   await expect(page.getByLabel("Hệ số")).toHaveValue("24");
@@ -136,7 +147,9 @@ test("admin edits a product from row actions", async ({ page }) => {
   expect(deleteCalled).toBe(true);
 });
 
-test("receiver gets inbound navigation and forbidden settings", async ({ page }) => {
+test("receiver gets inbound navigation and forbidden settings", async ({
+  page,
+}) => {
   await seedWmsSession(page, ["RECEIVER"], "Receiver User");
 
   await page.goto("/dashboard");
@@ -145,15 +158,22 @@ test("receiver gets inbound navigation and forbidden settings", async ({ page })
   ).toBeVisible();
   await expect(page.getByRole("link", { name: /Cất hàng/i })).toBeVisible();
   await expect(page.getByRole("link", { name: /Nhập hàng/i })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: /Cài đặt/i })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Hệ thống/i })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Nhân viên/i })).toHaveCount(0);
 
   await page.goto("/settings");
   await expect(
     page.getByRole("heading", { name: /Không có quyền truy cập/i }),
   ).toBeVisible();
+  await page.goto("/staff");
+  await expect(
+    page.getByRole("heading", { name: /Không có quyền truy cập/i }),
+  ).toBeVisible();
 });
 
-test("manager opens purchases when purchase order items are missing", async ({ page }) => {
+test("manager opens purchases when purchase order items are missing", async ({
+  page,
+}) => {
   await seedWmsSession(page, ["MANAGER"], "Manager User");
   let purchaseOrderPostBody: unknown;
   const purchaseOrderWithoutItems = {
@@ -281,17 +301,25 @@ test("manager opens purchases when purchase order items are missing", async ({ p
 
   await page.goto("/purchases");
 
-  await expect(page.getByRole("heading", { name: /^Nhập hàng$/i })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "PO-20260713-0002" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /^Nhập hàng$/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("cell", { name: "PO-20260713-0002" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: /^Tạo đơn mua$/i }).click();
   const dialog = page.getByRole("dialog", { name: /^Tạo đơn mua$/i });
   await dialog.getByRole("combobox").nth(0).click();
-  await page.getByText(/NCC-001/i).last().click();
-  await dialog.getByRole("combobox").nth(1).click();
-  await page.getByText(/^Kho A$/i).last().click();
-  await dialog
-    .getByRole("combobox", { name: /Mặt hàng dòng 1/i })
+  await page
+    .getByText(/NCC-001/i)
+    .last()
     .click();
+  await dialog.getByRole("combobox").nth(1).click();
+  await page
+    .getByText(/^Kho A$/i)
+    .last()
+    .click();
+  await dialog.getByRole("combobox", { name: /Mặt hàng dòng 1/i }).click();
   await page.getByText(/CUP-500ML-RED/i).click();
   await dialog.getByLabel(/Số lượng dòng 1/i).fill("12");
   await dialog.getByLabel(/Đơn giá dòng 1/i).fill("1500");
@@ -310,7 +338,9 @@ test("manager opens purchases when purchase order items are missing", async ({ p
   });
 });
 
-test("admin edits and removes supplier items from row actions", async ({ page }) => {
+test("admin edits and removes supplier items from row actions", async ({
+  page,
+}) => {
   await seedWmsSession(page, ["ADMIN"], "Admin User");
   const supplier = {
     address: "123 Lê Văn Lương, Q7",
@@ -384,8 +414,12 @@ test("admin edits and removes supplier items from row actions", async ({ page })
     name: /Công ty TNHH ABCD/i,
   });
   await expect(supplierDialog).toBeVisible();
-  await expect(supplierDialog.getByText("Mặt hàng NCC", { exact: true })).toBeVisible();
-  await expect(supplierDialog.getByRole("row", { name: /item-1/i })).toBeVisible();
+  await expect(
+    supplierDialog.getByText("Mặt hàng NCC", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    supplierDialog.getByRole("row", { name: /item-1/i }),
+  ).toBeVisible();
 
   await supplierDialog
     .getByRole("row", { name: /item-1/i })
@@ -410,7 +444,7 @@ test("admin edits and removes supplier items from row actions", async ({ page })
   expect(patchBodies[1]).toMatchObject({ isActive: false });
 });
 
-test("admin sees settings health and WMS user action forms", async ({ page }) => {
+test("admin sees system health and staff action forms", async ({ page }) => {
   await seedWmsSession(page, ["ADMIN"], "Admin User");
   await page.route("**/api/wms/health", async (route) => {
     await route.fulfill({
@@ -430,14 +464,37 @@ test("admin sees settings health and WMS user action forms", async ({ page }) =>
 
   await page.goto("/settings");
 
-  await expect(page.getByText("Trạng thái hệ thống", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /^Hệ thống$/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Trạng thái hệ thống", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("Kết nối WMS", { exact: true })).toBeVisible();
-  await expect(page.getByText("Quản lý tài khoản WMS")).toBeVisible();
+  await expect(page.getByText("Quản lý tài khoản WMS")).toHaveCount(0);
+
+  await page.goto("/staff");
+
+  await expect(
+    page.getByRole("heading", { name: /^Nhân viên$/i }),
+  ).toBeVisible();
+  await expect(page.getByText("Tạo tài khoản WMS")).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Tạo nhân viên/i }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Đặt lại mật khẩu/i }),
+  ).toBeVisible();
+
+  await expect(page.getByText("Phạm vi truy cập")).toBeVisible();
+  await expect(page.getByText("Toàn hệ thống")).toBeVisible();
+  await page.getByRole("button", { name: /Admin/i }).click();
+  await expect(
+    page.getByRole("menuitem", { name: /Nhân viên/i }),
+  ).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: /Hệ thống/i })).toBeVisible();
+  await expect(
+    page.getByRole("menuitem", { name: /Đăng xuất/i }),
   ).toBeVisible();
 });
 
@@ -463,9 +520,15 @@ test("manager sees settings API status without admin mutation controls", async (
 
   await page.goto("/settings");
 
-  await expect(page.getByText("Trạng thái hệ thống", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /^Hệ thống$/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Trạng thái hệ thống", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("Kết nối WMS", { exact: true })).toBeVisible();
   await expect(page.getByText("Quản lý tài khoản WMS")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Nhân viên/i })).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: /Tạo nhân viên/i }),
   ).toHaveCount(0);
@@ -539,7 +602,9 @@ test("printer can use print jobs but not purchases", async ({ page }) => {
   await page.getByRole("row", { name: /CUP-BLANK-500/i }).click();
   await page.getByLabel("Mã vị trí").fill("A1-S02");
   await page.getByRole("button", { name: /^Tiêu thụ ly chưa in$/i }).click();
-  await expect(page.getByText(/Đã ghi nhận tiêu thụ ly chưa in/i)).toBeVisible();
+  await expect(
+    page.getByText(/Đã ghi nhận tiêu thụ ly chưa in/i),
+  ).toBeVisible();
   expect(postBodies[0]).toMatchObject({
     itemBarcode: "CUP-BLANK-500",
     quantity: 10,
@@ -560,7 +625,9 @@ test("printer can use print jobs but not purchases", async ({ page }) => {
   ).toBeVisible();
 });
 
-test("manager can view print jobs without processing controls", async ({ page }) => {
+test("manager can view print jobs without processing controls", async ({
+  page,
+}) => {
   await seedWmsSession(page, ["MANAGER"], "Manager User");
   const printJob = {
     createdAt: "2026-07-04T00:00:00.000Z",
@@ -630,7 +697,9 @@ test("admin manages warehouse list and layout canvas", async ({ page }) => {
     await route.fulfill({
       status: 404,
       contentType: "application/json",
-      body: JSON.stringify({ error: { code: "NOT_FOUND", message: "missing" } }),
+      body: JSON.stringify({
+        error: { code: "NOT_FOUND", message: "missing" },
+      }),
     });
   });
   await page.route("**/api/wms/warehouse", async (route) => {
@@ -664,7 +733,9 @@ test("admin manages warehouse list and layout canvas", async ({ page }) => {
   expect(layoutCalled).toBe(true);
 
   await page.getByRole("button", { name: /Khu vực/i }).click();
-  await expect(page.getByRole("button", { name: /Lưu bản nháp/i })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: /Lưu bản nháp/i }),
+  ).toBeDisabled();
 });
 
 test("receiver confirms put-away task through warehouse navigation", async ({
@@ -737,14 +808,14 @@ test("receiver confirms put-away task through warehouse navigation", async ({
     await route.fulfill({
       status: 404,
       contentType: "application/json",
-      body: JSON.stringify({ error: { code: "NOT_FOUND", message: "missing" } }),
+      body: JSON.stringify({
+        error: { code: "NOT_FOUND", message: "missing" },
+      }),
     });
   });
 
   await page.goto("/warehouse-navigation");
-  await expect(
-    page.getByRole("heading", { name: "Cất hàng" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Cất hàng" })).toBeVisible();
   await page.getByRole("row", { name: /CUP-BLANK-500/i }).click();
   await expect(page.getByText("A1-S02").first()).toBeVisible();
   await page.getByRole("button", { name: /A1-S02/i }).click();
@@ -830,7 +901,9 @@ test("picker sees picking location and confirms goods issue line", async ({
     await route.fulfill({
       status: 404,
       contentType: "application/json",
-      body: JSON.stringify({ error: { code: "NOT_FOUND", message: "missing" } }),
+      body: JSON.stringify({
+        error: { code: "NOT_FOUND", message: "missing" },
+      }),
     });
   });
 
@@ -844,4 +917,3 @@ test("picker sees picking location and confirms goods issue line", async ({
   await page.getByRole("button", { name: /^Xác nhận$/i }).click();
   await expect(page.getByText(/Đã xác nhận dòng xuất kho/i)).toBeVisible();
 });
-

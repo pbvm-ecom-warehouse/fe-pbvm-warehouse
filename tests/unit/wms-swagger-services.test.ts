@@ -27,6 +27,14 @@ import {
   normalizeGoodsIssueListResponse,
 } from "@/features/goods-issues/services/goods-issue.service";
 import {
+  cancelGoodsReturn,
+  confirmGoodsReturn,
+  createGoodsReturn,
+  inspectGoodsReturn,
+  listGoodsReturns,
+  normalizeGoodsReturnListResponse,
+} from "@/features/goods-returns/services/goods-return.service";
+import {
   completePrintJobItem,
   consumePrintJobItem,
   listPrintJobs,
@@ -124,6 +132,27 @@ const goodsIssue = {
   warehouseId: "wh-1",
 };
 
+const goodsReturn = {
+  createdAt: "2026-07-07T00:00:00.000Z",
+  createdBy: "receiver-1",
+  id: "return-1",
+  items: [
+    {
+      condition: null,
+      itemId: "item-1",
+      lotId: null,
+      quantity: 2,
+      scrapNoteId: null,
+      shelfId: null,
+      sku: "CUP-BLANK-500",
+    },
+  ],
+  orderId: "order-1",
+  status: "DRAFT" as const,
+  updatedAt: "2026-07-07T00:00:00.000Z",
+  warehouseId: null,
+};
+
 const printJob = {
   createdAt: "2026-07-04T00:00:00.000Z",
   id: "pj-1",
@@ -213,6 +242,10 @@ describe("Swagger-backed WMS services", () => {
     });
     expect(normalizeGoodsIssueListResponse([goodsIssue])).toMatchObject({
       data: [goodsIssue],
+      total: 1,
+    });
+    expect(normalizeGoodsReturnListResponse([goodsReturn])).toMatchObject({
+      data: [goodsReturn],
       total: 1,
     });
     expect(normalizePrintJobListResponse([printJob])).toMatchObject({
@@ -382,6 +415,63 @@ describe("Swagger-backed WMS services", () => {
       quantity: 10,
       shelfCode: "A1-S02",
     });
+  });
+
+  it("calls goods return endpoints from Swagger", async () => {
+    mockedGet.mockResolvedValueOnce({ data: [goodsReturn] });
+    mockedPost.mockResolvedValue({ data: goodsReturn });
+
+    await listGoodsReturns({
+      limit: 20,
+      orderId: "order-1",
+      page: 1,
+      status: "DRAFT",
+      warehouseId: "wh-1",
+    });
+    await createGoodsReturn({
+      items: [{ itemId: "item-1", quantity: 2 }],
+      note: "Khách trả tại kho",
+      orderId: "order-1",
+    });
+    await inspectGoodsReturn("return-1", {
+      items: [
+        {
+          condition: "GOOD",
+          itemId: "item-1",
+          shelfId: "shelf-1",
+        },
+      ],
+      warehouseId: "wh-1",
+    });
+    await confirmGoodsReturn("return-1");
+    await cancelGoodsReturn("return-1");
+
+    expect(mockedGet).toHaveBeenCalledWith("/goods-returns", {
+      params: {
+        limit: 20,
+        orderId: "order-1",
+        page: 1,
+        status: "DRAFT",
+        warehouseId: "wh-1",
+      },
+    });
+    expect(mockedPost).toHaveBeenCalledWith("/goods-returns", {
+      items: [{ itemId: "item-1", quantity: 2 }],
+      note: "Khách trả tại kho",
+      orderId: "order-1",
+    });
+    expect(mockedPost).toHaveBeenCalledWith("/goods-returns/return-1/inspect", {
+      items: [
+        {
+          condition: "GOOD",
+          itemId: "item-1",
+          shelfId: "shelf-1",
+        },
+      ],
+      warehouseId: "wh-1",
+    });
+    expect(mockedPost).toHaveBeenCalledWith("/goods-returns/return-1/confirm");
+    expect(mockedPost).toHaveBeenCalledWith("/goods-returns/return-1/cancel");
   });
 
   it("calls print job endpoints from Swagger", async () => {

@@ -80,3 +80,13 @@
   - Warehouse UX decision: only warehouses are the primary list; zones/racks/shelves are edited through the canvas/tooling for the selected warehouse where possible. Without layout APIs, canvas persistence must be clearly limited.
   - Supplier UX decision: supplier rows expose explicit `Sửa`/`Xóa`; supplier-item rows expose explicit `Sửa`/`Xóa`, with supplier-item delete implemented as soft-delete via `PATCH /supplier/items/{id}` and `isActive=false`.
   - Verification for latest API connection work: `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm test:e2e` passed.
+- 2026-07-16: Goods return and admin/staff settings compact:
+  - Backend Swagger now exposes `goods-returns`; WMS FE connects `/goods-returns` with list/create/detail/inspect/confirm/cancel.
+  - `/goods-returns` is the user-facing route `Hàng hoàn`; RECEIVER and ADMIN can create/inspect/confirm/cancel, MANAGER can view according to backend roles.
+  - Goods return statuses are `DRAFT`, `INSPECTED`, `RESTOCKED`, `CANCELLED`; item conditions are `GOOD` and `DAMAGED`.
+  - Staff management moved out of `/settings` into `/staff`. `/staff` is ADMIN-only and reuses existing auth admin endpoints: create user, bootstrap admin, update roles, lock/unlock, reset password.
+  - `/settings` is now labeled `Hệ thống` and only shows real WMS health/root checks. Do not put staff mutation controls back into settings.
+  - Sidebar scope card is informational only. ADMIN shows `Phạm vi truy cập / Toàn hệ thống`; staff with `warehouseId` shows `Kho phụ trách`; no chevron/dropdown unless a real warehouse selector exists.
+  - Header user chip is a real dropdown with `Nhân viên` for ADMIN, `Hệ thống`, and `Đăng xuất`.
+  - Backend `CreateUserDto` does not accept `warehouseId`; do not add warehouse assignment UI until backend adds a contract.
+  - Verification after this work: `pnpm typecheck`, `pnpm lint`, `pnpm test` (`97/97`), `pnpm build`, targeted Playwright (`3/3`), and full `pnpm test:e2e` (`13/13`) passed.
