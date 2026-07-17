@@ -10,6 +10,14 @@ export type AuthTokenResponse = {
 
 export type WmsUserStatus = "ACTIVE" | "LOCKED";
 
+export type ListWmsUsersQuery = {
+  limit?: number;
+  page?: number;
+  role?: string;
+  search?: string;
+  status?: WmsUserStatus;
+};
+
 export type WmsUserResponse = {
   id: string;
   username: string;

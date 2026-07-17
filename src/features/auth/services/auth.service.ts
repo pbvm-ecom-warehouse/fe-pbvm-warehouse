@@ -1,5 +1,6 @@
 import { apiClient } from "@/lib/api-client";
 import { type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
+import { normalizeApiList, type ApiListLike } from "@/lib/api-list";
 import { env } from "@/lib/env";
 import {
   sessionUserFromAccessToken,
@@ -18,6 +19,7 @@ import type {
   ChangePasswordResponse,
   CreateUserInput,
   CreateUserResponse,
+  ListWmsUsersQuery,
   ResetUserPasswordInput,
   ResetUserPasswordResponse,
   UpdateUserRolesInput,
@@ -81,6 +83,15 @@ export async function bootstrapAdmin(input: CreateUserInput) {
   >("/auth/bootstrap-admin", input);
 
   return unwrapApiData(response.data);
+}
+
+export async function listWmsUsers(query: ListWmsUsersQuery = {}) {
+  const response = await apiClient.get<ApiListLike<WmsUserResponse>>(
+    "/auth/users",
+    { params: query },
+  );
+
+  return normalizeApiList(response.data);
 }
 
 export async function createWmsUser(input: CreateUserInput) {

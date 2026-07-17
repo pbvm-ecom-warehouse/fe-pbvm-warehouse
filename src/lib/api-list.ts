@@ -5,7 +5,8 @@ import {
 } from "@/lib/api-contract";
 
 export type ApiListPayload<T> = {
-  data: T[];
+  data?: T[];
+  items?: T[];
   total?: number;
   page?: number;
   limit?: number;
@@ -52,7 +53,7 @@ export function normalizeApiList<T>(
     };
   }
 
-  const rows = data.data;
+  const rows = data.data ?? data.items ?? [];
 
   return {
     data: rows,

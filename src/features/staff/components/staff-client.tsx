@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   KeyRound,
   LoaderCircle,
@@ -64,6 +64,7 @@ import type {
 import {
   bootstrapAdmin,
   createWmsUser,
+  listWmsUsers,
   lockWmsUser,
   resetWmsUserPassword,
   unlockWmsUser,
@@ -77,12 +78,14 @@ import {
   TablePanel,
 } from "@/features/admin-shell/components/operations-ui";
 
-type StaffListRow = WmsUserResponse & {
-  source: "api" | "mock";
-};
+type StaffListRow = WmsUserResponse;
 
 type StaffStatusFilter = "ALL" | WmsUserStatus;
 
+const staffKeys = {
+  all: ["staff"] as const,
+  list: () => [...staffKeys.all, "list"] as const,
+};
 const defaultCreateForm = {
   email: "",
   name: "",
@@ -90,74 +93,6 @@ const defaultCreateForm = {
   roles: ["RECEIVER"] as WmsRole[],
   username: "",
 };
-
-const MOCK_STAFF_ROWS: StaffListRow[] = [
-  {
-    createdAt: "2026-07-16T01:31:58.557Z",
-    email: "admin@pbvm.local",
-    id: "mock-admin-001",
-    mustChangePassword: false,
-    name: "Administrator",
-    roles: ["ADMIN"],
-    source: "mock",
-    status: "ACTIVE",
-    updatedAt: "2026-07-16T01:31:58.557Z",
-    username: "admin",
-    warehouseId: "central",
-  },
-  {
-    createdAt: "2026-07-15T09:20:00.000Z",
-    email: "receiver01@pbvm.local",
-    id: "mock-receiver-001",
-    mustChangePassword: true,
-    name: "Nguyen Hoang Minh",
-    roles: ["RECEIVER"],
-    source: "mock",
-    status: "ACTIVE",
-    updatedAt: "2026-07-16T02:10:00.000Z",
-    username: "receiver01",
-    warehouseId: "central",
-  },
-  {
-    createdAt: "2026-07-14T04:45:00.000Z",
-    email: "picker02@pbvm.local",
-    id: "mock-picker-002",
-    mustChangePassword: false,
-    name: "Tran Bao Chau",
-    roles: ["PICKER"],
-    source: "mock",
-    status: "ACTIVE",
-    updatedAt: "2026-07-15T12:05:00.000Z",
-    username: "picker02",
-    warehouseId: "central",
-  },
-  {
-    createdAt: "2026-07-13T07:15:00.000Z",
-    email: "printer01@pbvm.local",
-    id: "mock-printer-001",
-    mustChangePassword: false,
-    name: "Le Anh Thu",
-    roles: ["PRINTER"],
-    source: "mock",
-    status: "LOCKED",
-    updatedAt: "2026-07-16T03:35:00.000Z",
-    username: "printer01",
-    warehouseId: "central",
-  },
-  {
-    createdAt: "2026-07-12T08:00:00.000Z",
-    email: "counter01@pbvm.local",
-    id: "mock-counter-001",
-    mustChangePassword: false,
-    name: "Pham Quoc Bao",
-    roles: ["COUNTER"],
-    source: "mock",
-    status: "ACTIVE",
-    updatedAt: "2026-07-14T10:30:00.000Z",
-    username: "counter01",
-    warehouseId: "central",
-  },
-];
 
 function optionalText(value: string) {
   const trimmed = value.trim();
@@ -223,7 +158,6 @@ function staffRowFromCreateResponse(
     mustChangePassword: response.mustChangePassword,
     name: optionalText(form.name) ?? response.username,
     roles: response.roles,
-    source: "api",
     status: "ACTIVE",
     updatedAt: now,
     username: response.username,
@@ -319,7 +253,16 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 export function StaffClient() {
   const user = useSessionUser();
   const isAdmin = hasAnyRole(user?.roles, ["ADMIN"]);
-  const [staffRows, setStaffRows] = useState<StaffListRow[]>(MOCK_STAFF_ROWS);
+  const queryClient = useQueryClient();
+  const staffQuery = useQuery({
+    enabled: isAdmin,
+    queryFn: () => listWmsUsers({ limit: 100, page: 1 }),
+    queryKey: staffKeys.list(),
+  });
+  const staffRows = useMemo(
+    () => staffQuery.data?.data ?? [],
+    [staffQuery.data?.data],
+  );
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StaffStatusFilter>("ALL");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -362,10 +305,21 @@ export function StaffClient() {
     selectedCreateRoles.length > 0;
 
   function upsertStaffRow(nextRow: StaffListRow) {
-    setStaffRows((current) =>
-      current.some((row) => row.id === nextRow.id)
-        ? current.map((row) => (row.id === nextRow.id ? nextRow : row))
-        : [nextRow, ...current],
+    queryClient.setQueryData<Awaited<ReturnType<typeof listWmsUsers>>>(
+      staffKeys.list(),
+      (current) => {
+        const currentRows = current?.data ?? [];
+        const nextRows = currentRows.some((row) => row.id === nextRow.id)
+          ? currentRows.map((row) => (row.id === nextRow.id ? nextRow : row))
+          : [nextRow, ...currentRows];
+
+        return {
+          data: nextRows,
+          limit: current?.limit ?? nextRows.length,
+          page: current?.page ?? 1,
+          total: current?.total ?? nextRows.length,
+        };
+      },
     );
     setEditingStaff((current) =>
       current?.id === nextRow.id ? nextRow : current,
@@ -401,19 +355,8 @@ export function StaffClient() {
   });
 
   const updateRolesMutation = useMutation({
-    mutationFn: async (staff: StaffListRow) => {
-      if (staff.source === "mock") {
-        return {
-          ...staff,
-          roles: editRoles,
-          updatedAt: new Date().toISOString(),
-        } satisfies StaffListRow;
-      }
-
-      const response = await updateWmsUserRoles(staff.id, { roles: editRoles });
-
-      return { ...response, source: staff.source } satisfies StaffListRow;
-    },
+    mutationFn: (staff: StaffListRow) =>
+      updateWmsUserRoles(staff.id, { roles: editRoles }),
     onError: (error) => toast.error(formatError(error)),
     onSuccess: (response) => {
       upsertStaffRow(response);
@@ -429,20 +372,9 @@ export function StaffClient() {
       nextStatus: WmsUserStatus;
       staff: StaffListRow;
     }) => {
-      if (staff.source === "mock") {
-        return {
-          ...staff,
-          status: nextStatus,
-          updatedAt: new Date().toISOString(),
-        } satisfies StaffListRow;
-      }
-
-      const response =
-        nextStatus === "LOCKED"
-          ? await lockWmsUser(staff.id)
-          : await unlockWmsUser(staff.id);
-
-      return { ...response, source: staff.source } satisfies StaffListRow;
+      return nextStatus === "LOCKED"
+        ? await lockWmsUser(staff.id)
+        : await unlockWmsUser(staff.id);
     },
     onError: (error) => toast.error(formatError(error)),
     onSuccess: (response) => {
@@ -455,10 +387,6 @@ export function StaffClient() {
 
   const resetPasswordMutation = useMutation({
     mutationFn: async (staff: StaffListRow) => {
-      if (staff.source === "mock") {
-        return staff;
-      }
-
       await resetWmsUserPassword(staff.id, { temporaryPassword });
       return staff;
     },
@@ -669,7 +597,14 @@ export function StaffClient() {
           </Button>
         </form>
 
-        {filteredStaffRows.length === 0 ? (
+        {staffQuery.isLoading ? (
+          <EmptyState title="Đang tải danh sách nhân viên" />
+        ) : staffQuery.isError ? (
+          <EmptyState
+            title="Không tải được danh sách nhân viên"
+            description={formatError(staffQuery.error)}
+          />
+        ) : filteredStaffRows.length === 0 ? (
           <EmptyState title="Không có nhân viên phù hợp" />
         ) : (
           <Table>

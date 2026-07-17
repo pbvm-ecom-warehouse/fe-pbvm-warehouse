@@ -12,6 +12,7 @@ vi.mock("@/hooks/use-session-user", () => ({
 vi.mock("@/features/auth/services/auth.service", () => ({
   bootstrapAdmin: vi.fn(),
   createWmsUser: vi.fn(),
+  listWmsUsers: vi.fn(),
   lockWmsUser: vi.fn(),
   resetWmsUserPassword: vi.fn(),
   unlockWmsUser: vi.fn(),
@@ -26,7 +27,9 @@ vi.mock("sonner", () => ({
 }));
 
 const { useSessionUser } = await import("@/hooks/use-session-user");
+const { listWmsUsers } = await import("@/features/auth/services/auth.service");
 const mockedUseSessionUser = vi.mocked(useSessionUser);
+const mockedListWmsUsers = vi.mocked(listWmsUsers);
 
 function sessionUser(roles: SessionUser["roles"]): SessionUser {
   return {
@@ -54,10 +57,42 @@ function renderStaff() {
 describe("staff page", () => {
   beforeEach(() => {
     mockedUseSessionUser.mockReset();
+    mockedListWmsUsers.mockReset();
   });
 
-  it("shows create action and staff list to ADMIN", () => {
+  it("shows create action and staff list to ADMIN", async () => {
     mockedUseSessionUser.mockReturnValue(sessionUser(["ADMIN"]));
+    mockedListWmsUsers.mockResolvedValue({
+      data: [
+        {
+          createdAt: "2026-07-16T01:31:58.557Z",
+          email: "admin@pbvm.local",
+          id: "admin-001",
+          mustChangePassword: false,
+          name: "Administrator",
+          roles: ["ADMIN"],
+          status: "ACTIVE",
+          updatedAt: "2026-07-16T01:31:58.557Z",
+          username: "admin",
+          warehouseId: "central",
+        },
+        {
+          createdAt: "2026-07-13T07:15:00.000Z",
+          email: "printer01@pbvm.local",
+          id: "printer-001",
+          mustChangePassword: false,
+          name: "Le Anh Thu",
+          roles: ["PRINTER"],
+          status: "LOCKED",
+          updatedAt: "2026-07-16T03:35:00.000Z",
+          username: "printer01",
+          warehouseId: "central",
+        },
+      ],
+      limit: 100,
+      page: 1,
+      total: 2,
+    });
 
     renderStaff();
 
@@ -68,7 +103,7 @@ describe("staff page", () => {
     expect(
       screen.getByRole("button", { name: /^Tạo nhân viên$/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Administrator")).toBeInTheDocument();
+    expect(await screen.findByText("Administrator")).toBeInTheDocument();
     expect(
       screen.getAllByRole("button", { name: /Sửa/i }).length,
     ).toBeGreaterThan(0);
