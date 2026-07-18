@@ -36,7 +36,7 @@ async function seedWmsSession(
   );
 }
 
-test("manager sees management dashboard and inventory route", async ({
+test("manager sees management dashboard and reports route", async ({
   page,
 }) => {
   await seedWmsSession(page, ["MANAGER"], "Manager User");
@@ -48,10 +48,10 @@ test("manager sees management dashboard and inventory route", async ({
   await expect(page.getByRole("link", { name: /Xuất kho/i })).toBeVisible();
   await expect(page.getByRole("link", { name: /Chuyển kho/i })).toHaveCount(0);
 
-  await page.goto("/inventory");
-  await expect(page.getByRole("heading", { name: /^Tồn kho$/i })).toBeVisible();
+  await page.goto("/reports");
+  await expect(page.getByRole("heading", { name: /^Báo cáo kho$/i })).toBeVisible();
   await expect(
-    page.getByText(/Tính năng tồn kho tổng hợp chưa sẵn sàng/i),
+    page.getByRole("tab", { name: /^Tồn kho$/i }),
   ).toBeVisible();
 });
 

@@ -1,5 +1,4 @@
 import {
-  Boxes,
   ClipboardCheck,
   Factory,
   FileBarChart2,
@@ -26,6 +25,12 @@ export const dashboardRoutes = [
     allowedRoles: getRouteAllowedRoles("/dashboard"),
   },
   {
+    href: "/reports",
+    label: "Báo cáo",
+    icon: FileBarChart2,
+    allowedRoles: getRouteAllowedRoles("/reports"),
+  },
+  {
     href: "/warehouses",
     label: "Kho",
     icon: Warehouse,
@@ -36,12 +41,6 @@ export const dashboardRoutes = [
     label: "Sản phẩm",
     icon: PackageOpen,
     allowedRoles: getRouteAllowedRoles("/products"),
-  },
-  {
-    href: "/inventory",
-    label: "Tồn kho",
-    icon: Boxes,
-    allowedRoles: getRouteAllowedRoles("/inventory"),
   },
   {
     href: "/warehouse-navigation",
@@ -84,12 +83,6 @@ export const dashboardRoutes = [
     label: "In ly",
     icon: Repeat2,
     allowedRoles: getRouteAllowedRoles("/print-jobs"),
-  },
-  {
-    href: "/reports",
-    label: "Báo cáo",
-    icon: FileBarChart2,
-    allowedRoles: getRouteAllowedRoles("/reports"),
   },
   {
     href: "/settings",

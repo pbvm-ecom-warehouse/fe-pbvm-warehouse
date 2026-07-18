@@ -20,8 +20,8 @@ describe("WMS API contract helpers", () => {
     expect(buildApiUrl("/api/wms", "/auth/login")).toBe(
       "/api/wms/auth/login",
     );
-    expect(buildApiUrl("http://localhost:3001", "/inventory/ledger")).toBe(
-      "http://localhost:3001/api/wms/inventory/ledger",
+    expect(buildApiUrl("http://localhost:3001", "/reports/stock")).toBe(
+      "http://localhost:3001/api/wms/reports/stock",
     );
     expect(
       buildApiUrl(

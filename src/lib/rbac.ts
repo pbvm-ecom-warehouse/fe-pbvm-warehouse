@@ -48,13 +48,12 @@ const LEGACY_ROLE_MAP: Record<string, readonly WmsRole[]> = {
 };
 
 const ALL_STAFF_ROLES = WMS_ROLES;
-const RETIRED_ROUTES = new Set<string>(["/transfers"]);
+const RETIRED_ROUTES = new Set<string>(["/inventory", "/transfers"]);
 
 export const ROUTE_ACCESS_BY_HREF = {
   "/dashboard": ALL_STAFF_ROLES,
   "/warehouses": ["MANAGER"],
   "/products": ["ADMIN", "MANAGER", "PRINTER"],
-  "/inventory": ALL_STAFF_ROLES,
   "/warehouse-navigation": ["ADMIN", "MANAGER", "RECEIVER", "PICKER"],
   "/purchases": ["ADMIN", "MANAGER"],
   "/goods-issues": ["ADMIN", "MANAGER", "PICKER"],
@@ -72,7 +71,6 @@ export const ROUTE_ACCESS_BY_HREF = {
 export const MODULE_PRIMARY_ACTION_ROLES = {
   warehouses: ["MANAGER"],
   products: ["ADMIN", "MANAGER"],
-  inventory: ALL_STAFF_ROLES,
   purchases: ["ADMIN", "MANAGER"],
   "goods-issues": ["ADMIN", "MANAGER", "PICKER"],
   "goods-returns": ["ADMIN", "RECEIVER"],

@@ -63,6 +63,17 @@ describe("WMS RBAC helpers", () => {
     expect(printerRoutes).not.toContain("/purchases");
   });
 
+  it("keeps reports directly under dashboard and hides the placeholder inventory route", () => {
+    const visibleRoutes = dashboardRoutes
+      .filter((route) => route.href !== "/login")
+      .map((route) => route.href);
+
+    expect(visibleRoutes.slice(0, 2)).toEqual(["/dashboard", "/reports"]);
+    expect(visibleRoutes).not.toContain("/inventory");
+    expect(hasRouteAccess("/inventory", ["ADMIN"])).toBe(false);
+    expect(hasRouteAccess("/inventory", ["RECEIVER"])).toBe(false);
+  });
+
   it("aligns exposed supplier and purchase APIs with backend roles", () => {
     expect(hasRouteAccess("/suppliers", ["RECEIVER"])).toBe(false);
     expect(hasRouteAccess("/purchases", ["RECEIVER"])).toBe(false);

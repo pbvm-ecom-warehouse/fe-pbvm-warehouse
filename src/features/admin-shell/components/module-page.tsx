@@ -48,24 +48,6 @@ const moduleSummaries = {
       PRINTER: "Nhân viên in theo dõi ly chưa in và ly đã in.",
     },
   },
-  inventory: {
-    title: "Tồn kho",
-    description: "Theo dõi số lượng tồn kho, đã đặt trước và khả dụng.",
-    action: "Xem sổ tồn kho",
-    highlights: ["Sổ tồn kho", "Biến động tồn", "Lịch sử đối chiếu"],
-    tableTitle: "Sổ tồn kho",
-    columns: ["SKU", "Kho", "Khả dụng"],
-    roleNotes: {
-      ADMIN:
-        "Quản trị viên xem toàn bộ số lượng tồn, đã đặt trước và khả dụng.",
-      MANAGER: "Quản lý dùng sổ tồn kho để điều phối và duyệt điều chỉnh.",
-      RECEIVER: "Nhân viên nhận hàng đối chiếu tồn sau khi nhập và cất hàng.",
-      PICKER:
-        "Nhân viên soạn hàng xem vị trí và lượng khả dụng trước khi xuất.",
-      PRINTER: "Nhân viên in kiểm tra tồn ly chưa in và ly đã in.",
-      COUNTER: "Nhân viên kiểm kê dùng sổ tồn kho để đối chiếu số thực tế.",
-    },
-  },
   purchases: {
     title: "Nhập hàng",
     description: "Quản lý đơn mua hàng và phiếu nhập kho.",
