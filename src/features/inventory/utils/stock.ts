@@ -30,6 +30,7 @@ const moveTypeLabels: Record<MoveType, string> = {
   SCRAP: "Hủy hàng",
   PRINT_CONSUME: "Tiêu thụ ly trắng để in",
   PRINT_OUTPUT: "Nhập ly in cho đơn",
+  RETURN_IN: "Nhập hoàn",
 };
 
 export function getMoveTypeLabel(moveType: MoveType) {

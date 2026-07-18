@@ -25,5 +25,6 @@ describe("inventory stock helpers", () => {
     expect(getMoveTypeLabel("ISSUE")).toBe("Xuất kho");
     expect(getMoveTypeLabel("ADJUST")).toBe("Điều chỉnh kiểm kê");
     expect(getMoveTypeLabel("SCRAP")).toBe("Hủy hàng");
+    expect(getMoveTypeLabel("RETURN_IN")).toBe("Nhập hoàn");
   });
 });

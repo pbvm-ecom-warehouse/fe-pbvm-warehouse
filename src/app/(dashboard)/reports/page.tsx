@@ -1,5 +1,5 @@
-import { ModulePage } from "@/features/admin-shell/components/module-page";
+import { ReportsClient } from "@/features/reports/components/reports-client";
 
 export default function ReportsPage() {
-  return <ModulePage moduleKey="reports" />;
+  return <ReportsClient />;
 }
