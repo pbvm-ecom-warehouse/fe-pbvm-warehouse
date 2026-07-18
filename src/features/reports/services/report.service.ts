@@ -1,5 +1,4 @@
 import { apiClient } from "@/lib/api-client";
-import { isApiEnvelope, unwrapApiData } from "@/lib/api-contract";
 
 export type StockReportRow = {
   sku: string;
@@ -87,6 +86,21 @@ type ReportEnvelope<T> = {
   };
 };
 
+function isReportEnvelope<T>(
+  payload: ReportEnvelope<T> | T,
+): payload is ReportEnvelope<T> {
+  return (
+    typeof payload === "object" &&
+    payload !== null &&
+    "data" in payload &&
+    "meta" in payload
+  );
+}
+
+function unwrapReportData<T>(payload: ReportEnvelope<T> | T) {
+  return isReportEnvelope(payload) ? payload.data : payload;
+}
+
 function optionalText(value: string | undefined) {
   const trimmed = value?.trim();
   return trimmed || undefined;
@@ -96,10 +110,8 @@ function toReportPage<T>(
   payload: ReportEnvelope<T[]> | T[],
   fallback: Pick<ReportPagination, "page" | "limit">,
 ): ReportPage<T> {
-  const data = unwrapApiData(payload);
-  const pagination = isApiEnvelope<T[]>(payload)
-    ? (payload.meta.pagination as ReportPagination | undefined)
-    : undefined;
+  const data = unwrapReportData(payload);
+  const pagination = isReportEnvelope(payload) ? payload.meta.pagination : undefined;
 
   return {
     data,
@@ -169,5 +181,5 @@ export async function getPerformanceReport(input: PerformanceReportQuery) {
     },
   });
 
-  return unwrapApiData(response.data);
+  return unwrapReportData(response.data);
 }

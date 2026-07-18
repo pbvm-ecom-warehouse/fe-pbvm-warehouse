@@ -93,7 +93,8 @@ export type MoveType =
   | "ADJUST"
   | "SCRAP"
   | "PRINT_CONSUME"
-  | "PRINT_OUTPUT";
+  | "PRINT_OUTPUT"
+  | "RETURN_IN";
 
 export type Warehouse = TenantScoped & {
   id: string;
