@@ -50,10 +50,10 @@ test("manager sees management dashboard and reports route", async ({
   await expect(page.getByRole("link", { name: /Chuyển kho/i })).toHaveCount(0);
 
   await page.goto("/reports");
-  await expect(page.getByRole("heading", { name: /^Báo cáo kho$/i })).toBeVisible();
   await expect(
-    page.getByRole("tab", { name: /^Tồn kho$/i }),
+    page.getByRole("heading", { name: /^Báo cáo kho$/i }),
   ).toBeVisible();
+  await expect(page.getByRole("tab", { name: /^Tồn kho$/i })).toBeVisible();
 });
 
 test("admin edits a product from row actions", async ({ page }) => {
@@ -447,7 +447,7 @@ test("admin edits and removes supplier items from row actions", async ({
 
 test("admin sees system health and staff list management", async ({ page }) => {
   await seedWmsSession(page, ["ADMIN"], "Admin User");
-  await page.route("**/api/wms/auth/users**", async (route) => {
+  await page.route("**/api/wms/users**", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -513,7 +513,7 @@ test("admin sees system health and staff list management", async ({ page }) => {
 
   await expect(page.getByText("Phạm vi truy cập")).toBeVisible();
   await expect(page.getByText("Toàn hệ thống")).toBeVisible();
-  await page.getByRole("button", { name: /Admin/i }).click();
+  await page.getByRole("button", { name: "AU Admin", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: /Hồ sơ/i })).toBeVisible();
   await expect(
     page.getByRole("menuitem", { name: /Đổi mật khẩu/i }),
@@ -529,10 +529,31 @@ test("admin sees system health and staff list management", async ({ page }) => {
   );
 });
 
-test("manager sees settings API status without admin mutation controls", async ({
+test("manager sees staff but cannot mutate ADMIN accounts", async ({
   page,
 }) => {
   await seedWmsSession(page, ["MANAGER"], "Manager User");
+  await page.route("**/api/wms/users**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: [
+          {
+            id: "admin-1",
+            mustChangePassword: false,
+            name: "Administrator",
+            roles: ["ADMIN"],
+            status: "ACTIVE",
+            username: "admin",
+          },
+        ],
+        meta: {
+          pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+          requestId: "e2e-manager-staff-list",
+        },
+      }),
+    });
+  });
   await page.route("**/api/wms/health", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -559,13 +580,18 @@ test("manager sees settings API status without admin mutation controls", async (
   ).toBeVisible();
   await expect(page.getByText("Kết nối WMS", { exact: true })).toBeVisible();
   await expect(page.getByText("Quản lý tài khoản WMS")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: /Nhân viên/i })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Nhân viên/i })).toBeVisible();
+
+  await page.goto("/staff");
+  await expect(page.getByText("Administrator")).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Tạo nhân viên/i }),
-  ).toHaveCount(0);
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: /Sửa/i })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /^Khóa$/i })).toBeDisabled();
   await expect(
-    page.getByRole("button", { name: /Đặt lại mật khẩu/i }),
-  ).toHaveCount(0);
+    page.getByText("Chỉ Admin có thể thao tác tài khoản Admin."),
+  ).toBeVisible();
 });
 
 test("printer can use print jobs but not purchases", async ({ page }) => {
@@ -1016,10 +1042,14 @@ test("shipper assigns a carrier and advances a shipment", async ({ page }) => {
   });
 
   await page.goto("/shipping");
-  await expect(page.getByRole("heading", { name: /^Giao hàng$/i })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /^Giao hàng$/i }),
+  ).toBeVisible();
   await page.getByRole("row", { name: /ORD-001/i }).click();
   await page.getByRole("button", { name: /^Gán hãng và mã vận đơn$/i }).click();
-  const assignDialog = page.getByRole("dialog", { name: /Gán hãng vận chuyển/i });
+  const assignDialog = page.getByRole("dialog", {
+    name: /Gán hãng vận chuyển/i,
+  });
   await assignDialog.getByRole("combobox", { name: "Hãng vận chuyển" }).click();
   await page.getByRole("option", { name: /Giao Hàng Nhanh.*GHN/i }).click();
   await assignDialog.getByLabel("Mã vận đơn").fill("GHN-0002");
@@ -1027,11 +1057,15 @@ test("shipper assigns a carrier and advances a shipment", async ({ page }) => {
   await expect(page.getByText(/Đã gán hãng vận chuyển/i)).toBeVisible();
 
   await page.getByRole("button", { name: /^Cập nhật trạng thái$/i }).click();
-  const statusDialog = page.getByRole("dialog", { name: /Cập nhật trạng thái giao hàng/i });
+  const statusDialog = page.getByRole("dialog", {
+    name: /Cập nhật trạng thái giao hàng/i,
+  });
   await statusDialog.getByRole("combobox", { name: "Trạng thái" }).click();
   await page.getByRole("option", { name: "Đã nhận hàng" }).click();
   await statusDialog.getByRole("button", { name: /^Lưu trạng thái$/i }).click();
-  await expect(page.getByText(/Đã cập nhật trạng thái giao hàng/i)).toBeVisible();
+  await expect(
+    page.getByText(/Đã cập nhật trạng thái giao hàng/i),
+  ).toBeVisible();
 });
 
 test("manager creates a carrier but cannot change shipment operations", async ({

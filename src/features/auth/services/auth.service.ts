@@ -1,6 +1,5 @@
 import { apiClient } from "@/lib/api-client";
 import { type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
-import { normalizeApiList, type ApiListLike } from "@/lib/api-list";
 import { env } from "@/lib/env";
 import {
   sessionUserFromAccessToken,
@@ -19,10 +18,6 @@ import type {
   ChangePasswordResponse,
   CreateUserInput,
   CreateUserResponse,
-  ListWmsUsersQuery,
-  ResetUserPasswordInput,
-  ResetUserPasswordResponse,
-  UpdateUserRolesInput,
   WmsUserResponse,
 } from "@/types/api";
 
@@ -81,61 +76,6 @@ export async function bootstrapAdmin(input: CreateUserInput) {
   const response = await apiClient.post<
     ApiEnvelope<CreateUserResponse> | CreateUserResponse
   >("/auth/bootstrap-admin", input);
-
-  return unwrapApiData(response.data);
-}
-
-export async function listWmsUsers(query: ListWmsUsersQuery = {}) {
-  const response = await apiClient.get<ApiListLike<WmsUserResponse>>(
-    "/auth/users",
-    { params: query },
-  );
-
-  return normalizeApiList(response.data);
-}
-
-export async function createWmsUser(input: CreateUserInput) {
-  const response = await apiClient.post<
-    ApiEnvelope<CreateUserResponse> | CreateUserResponse
-  >("/auth/users", input);
-
-  return unwrapApiData(response.data);
-}
-
-export async function updateWmsUserRoles(
-  userId: string,
-  input: UpdateUserRolesInput,
-) {
-  const response = await apiClient.patch<
-    ApiEnvelope<WmsUserResponse> | WmsUserResponse
-  >(`/auth/users/${encodeURIComponent(userId)}/roles`, input);
-
-  return unwrapApiData(response.data);
-}
-
-export async function lockWmsUser(userId: string) {
-  const response = await apiClient.post<
-    ApiEnvelope<WmsUserResponse> | WmsUserResponse
-  >(`/auth/users/${encodeURIComponent(userId)}/lock`);
-
-  return unwrapApiData(response.data);
-}
-
-export async function unlockWmsUser(userId: string) {
-  const response = await apiClient.post<
-    ApiEnvelope<WmsUserResponse> | WmsUserResponse
-  >(`/auth/users/${encodeURIComponent(userId)}/unlock`);
-
-  return unwrapApiData(response.data);
-}
-
-export async function resetWmsUserPassword(
-  userId: string,
-  input: ResetUserPasswordInput,
-) {
-  const response = await apiClient.post<
-    ApiEnvelope<ResetUserPasswordResponse> | ResetUserPasswordResponse
-  >(`/auth/users/${encodeURIComponent(userId)}/reset-password`, input);
 
   return unwrapApiData(response.data);
 }

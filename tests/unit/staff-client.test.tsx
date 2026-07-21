@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { StaffClient } from "@/features/staff/components/staff-client";
@@ -9,13 +9,14 @@ vi.mock("@/hooks/use-session-user", () => ({
   useSessionUser: vi.fn(),
 }));
 
-vi.mock("@/features/auth/services/auth.service", () => ({
-  bootstrapAdmin: vi.fn(),
+vi.mock("@/features/staff/services/staff.service", () => ({
   createWmsUser: vi.fn(),
+  deleteWmsUser: vi.fn(),
   listWmsUsers: vi.fn(),
   lockWmsUser: vi.fn(),
   resetWmsUserPassword: vi.fn(),
   unlockWmsUser: vi.fn(),
+  updateWmsUser: vi.fn(),
   updateWmsUserRoles: vi.fn(),
 }));
 
@@ -27,7 +28,8 @@ vi.mock("sonner", () => ({
 }));
 
 const { useSessionUser } = await import("@/hooks/use-session-user");
-const { listWmsUsers } = await import("@/features/auth/services/auth.service");
+const { listWmsUsers } =
+  await import("@/features/staff/services/staff.service");
 const mockedUseSessionUser = vi.mocked(useSessionUser);
 const mockedListWmsUsers = vi.mocked(listWmsUsers);
 
@@ -89,7 +91,7 @@ describe("staff page", () => {
           warehouseId: "central",
         },
       ],
-      limit: 100,
+      limit: 20,
       page: 1,
       total: 2,
     });
@@ -116,24 +118,123 @@ describe("staff page", () => {
 
     expect(screen.getByText("Tạo tài khoản WMS")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Bootstrap admin/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /Bootstrap admin/i }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getAllByRole("button", { name: /^Tạo nhân viên$/i }).length,
     ).toBeGreaterThan(0);
   });
 
-  it("keeps staff mutation controls hidden from MANAGER", () => {
+  it("lets MANAGER view staff while protecting ADMIN targets", async () => {
     mockedUseSessionUser.mockReturnValue(sessionUser(["MANAGER"]));
+    mockedListWmsUsers.mockResolvedValue({
+      data: [
+        {
+          id: "admin-001",
+          username: "admin",
+          name: "Administrator",
+          roles: ["ADMIN"],
+          status: "ACTIVE",
+          mustChangePassword: false,
+        },
+      ],
+      limit: 20,
+      page: 1,
+      total: 1,
+    });
 
     renderStaff();
 
+    expect(await screen.findByText("Administrator")).toBeInTheDocument();
     expect(
-      screen.getByText("Bạn cần quyền Admin để quản lý tài khoản nhân viên."),
+      screen.getByRole("button", { name: /Tạo nhân viên/i }),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Tạo tài khoản WMS")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Sửa/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Khóa$/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: /Tạo nhân viên/i }));
     expect(
-      screen.queryByRole("button", { name: /Tạo nhân viên/i }),
+      screen.queryByRole("checkbox", { name: "Admin" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("prevents an ADMIN from deleting the active account", async () => {
+    const activeUser = sessionUser(["ADMIN"]);
+    mockedUseSessionUser.mockReturnValue(activeUser);
+    mockedListWmsUsers.mockResolvedValue({
+      data: [
+        {
+          id: activeUser.id,
+          username: "current-admin",
+          name: "Current Admin",
+          roles: ["ADMIN"],
+          status: "ACTIVE",
+          mustChangePassword: false,
+        },
+      ],
+      limit: 20,
+      page: 1,
+      total: 1,
+    });
+
+    renderStaff();
+
+    expect(await screen.findByText("Current Admin")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Xóa current-admin" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText("Không thể tự xóa tài khoản đang đăng nhập."),
+    ).toBeInTheDocument();
+  });
+
+  it("allows profile changes without forcing a password reset", async () => {
+    mockedUseSessionUser.mockReturnValue(sessionUser(["ADMIN"]));
+    mockedListWmsUsers.mockResolvedValue({
+      data: [
+        {
+          id: "receiver-001",
+          username: "receiver01",
+          name: "Receiver 01",
+          roles: ["RECEIVER"],
+          status: "ACTIVE",
+          mustChangePassword: false,
+        },
+      ],
+      limit: 20,
+      page: 1,
+      total: 1,
+    });
+
+    renderStaff();
+    fireEvent.click(await screen.findByRole("button", { name: "Sửa" }));
+
+    expect(screen.getByLabelText("Mật khẩu tạm mới")).not.toBeRequired();
+  });
+
+  it("sends search terms to the server instead of filtering client-side", async () => {
+    mockedUseSessionUser.mockReturnValue(sessionUser(["ADMIN"]));
+    mockedListWmsUsers.mockResolvedValue({
+      data: [],
+      limit: 20,
+      page: 1,
+      total: 0,
+    });
+
+    renderStaff();
+    fireEvent.change(screen.getByLabelText("Tìm kiếm"), {
+      target: { value: "receiver01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Lọc" }));
+
+    await waitFor(() =>
+      expect(mockedListWmsUsers).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          limit: 20,
+          page: 1,
+          search: "receiver01",
+        }),
+      ),
+    );
   });
 });

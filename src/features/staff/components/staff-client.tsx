@@ -3,6 +3,8 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ChevronLeft,
+  ChevronRight,
   KeyRound,
   LoaderCircle,
   LockKeyhole,
@@ -10,7 +12,7 @@ import {
   Plus,
   Save,
   Search,
-  ShieldCheck,
+  Trash2,
   UnlockKeyhole,
   UserPlus,
   UsersRound,
@@ -46,6 +48,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  EmptyState,
+  PageHeader,
+  PermissionNotice,
+  StatusBadge,
+  TablePanel,
+} from "@/features/admin-shell/components/operations-ui";
+import {
+  createWmsUser,
+  deleteWmsUser,
+  listWmsUsers,
+  lockWmsUser,
+  resetWmsUserPassword,
+  unlockWmsUser,
+  updateWmsUser,
+  updateWmsUserRoles,
+} from "@/features/staff/services/staff.service";
 import { useSessionUser } from "@/hooks/use-session-user";
 import { getApiErrorMessage } from "@/lib/api-contract";
 import {
@@ -57,34 +76,21 @@ import {
 } from "@/lib/rbac";
 import type {
   CreateUserInput,
-  CreateUserResponse,
+  ListWmsUsersQuery,
+  UpdateUserInput,
   WmsUserResponse,
   WmsUserStatus,
 } from "@/types/api";
-import {
-  bootstrapAdmin,
-  createWmsUser,
-  listWmsUsers,
-  lockWmsUser,
-  resetWmsUserPassword,
-  unlockWmsUser,
-  updateWmsUserRoles,
-} from "@/features/auth/services/auth.service";
-import {
-  EmptyState,
-  PageHeader,
-  PermissionNotice,
-  StatusBadge,
-  TablePanel,
-} from "@/features/admin-shell/components/operations-ui";
 
 type StaffListRow = WmsUserResponse;
-
 type StaffStatusFilter = "ALL" | WmsUserStatus;
+type StaffRoleFilter = "ALL" | WmsRole;
 
+const PAGE_SIZE = 20;
 const staffKeys = {
   all: ["staff"] as const,
-  list: () => [...staffKeys.all, "list"] as const,
+  list: (query: ListWmsUsersQuery) =>
+    [...staffKeys.all, "list", query] as const,
 };
 const defaultCreateForm = {
   email: "",
@@ -93,6 +99,13 @@ const defaultCreateForm = {
   roles: ["RECEIVER"] as WmsRole[],
   username: "",
 };
+const defaultFilters = {
+  role: "ALL" as StaffRoleFilter,
+  search: "",
+  status: "ALL" as StaffStatusFilter,
+  warehouseId: "",
+};
+const defaultProfile = { email: "", name: "", warehouseId: "" };
 
 function optionalText(value: string) {
   const trimmed = value.trim();
@@ -124,61 +137,34 @@ function toggleRole(current: readonly WmsRole[], role: WmsRole) {
 
 function formatRoles(roles: readonly string[]) {
   const normalized = normalizeRoles(roles);
-
-  if (normalized.length > 0) {
-    return normalized.map((role) => ROLE_LABELS[role]).join(", ");
-  }
-
-  return roles.length > 0 ? roles.join(", ") : "Chưa phân quyền";
+  return normalized.length > 0
+    ? normalized.map((role) => ROLE_LABELS[role]).join(", ")
+    : roles.join(", ") || "Chưa phân quyền";
 }
 
 function formatDate(value: string | undefined) {
-  if (!value) {
-    return "Chưa có";
-  }
-
+  if (!value) return "Chưa có";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("vi-VN").format(date);
-}
-
-function staffRowFromCreateResponse(
-  response: CreateUserResponse,
-  form: typeof defaultCreateForm,
-): StaffListRow {
-  const now = new Date().toISOString();
-
-  return {
-    createdAt: now,
-    email: response.email ?? optionalText(form.email),
-    id: response.id,
-    mustChangePassword: response.mustChangePassword,
-    name: optionalText(form.name) ?? response.username,
-    roles: response.roles,
-    status: "ACTIVE",
-    updatedAt: now,
-    username: response.username,
-    warehouseId: undefined,
-  };
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat("vi-VN").format(date);
 }
 
 function RoleCheckboxes({
+  availableRoles,
   idPrefix,
   onChange,
   roles,
 }: {
+  availableRoles: readonly WmsRole[];
   idPrefix: string;
   onChange: (roles: WmsRole[]) => void;
   roles: readonly WmsRole[];
 }) {
   return (
     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-      {WMS_ROLES.map((role) => {
+      {availableRoles.map((role) => {
         const id = `${idPrefix}-${role.toLowerCase()}`;
-
         return (
           <Label
             className="flex items-center gap-2 rounded-lg border border-border/70 px-3 py-2 text-sm font-medium"
@@ -228,157 +214,122 @@ function TextField({
   );
 }
 
-function EmptyRow({ colSpan, label }: { colSpan: number; label: string }) {
-  return (
-    <TableRow>
-      <TableCell
-        className="h-24 text-center text-sm text-muted-foreground"
-        colSpan={colSpan}
-      >
-        {label}
-      </TableCell>
-    </TableRow>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="min-w-0 truncate font-medium">{value}</span>
-    </div>
-  );
-}
-
 export function StaffClient() {
   const user = useSessionUser();
   const isAdmin = hasAnyRole(user?.roles, ["ADMIN"]);
-  const queryClient = useQueryClient();
-  const staffQuery = useQuery({
-    enabled: isAdmin,
-    queryFn: () => listWmsUsers({ limit: 100, page: 1 }),
-    queryKey: staffKeys.list(),
-  });
-  const staffRows = useMemo(
-    () => staffQuery.data?.data ?? [],
-    [staffQuery.data?.data],
+  const canAccessStaff = hasAnyRole(user?.roles, ["ADMIN", "MANAGER"]);
+  const availableRoles = useMemo(
+    () => WMS_ROLES.filter((role) => isAdmin || role !== "ADMIN"),
+    [isAdmin],
   );
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StaffStatusFilter>("ALL");
+  const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [filterDraft, setFilterDraft] = useState(defaultFilters);
+  const [filters, setFilters] = useState(defaultFilters);
+  const query = useMemo<ListWmsUsersQuery>(
+    () => ({
+      limit: PAGE_SIZE,
+      page,
+      role: filters.role === "ALL" ? undefined : filters.role,
+      search: optionalText(filters.search),
+      status: filters.status === "ALL" ? undefined : filters.status,
+      warehouseId: optionalText(filters.warehouseId),
+    }),
+    [filters, page],
+  );
+  const staffQuery = useQuery({
+    enabled: canAccessStaff,
+    queryFn: () => listWmsUsers(query),
+    queryKey: staffKeys.list(query),
+  });
+  const staffRows = staffQuery.data?.data ?? [];
+  const total = staffQuery.data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createForm, setCreateForm] = useState(defaultCreateForm);
   const [editingStaff, setEditingStaff] = useState<StaffListRow | null>(null);
+  const [deletingStaff, setDeletingStaff] = useState<StaffListRow | null>(null);
+  const [editProfile, setEditProfile] = useState(defaultProfile);
   const [editRoles, setEditRoles] = useState<WmsRole[]>(["RECEIVER"]);
   const [temporaryPassword, setTemporaryPassword] =
     useState("TempP@ssw0rd123!");
 
-  const selectedCreateRoles = useMemo(
-    () => createForm.roles.filter((role) => WMS_ROLES.includes(role)),
-    [createForm.roles],
+  const selectedCreateRoles = createForm.roles.filter((role) =>
+    availableRoles.includes(role),
   );
-
-  const filteredStaffRows = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
-
-    return staffRows.filter((staff) => {
-      const matchesStatus =
-        statusFilter === "ALL" || staff.status === statusFilter;
-      const haystack = [
-        staff.id,
-        staff.username,
-        staff.name,
-        staff.email,
-        staff.warehouseId,
-        formatRoles(staff.roles),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return matchesStatus && haystack.includes(normalizedSearch);
-    });
-  }, [search, staffRows, statusFilter]);
-
   const createFormValid =
     createForm.username.trim().length >= 3 &&
     createForm.password.length >= 8 &&
     selectedCreateRoles.length > 0;
 
-  function upsertStaffRow(nextRow: StaffListRow) {
-    queryClient.setQueryData<Awaited<ReturnType<typeof listWmsUsers>>>(
-      staffKeys.list(),
-      (current) => {
-        const currentRows = current?.data ?? [];
-        const nextRows = currentRows.some((row) => row.id === nextRow.id)
-          ? currentRows.map((row) => (row.id === nextRow.id ? nextRow : row))
-          : [nextRow, ...currentRows];
-
-        return {
-          data: nextRows,
-          limit: current?.limit ?? nextRows.length,
-          page: current?.page ?? 1,
-          total: current?.total ?? nextRows.length,
-        };
-      },
-    );
-    setEditingStaff((current) =>
-      current?.id === nextRow.id ? nextRow : current,
-    );
+  function canManageTarget(staff: StaffListRow) {
+    return isAdmin || !normalizeRoles(staff.roles).includes("ADMIN");
   }
 
-  function applyCreatedUser(response: CreateUserResponse, message: string) {
-    const nextRow = staffRowFromCreateResponse(response, createForm);
-    upsertStaffRow(nextRow);
-    setCreateForm(defaultCreateForm);
-    setCreateDialogOpen(false);
-    toast.success(message);
+  async function refreshStaff() {
+    await queryClient.invalidateQueries({ queryKey: staffKeys.all });
   }
 
   function openStaffEditor(staff: StaffListRow) {
-    const roles = normalizeRoles(staff.roles);
-
+    if (!canManageTarget(staff)) return;
+    const roles = normalizeRoles(staff.roles).filter((role) =>
+      availableRoles.includes(role),
+    );
     setEditingStaff(staff);
+    setEditProfile({
+      email: staff.email ?? "",
+      name: staff.name ?? "",
+      warehouseId: staff.warehouseId ?? "",
+    });
     setEditRoles(roles.length > 0 ? roles : ["RECEIVER"]);
     setTemporaryPassword("TempP@ssw0rd123!");
   }
 
-  const bootstrapMutation = useMutation({
-    mutationFn: (input: CreateUserInput) => bootstrapAdmin(input),
-    onError: (error) => toast.error(formatError(error)),
-    onSuccess: (response) => applyCreatedUser(response, "Đã bootstrap admin"),
-  });
-
   const createUserMutation = useMutation({
-    mutationFn: (input: CreateUserInput) => createWmsUser(input),
+    mutationFn: createWmsUser,
     onError: (error) => toast.error(formatError(error)),
-    onSuccess: (response) => applyCreatedUser(response, "Đã tạo nhân viên"),
+    onSuccess: async () => {
+      setCreateForm(defaultCreateForm);
+      setCreateDialogOpen(false);
+      await refreshStaff();
+      toast.success("Đã tạo nhân viên");
+    },
   });
 
-  const updateRolesMutation = useMutation({
-    mutationFn: (staff: StaffListRow) =>
-      updateWmsUserRoles(staff.id, { roles: editRoles }),
+  const saveStaffMutation = useMutation({
+    mutationFn: async ({
+      profile,
+      roles,
+      staff,
+    }: {
+      profile: UpdateUserInput;
+      roles: WmsRole[];
+      staff: StaffListRow;
+    }) => {
+      await updateWmsUser(staff.id, profile);
+      await updateWmsUserRoles(staff.id, { roles });
+    },
     onError: (error) => toast.error(formatError(error)),
-    onSuccess: (response) => {
-      upsertStaffRow(response);
-      toast.success("Đã cập nhật vai trò");
+    onSuccess: async () => {
+      setEditingStaff(null);
+      await refreshStaff();
+      toast.success("Đã cập nhật nhân viên");
     },
   });
 
   const lockStatusMutation = useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       nextStatus,
       staff,
     }: {
       nextStatus: WmsUserStatus;
       staff: StaffListRow;
-    }) => {
-      return nextStatus === "LOCKED"
-        ? await lockWmsUser(staff.id)
-        : await unlockWmsUser(staff.id);
-    },
+    }) =>
+      nextStatus === "LOCKED" ? lockWmsUser(staff.id) : unlockWmsUser(staff.id),
     onError: (error) => toast.error(formatError(error)),
-    onSuccess: (response) => {
-      upsertStaffRow(response);
+    onSuccess: async (response) => {
+      await refreshStaff();
       toast.success(
         response.status === "LOCKED" ? "Đã khóa nhân viên" : "Đã mở khóa",
       );
@@ -386,18 +337,23 @@ export function StaffClient() {
   });
 
   const resetPasswordMutation = useMutation({
-    mutationFn: async (staff: StaffListRow) => {
-      await resetWmsUserPassword(staff.id, { temporaryPassword });
-      return staff;
-    },
+    mutationFn: (staff: StaffListRow) =>
+      resetWmsUserPassword(staff.id, { temporaryPassword }),
     onError: (error) => toast.error(formatError(error)),
-    onSuccess: (staff) => {
-      upsertStaffRow({
-        ...staff,
-        mustChangePassword: true,
-        updatedAt: new Date().toISOString(),
-      });
+    onSuccess: async () => {
+      await refreshStaff();
       toast.success("Đã đặt lại mật khẩu");
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: deleteWmsUser,
+    onError: (error) => toast.error(formatError(error)),
+    onSuccess: async () => {
+      setDeletingStaff(null);
+      setEditingStaff(null);
+      await refreshStaff();
+      toast.success("Đã xóa nhân viên");
     },
   });
 
@@ -408,32 +364,41 @@ export function StaffClient() {
     );
   }
 
-  function handleBootstrapAdmin() {
-    bootstrapMutation.mutate(buildCreatePayload(createForm, ["ADMIN"]));
-  }
-
-  function handleUpdateRoles(event: FormEvent<HTMLFormElement>) {
+  function handleFilter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (editingStaff) {
-      updateRolesMutation.mutate(editingStaff);
-    }
+    setPage(1);
+    setFilters(filterDraft);
   }
 
-  const isCreateBusy =
-    bootstrapMutation.isPending || createUserMutation.isPending;
+  function handleSaveStaff(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingStaff || !canManageTarget(editingStaff)) return;
+    saveStaffMutation.mutate({
+      profile: {
+        email: optionalText(editProfile.email),
+        name: optionalText(editProfile.name),
+        warehouseId: optionalText(editProfile.warehouseId),
+      },
+      roles: editRoles,
+      staff: editingStaff,
+    });
+  }
+
   const editBusy =
-    updateRolesMutation.isPending ||
+    saveStaffMutation.isPending ||
     lockStatusMutation.isPending ||
-    resetPasswordMutation.isPending;
+    resetPasswordMutation.isPending ||
+    deleteUserMutation.isPending;
   const busyStaffId =
     lockStatusMutation.variables?.staff.id ??
     resetPasswordMutation.variables?.id ??
-    updateRolesMutation.variables?.id;
+    saveStaffMutation.variables?.staff.id ??
+    deleteUserMutation.variables;
 
-  if (!isAdmin) {
+  if (!canAccessStaff) {
     return (
       <PermissionNotice>
-        Bạn cần quyền Admin để quản lý tài khoản nhân viên.
+        Bạn cần quyền Admin hoặc Manager để quản lý tài khoản nhân viên.
       </PermissionNotice>
     );
   }
@@ -496,10 +461,10 @@ export function StaffClient() {
                     }
                   />
                 </div>
-
                 <div className="space-y-2">
                   <Label>Vai trò khi tạo nhân viên</Label>
                   <RoleCheckboxes
+                    availableRoles={availableRoles}
                     idPrefix="create-role"
                     roles={selectedCreateRoles}
                     onChange={(roles) =>
@@ -507,7 +472,6 @@ export function StaffClient() {
                     }
                   />
                 </div>
-
                 <DialogFooter>
                   <DialogClose asChild>
                     <Button type="button" variant="outline">
@@ -515,23 +479,7 @@ export function StaffClient() {
                     </Button>
                   </DialogClose>
                   <Button
-                    disabled={!createFormValid || isCreateBusy}
-                    onClick={handleBootstrapAdmin}
-                    type="button"
-                    variant="outline"
-                  >
-                    {bootstrapMutation.isPending ? (
-                      <LoaderCircle
-                        className="animate-spin"
-                        data-icon="inline-start"
-                      />
-                    ) : (
-                      <ShieldCheck data-icon="inline-start" />
-                    )}
-                    Bootstrap admin
-                  </Button>
-                  <Button
-                    disabled={!createFormValid || isCreateBusy}
+                    disabled={!createFormValid || createUserMutation.isPending}
                     type="submit"
                   >
                     {createUserMutation.isPending ? (
@@ -552,7 +500,7 @@ export function StaffClient() {
       />
 
       <TablePanel
-        count={`${filteredStaffRows.length}/${staffRows.length} bản ghi`}
+        count={`${total} bản ghi · trang ${page}/${totalPages}`}
         title={
           <span className="flex items-center gap-2">
             <UsersRound className="size-4 text-primary" />
@@ -561,24 +509,32 @@ export function StaffClient() {
         }
       >
         <form
-          className="grid gap-3 md:grid-cols-[1fr_180px_auto]"
-          onSubmit={(event) => event.preventDefault()}
+          className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_170px_170px_190px_auto]"
+          onSubmit={handleFilter}
         >
           <div className="space-y-2">
             <Label htmlFor="staff-search">Tìm kiếm</Label>
             <Input
               id="staff-search"
-              placeholder="Tên, username, email hoặc mã nhân viên"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Tên, username hoặc email"
+              value={filterDraft.search}
+              onChange={(event) =>
+                setFilterDraft((current) => ({
+                  ...current,
+                  search: event.target.value,
+                }))
+              }
             />
           </div>
           <div className="space-y-2">
             <Label>Trạng thái</Label>
             <Select
-              value={statusFilter}
-              onValueChange={(value) =>
-                setStatusFilter(value as StaffStatusFilter)
+              value={filterDraft.status}
+              onValueChange={(status) =>
+                setFilterDraft((current) => ({
+                  ...current,
+                  status: status as StaffStatusFilter,
+                }))
               }
             >
               <SelectTrigger className="w-full">
@@ -591,6 +547,39 @@ export function StaffClient() {
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-2">
+            <Label>Vai trò</Label>
+            <Select
+              value={filterDraft.role}
+              onValueChange={(role) =>
+                setFilterDraft((current) => ({
+                  ...current,
+                  role: role as StaffRoleFilter,
+                }))
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tất cả</SelectItem>
+                {WMS_ROLES.map((role) => (
+                  <SelectItem key={role} value={role}>
+                    {ROLE_LABELS[role]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <TextField
+            id="staff-warehouse-filter"
+            label="Mã kho"
+            required={false}
+            value={filterDraft.warehouseId}
+            onChange={(warehouseId) =>
+              setFilterDraft((current) => ({ ...current, warehouseId }))
+            }
+          />
           <Button className="self-end" type="submit">
             <Search data-icon="inline-start" />
             Lọc
@@ -604,7 +593,7 @@ export function StaffClient() {
             title="Không tải được danh sách nhân viên"
             description={formatError(staffQuery.error)}
           />
-        ) : filteredStaffRows.length === 0 ? (
+        ) : staffRows.length === 0 ? (
           <EmptyState title="Không có nhân viên phù hợp" />
         ) : (
           <Table>
@@ -616,97 +605,139 @@ export function StaffClient() {
                 <TableHead>Trạng thái</TableHead>
                 <TableHead>Mật khẩu</TableHead>
                 <TableHead>Cập nhật</TableHead>
-                <TableHead className="w-48 text-right">Thao tác</TableHead>
+                <TableHead className="w-72 text-right">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredStaffRows.length === 0 ? (
-                <EmptyRow colSpan={7} label="Chưa có nhân viên." />
-              ) : (
-                filteredStaffRows.map((staff) => {
-                  const isBusy = busyStaffId === staff.id && editBusy;
-                  const nextStatus =
-                    staff.status === "LOCKED" ? "ACTIVE" : "LOCKED";
-
-                  return (
-                    <TableRow key={staff.id}>
-                      <TableCell className="font-medium">
-                        <div>{staff.name || staff.username}</div>
-                        <div className="font-mono text-xs text-muted-foreground">
-                          {staff.username} · {staff.id}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {staff.email ?? "Chưa khai báo"}
-                      </TableCell>
-                      <TableCell>{formatRoles(staff.roles)}</TableCell>
-                      <TableCell>
-                        <StatusBadge
-                          tone={
-                            staff.status === "ACTIVE" ? "success" : "danger"
+              {staffRows.map((staff) => {
+                const protectedTarget = !canManageTarget(staff);
+                const isSelf = staff.id === user?.id;
+                const isBusy = busyStaffId === staff.id && editBusy;
+                const nextStatus =
+                  staff.status === "LOCKED" ? "ACTIVE" : "LOCKED";
+                return (
+                  <TableRow key={staff.id}>
+                    <TableCell className="font-medium">
+                      <div>{staff.name || staff.username}</div>
+                      <div className="font-mono text-xs text-muted-foreground">
+                        {staff.username} · {staff.id}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {staff.email ?? "Chưa khai báo"}
+                      <div>{staff.warehouseId ?? "Chưa gán kho"}</div>
+                    </TableCell>
+                    <TableCell>{formatRoles(staff.roles)}</TableCell>
+                    <TableCell>
+                      <StatusBadge
+                        tone={staff.status === "ACTIVE" ? "success" : "danger"}
+                      >
+                        {staff.status === "ACTIVE"
+                          ? "Đang hoạt động"
+                          : "Đã khóa"}
+                      </StatusBadge>
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge
+                        tone={staff.mustChangePassword ? "warning" : "neutral"}
+                      >
+                        {staff.mustChangePassword ? "Cần đổi" : "Ổn định"}
+                      </StatusBadge>
+                    </TableCell>
+                    <TableCell>{formatDate(staff.updatedAt)}</TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          disabled={editBusy || protectedTarget}
+                          onClick={() => openStaffEditor(staff)}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          <Pencil data-icon="inline-start" />
+                          Sửa
+                        </Button>
+                        <Button
+                          disabled={isBusy || protectedTarget}
+                          onClick={() =>
+                            lockStatusMutation.mutate({ nextStatus, staff })
+                          }
+                          size="sm"
+                          type="button"
+                          variant={
+                            staff.status === "LOCKED"
+                              ? "outline"
+                              : "destructive"
                           }
                         >
-                          {staff.status === "ACTIVE"
-                            ? "Đang hoạt động"
-                            : "Đã khóa"}
-                        </StatusBadge>
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge
-                          tone={
-                            staff.mustChangePassword ? "warning" : "neutral"
-                          }
+                          {isBusy ? (
+                            <LoaderCircle
+                              className="animate-spin"
+                              data-icon="inline-start"
+                            />
+                          ) : staff.status === "LOCKED" ? (
+                            <UnlockKeyhole data-icon="inline-start" />
+                          ) : (
+                            <LockKeyhole data-icon="inline-start" />
+                          )}
+                          {staff.status === "LOCKED" ? "Mở" : "Khóa"}
+                        </Button>
+                        <Button
+                          aria-label={`Xóa ${staff.username}`}
+                          disabled={editBusy || protectedTarget || isSelf}
+                          onClick={() => setDeletingStaff(staff)}
+                          size="icon-sm"
+                          type="button"
+                          variant="ghost"
                         >
-                          {staff.mustChangePassword ? "Cần đổi" : "Ổn định"}
-                        </StatusBadge>
-                      </TableCell>
-                      <TableCell>{formatDate(staff.updatedAt)}</TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            disabled={editBusy}
-                            onClick={() => openStaffEditor(staff)}
-                            size="sm"
-                            type="button"
-                            variant="outline"
-                          >
-                            <Pencil data-icon="inline-start" />
-                            Sửa
-                          </Button>
-                          <Button
-                            disabled={isBusy}
-                            onClick={() =>
-                              lockStatusMutation.mutate({ nextStatus, staff })
-                            }
-                            size="sm"
-                            type="button"
-                            variant={
-                              staff.status === "LOCKED"
-                                ? "outline"
-                                : "destructive"
-                            }
-                          >
-                            {isBusy ? (
-                              <LoaderCircle
-                                className="animate-spin"
-                                data-icon="inline-start"
-                              />
-                            ) : staff.status === "LOCKED" ? (
-                              <UnlockKeyhole data-icon="inline-start" />
-                            ) : (
-                              <LockKeyhole data-icon="inline-start" />
-                            )}
-                            {staff.status === "LOCKED" ? "Mở" : "Khóa"}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
+                          <Trash2 />
+                        </Button>
+                      </div>
+                      {protectedTarget ? (
+                        <p className="mt-2 text-right text-xs text-muted-foreground">
+                          Chỉ Admin có thể thao tác tài khoản Admin.
+                        </p>
+                      ) : null}
+                      {isSelf ? (
+                        <p className="mt-2 text-right text-xs text-muted-foreground">
+                          Không thể tự xóa tài khoản đang đăng nhập.
+                        </p>
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         )}
+
+        <div className="flex items-center justify-end gap-2 border-t border-border/70 pt-4">
+          <Button
+            aria-label="Trang trước"
+            disabled={page <= 1 || staffQuery.isFetching}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+            size="icon-sm"
+            type="button"
+            variant="outline"
+          >
+            <ChevronLeft />
+          </Button>
+          <span className="min-w-16 text-center text-sm text-muted-foreground">
+            {page}/{totalPages}
+          </span>
+          <Button
+            aria-label="Trang sau"
+            disabled={page >= totalPages || staffQuery.isFetching}
+            onClick={() =>
+              setPage((current) => Math.min(totalPages, current + 1))
+            }
+            size="icon-sm"
+            type="button"
+            variant="outline"
+          >
+            <ChevronRight />
+          </Button>
+        </div>
       </TablePanel>
 
       <Dialog
@@ -724,56 +755,55 @@ export function StaffClient() {
                   {editingStaff.username} · {editingStaff.id}
                 </DialogDescription>
               </DialogHeader>
-
-              <form className="space-y-4" onSubmit={handleUpdateRoles}>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <InfoRow
-                    label="Email"
-                    value={editingStaff.email ?? "Chưa khai báo"}
-                  />
-                  <InfoRow
-                    label="Kho phụ trách"
-                    value={editingStaff.warehouseId ?? "Chưa gán kho"}
-                  />
-                  <InfoRow
-                    label="Trạng thái"
-                    value={
-                      editingStaff.status === "ACTIVE"
-                        ? "Đang hoạt động"
-                        : "Đã khóa"
+              <form className="space-y-4" onSubmit={handleSaveStaff}>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <TextField
+                    id="edit-staff-name"
+                    label="Tên hiển thị"
+                    required={false}
+                    value={editProfile.name}
+                    onChange={(name) =>
+                      setEditProfile((current) => ({ ...current, name }))
                     }
                   />
-                  <InfoRow
-                    label="Cập nhật"
-                    value={formatDate(editingStaff.updatedAt)}
+                  <TextField
+                    id="edit-staff-email"
+                    label="Email"
+                    required={false}
+                    type="email"
+                    value={editProfile.email}
+                    onChange={(email) =>
+                      setEditProfile((current) => ({ ...current, email }))
+                    }
+                  />
+                  <TextField
+                    id="edit-staff-warehouse"
+                    label="Kho phụ trách"
+                    required={false}
+                    value={editProfile.warehouseId}
+                    onChange={(warehouseId) =>
+                      setEditProfile((current) => ({ ...current, warehouseId }))
+                    }
                   />
                 </div>
-
                 <div className="space-y-2">
                   <Label>Vai trò</Label>
                   <RoleCheckboxes
+                    availableRoles={availableRoles}
                     idPrefix="edit-role"
                     roles={editRoles}
                     onChange={setEditRoles}
                   />
                 </div>
-
                 <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/20 p-3 md:grid-cols-[1fr_auto_auto]">
-                  <div className="space-y-2">
-                    <Label htmlFor="staff-temporary-password">
-                      Mật khẩu tạm mới
-                    </Label>
-                    <Input
-                      autoComplete="new-password"
-                      id="staff-temporary-password"
-                      minLength={8}
-                      type="password"
-                      value={temporaryPassword}
-                      onChange={(event) =>
-                        setTemporaryPassword(event.target.value)
-                      }
-                    />
-                  </div>
+                <TextField
+                  id="staff-temporary-password"
+                  label="Mật khẩu tạm mới"
+                  required={false}
+                  type="password"
+                    value={temporaryPassword}
+                    onChange={setTemporaryPassword}
+                  />
                   <Button
                     className="self-end"
                     disabled={editBusy || temporaryPassword.length < 8}
@@ -823,8 +853,16 @@ export function StaffClient() {
                     {editingStaff.status === "LOCKED" ? "Mở khóa" : "Khóa"}
                   </Button>
                 </div>
-
                 <DialogFooter>
+                  <Button
+                    disabled={editBusy || editingStaff.id === user?.id}
+                    onClick={() => setDeletingStaff(editingStaff)}
+                    type="button"
+                    variant="destructive"
+                  >
+                    <Trash2 data-icon="inline-start" />
+                    Xóa nhân viên
+                  </Button>
                   <DialogClose asChild>
                     <Button type="button" variant="outline">
                       Đóng
@@ -834,7 +872,7 @@ export function StaffClient() {
                     disabled={editBusy || editRoles.length === 0}
                     type="submit"
                   >
-                    {updateRolesMutation.isPending ? (
+                    {saveStaffMutation.isPending ? (
                       <LoaderCircle
                         className="animate-spin"
                         data-icon="inline-start"
@@ -842,12 +880,52 @@ export function StaffClient() {
                     ) : (
                       <Save data-icon="inline-start" />
                     )}
-                    Lưu vai trò
+                    Lưu thay đổi
                   </Button>
                 </DialogFooter>
               </form>
             </>
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(deletingStaff)}
+        onOpenChange={(open) => !open && setDeletingStaff(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xóa nhân viên</DialogTitle>
+            <DialogDescription>
+              Tài khoản {deletingStaff?.username} sẽ bị xóa mềm và không còn
+              đăng nhập được. Thao tác này không xóa lịch sử nghiệp vụ.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                Hủy
+              </Button>
+            </DialogClose>
+            <Button
+              disabled={!deletingStaff || deleteUserMutation.isPending}
+              onClick={() =>
+                deletingStaff && deleteUserMutation.mutate(deletingStaff.id)
+              }
+              type="button"
+              variant="destructive"
+            >
+              {deleteUserMutation.isPending ? (
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
+              ) : (
+                <Trash2 data-icon="inline-start" />
+              )}
+              Xóa nhân viên
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

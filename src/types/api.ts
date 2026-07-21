@@ -16,6 +16,7 @@ export type ListWmsUsersQuery = {
   role?: string;
   search?: string;
   status?: WmsUserStatus;
+  warehouseId?: string;
 };
 
 export type WmsUserResponse = {
@@ -55,6 +56,12 @@ export type CreateUserResponse = {
   email?: string;
   roles: string[];
   mustChangePassword: boolean;
+};
+
+export type UpdateUserInput = {
+  name?: string;
+  email?: string;
+  warehouseId?: string;
 };
 
 export type UpdateUserRolesInput = {
