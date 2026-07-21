@@ -98,13 +98,13 @@ describe("WMS RBAC helpers", () => {
     expect(hasRouteAccess("/purchases", ["MANAGER"])).toBe(true);
     expect(hasRouteAccess("/goods-returns", ["MANAGER"])).toBe(true);
     expect(hasRouteAccess("/staff", ["ADMIN"])).toBe(true);
-    expect(hasRouteAccess("/staff", ["MANAGER"])).toBe(false);
+    expect(hasRouteAccess("/staff", ["MANAGER"])).toBe(true);
     expect(hasModuleActionAccess("suppliers", ["RECEIVER"])).toBe(false);
     expect(hasModuleActionAccess("purchases", ["RECEIVER"])).toBe(false);
     expect(hasModuleActionAccess("goods-returns", ["RECEIVER"])).toBe(true);
     expect(hasModuleActionAccess("goods-returns", ["MANAGER"])).toBe(false);
     expect(hasModuleActionAccess("staff", ["ADMIN"])).toBe(true);
-    expect(hasModuleActionAccess("staff", ["MANAGER"])).toBe(false);
+    expect(hasModuleActionAccess("staff", ["MANAGER"])).toBe(true);
     expect(hasModuleActionAccess("suppliers", ["MANAGER"])).toBe(true);
     expect(hasModuleActionAccess("purchases", ["MANAGER"])).toBe(true);
     expect(hasRouteAccess("/warehouses", ["RECEIVER"])).toBe(false);
