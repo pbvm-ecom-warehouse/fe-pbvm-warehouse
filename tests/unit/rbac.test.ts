@@ -27,6 +27,7 @@ describe("WMS RBAC helpers", () => {
     ]);
     expect(normalizeRoles("warehouse_manager")).toEqual(["MANAGER"]);
     expect(normalizeRoles("operator")).toEqual(["RECEIVER", "PICKER"]);
+    expect(normalizeRoles("shipper")).toEqual(["SHIPPER"]);
   });
 
   it("lets ADMIN bypass role checks", () => {
@@ -49,6 +50,9 @@ describe("WMS RBAC helpers", () => {
     const printerRoutes = getAllowedRoutes(dashboardRoutes, ["PRINTER"]).map(
       (route) => route.href,
     );
+    const shipperRoutes = getAllowedRoutes(dashboardRoutes, ["SHIPPER"]).map(
+      (route) => route.href,
+    );
 
     expect(receiverRoutes).not.toContain("/purchases");
     expect(receiverRoutes).not.toContain("/suppliers");
@@ -61,6 +65,18 @@ describe("WMS RBAC helpers", () => {
     expect(printerRoutes).not.toContain("/transfers");
     expect(printerRoutes).toContain("/print-jobs");
     expect(printerRoutes).not.toContain("/purchases");
+    expect(shipperRoutes).toContain("/shipping");
+    expect(shipperRoutes).not.toContain("/purchases");
+    expect(shipperRoutes).not.toContain("/print-jobs");
+  });
+
+  it("exposes Shipping to backend-approved roles only", () => {
+    expect(hasRouteAccess("/shipping", ["SHIPPER"])).toBe(true);
+    expect(hasRouteAccess("/shipping", ["MANAGER"])).toBe(true);
+    expect(hasRouteAccess("/shipping", ["ADMIN"])).toBe(true);
+    expect(hasRouteAccess("/shipping", ["RECEIVER"])).toBe(false);
+    expect(hasRouteAccess("/shipping", ["PICKER"])).toBe(false);
+    expect(hasRouteAccess("/shipping", ["PRINTER"])).toBe(false);
   });
 
   it("keeps reports directly under dashboard and hides the placeholder inventory route", () => {

@@ -11,6 +11,7 @@ import {
   ShoppingCart,
   SlidersHorizontal,
   Server,
+  Truck,
   UsersRound,
   Warehouse,
 } from "lucide-react";
@@ -59,6 +60,12 @@ export const dashboardRoutes = [
     label: "Xuất kho",
     icon: PackageCheck,
     allowedRoles: getRouteAllowedRoles("/goods-issues"),
+  },
+  {
+    href: "/shipping",
+    label: "Giao hàng",
+    icon: Truck,
+    allowedRoles: getRouteAllowedRoles("/shipping"),
   },
   {
     href: "/goods-returns",

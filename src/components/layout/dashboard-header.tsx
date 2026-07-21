@@ -53,6 +53,7 @@ function initials(name: string) {
 const roleSearchPlaceholder = {
   ADMIN: "Tìm SKU, phiếu nhập, người dùng...",
   MANAGER: "Tìm SKU, đơn mua, phiếu chuyển, báo cáo...",
+  SHIPPER: "Tìm mã đơn, mã vận đơn, người nhận...",
   RECEIVER: "Tìm phiếu nhập, SKU, vị trí cất hàng...",
   PICKER: "Tìm đơn soạn hàng, SKU, mã vị trí...",
   PRINTER: "Tìm in ly, ly chưa in, ly đã in...",
