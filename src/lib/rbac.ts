@@ -1,6 +1,7 @@
 export const WMS_ROLES = [
   "ADMIN",
   "MANAGER",
+  "SHIPPER",
   "RECEIVER",
   "PICKER",
   "PRINTER",
@@ -12,6 +13,7 @@ export type WmsRole = (typeof WMS_ROLES)[number];
 export const ROLE_LABELS: Record<WmsRole, string> = {
   ADMIN: "Admin",
   MANAGER: "Manager",
+  SHIPPER: "Nhân viên giao hàng",
   RECEIVER: "Receiver",
   PICKER: "Picker",
   PRINTER: "Printer",
@@ -21,6 +23,7 @@ export const ROLE_LABELS: Record<WmsRole, string> = {
 export const ROLE_DESCRIPTIONS: Record<WmsRole, string> = {
   ADMIN: "Toàn quyền vận hành WMS",
   MANAGER: "Điều phối, tạo lệnh và duyệt",
+  SHIPPER: "Bàn giao và cập nhật trạng thái giao hàng",
   RECEIVER: "Nhận hàng, cất hàng và hoàn hàng",
   PICKER: "Soạn hàng, xuất kho và lấy đúng vị trí kệ",
   PRINTER: "Vận hành in ly và xác nhận thành phẩm",
@@ -30,6 +33,7 @@ export const ROLE_DESCRIPTIONS: Record<WmsRole, string> = {
 export const ROLE_PRIORITY: readonly WmsRole[] = [
   "ADMIN",
   "MANAGER",
+  "SHIPPER",
   "RECEIVER",
   "PICKER",
   "PRINTER",
@@ -45,6 +49,7 @@ const LEGACY_ROLE_MAP: Record<string, readonly WmsRole[]> = {
   manager: ["MANAGER"],
   operator: ["RECEIVER", "PICKER"],
   staff: ["RECEIVER", "PICKER"],
+  shipper: ["SHIPPER"],
 };
 
 const ALL_STAFF_ROLES = WMS_ROLES;
@@ -57,6 +62,7 @@ export const ROUTE_ACCESS_BY_HREF = {
   "/warehouse-navigation": ["ADMIN", "MANAGER", "RECEIVER", "PICKER"],
   "/purchases": ["ADMIN", "MANAGER"],
   "/goods-issues": ["ADMIN", "MANAGER", "PICKER"],
+  "/shipping": ["ADMIN", "MANAGER", "SHIPPER"],
   "/goods-returns": ["ADMIN", "MANAGER", "RECEIVER"],
   "/adjustments": ["ADMIN", "MANAGER", "COUNTER", "RECEIVER"],
   "/suppliers": ["ADMIN", "MANAGER"],
@@ -73,6 +79,7 @@ export const MODULE_PRIMARY_ACTION_ROLES = {
   products: ["ADMIN", "MANAGER"],
   purchases: ["ADMIN", "MANAGER"],
   "goods-issues": ["ADMIN", "MANAGER", "PICKER"],
+  shipping: ["ADMIN", "MANAGER", "SHIPPER"],
   "goods-returns": ["ADMIN", "RECEIVER"],
   adjustments: ["ADMIN", "MANAGER", "COUNTER", "RECEIVER"],
   suppliers: ["ADMIN", "MANAGER"],

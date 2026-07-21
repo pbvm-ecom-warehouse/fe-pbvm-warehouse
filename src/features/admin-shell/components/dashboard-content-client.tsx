@@ -70,6 +70,10 @@ const rolePanelCopy: Record<WmsRole, { description: string; title: string }> = {
     title: "Bảng điều phối quản lý",
     description: "Theo dõi mua hàng, nhập kho, cất hàng và xuất kho.",
   },
+  SHIPPER: {
+    title: "Khu vực giao hàng",
+    description: "Theo dõi vận đơn, bàn giao hàng và cập nhật trạng thái giao nhận.",
+  },
   RECEIVER: {
     title: "Khu vực nhận hàng",
     description: "Tập trung phiếu nhập và task cất hàng cần xử lý.",

@@ -54,6 +54,18 @@ import {
   normalizeScrapNoteListResponse,
   rejectScrapNote,
 } from "@/features/adjustments/services/scrap-note.service";
+import {
+  assignShipmentCarrier,
+  createCarrier,
+  getCarrier,
+  getShipment,
+  listCarriers,
+  listShipments,
+  normalizeCarrierListResponse,
+  normalizeShipmentListResponse,
+  updateCarrier,
+  updateShipmentStatus,
+} from "@/features/shipping/services/shipping.service";
 
 vi.mock("@/lib/api-client", () => ({
   apiClient: {
@@ -208,6 +220,38 @@ const scrapNote = {
   status: "DRAFT" as const,
   updatedAt: "2026-07-06T00:00:00.000Z",
   warehouseId: "wh-1",
+};
+
+const carrier = {
+  code: "GHN",
+  contactInfo: { phone: "1900636677" },
+  createdAt: "2026-07-21T00:00:00.000Z",
+  id: "carrier-1",
+  name: "Giao Hàng Nhanh",
+  note: "Ưu tiên nội thành",
+  status: "ACTIVE" as const,
+  updatedAt: "2026-07-21T00:00:00.000Z",
+};
+
+const shipment = {
+  attempts: 0,
+  carrierId: "carrier-1",
+  codAmount: 320000,
+  createdAt: "2026-07-21T00:00:00.000Z",
+  fulfillWarehouseId: "warehouse-1",
+  goodsIssueId: "issue-1",
+  id: "shipment-1",
+  orderId: "order-1",
+  paymentMethod: "COD" as const,
+  recipient: {
+    address: { line: "12 Nguyễn Văn Linh", province: "Hồ Chí Minh" },
+    name: "Nguyễn An",
+    phone: "0901000000",
+  },
+  shipmentStatus: "PENDING" as const,
+  statusHistory: [],
+  trackingNumber: "GHN-0001",
+  updatedAt: "2026-07-21T00:00:00.000Z",
 };
 
 describe("Swagger-backed WMS services", () => {
@@ -627,6 +671,82 @@ describe("Swagger-backed WMS services", () => {
     expect(mockedPost).toHaveBeenCalledWith("/scrap-notes/scrap-1/approve");
     expect(mockedPost).toHaveBeenCalledWith("/scrap-notes/scrap-1/reject", {
       rejectReason: "Cần kiểm lại số lượng",
+    });
+  });
+
+  it("calls live carrier and shipment endpoints from Swagger", async () => {
+    mockedGet.mockResolvedValueOnce({ data: [shipment] });
+    mockedGet.mockResolvedValueOnce({ data: shipment });
+    mockedGet.mockResolvedValueOnce({ data: [carrier] });
+    mockedGet.mockResolvedValueOnce({ data: carrier });
+    mockedPost.mockResolvedValueOnce({ data: carrier });
+    mockedPatch.mockResolvedValue({ data: shipment });
+
+    expect(normalizeShipmentListResponse([shipment])).toMatchObject({
+      data: [shipment],
+      total: 1,
+    });
+    expect(normalizeCarrierListResponse([carrier])).toMatchObject({
+      data: [carrier],
+      total: 1,
+    });
+
+    await listShipments({
+      carrierId: "carrier-1",
+      limit: 20,
+      orderId: "order-1",
+      page: 1,
+      shipmentStatus: "PENDING",
+    });
+    await getShipment("shipment-1");
+    await listCarriers({ limit: 20, page: 1, status: "ACTIVE" });
+    await getCarrier("carrier-1");
+    await createCarrier({
+      code: "GHN",
+      contactInfo: { phone: "1900636677" },
+      name: "Giao Hàng Nhanh",
+      note: "Ưu tiên nội thành",
+    });
+    await updateCarrier("carrier-1", { status: "INACTIVE" });
+    await assignShipmentCarrier("shipment-1", {
+      carrierId: "carrier-1",
+      trackingNumber: "GHN-0002",
+    });
+    await updateShipmentStatus("shipment-1", {
+      note: "Đã bàn giao cho hãng vận chuyển",
+      status: "PICKED_UP",
+    });
+
+    expect(mockedGet).toHaveBeenCalledWith("/shipments", {
+      params: {
+        carrierId: "carrier-1",
+        limit: 20,
+        orderId: "order-1",
+        page: 1,
+        shipmentStatus: "PENDING",
+      },
+    });
+    expect(mockedGet).toHaveBeenCalledWith("/shipments/shipment-1");
+    expect(mockedGet).toHaveBeenCalledWith("/carriers", {
+      params: { limit: 20, page: 1, status: "ACTIVE" },
+    });
+    expect(mockedGet).toHaveBeenCalledWith("/carriers/carrier-1");
+    expect(mockedPost).toHaveBeenCalledWith("/carriers", {
+      code: "GHN",
+      contactInfo: { phone: "1900636677" },
+      name: "Giao Hàng Nhanh",
+      note: "Ưu tiên nội thành",
+    });
+    expect(mockedPatch).toHaveBeenCalledWith("/carriers/carrier-1", {
+      status: "INACTIVE",
+    });
+    expect(mockedPatch).toHaveBeenCalledWith("/shipments/shipment-1/assign", {
+      carrierId: "carrier-1",
+      trackingNumber: "GHN-0002",
+    });
+    expect(mockedPatch).toHaveBeenCalledWith("/shipments/shipment-1/status", {
+      note: "Đã bàn giao cho hãng vận chuyển",
+      status: "PICKED_UP",
     });
   });
 });

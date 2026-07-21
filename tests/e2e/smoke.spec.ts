@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 type SeedRole =
   | "ADMIN"
   | "MANAGER"
+  | "SHIPPER"
   | "RECEIVER"
   | "PICKER"
   | "PRINTER"
@@ -446,6 +447,24 @@ test("admin edits and removes supplier items from row actions", async ({
 
 test("admin sees system health and staff list management", async ({ page }) => {
   await seedWmsSession(page, ["ADMIN"], "Admin User");
+  await page.route("**/api/wms/auth/users**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: [
+          {
+            id: "admin-1",
+            mustChangePassword: false,
+            name: "Administrator",
+            roles: ["ADMIN"],
+            status: "ACTIVE",
+            username: "admin",
+          },
+        ],
+        meta: { requestId: "e2e-staff-list" },
+      }),
+    });
+  });
   await page.route("**/api/wms/health", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -478,7 +497,9 @@ test("admin sees system health and staff list management", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: /^Nhân viên$/i }),
   ).toBeVisible();
-  await expect(page.getByText("Danh sách nhân viên")).toBeVisible();
+  await expect(
+    page.getByText("Danh sách nhân viên", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("Administrator")).toBeVisible();
   await expect(
     page.getByRole("button", { name: /^Tạo nhân viên$/i }),
@@ -926,4 +947,134 @@ test("picker sees picking location and confirms goods issue line", async ({
   await expect(page.getByLabel("Mã lô")).toHaveValue("lot-1");
   await page.getByRole("button", { name: /^Xác nhận$/i }).click();
   await expect(page.getByText(/Đã xác nhận dòng xuất kho/i)).toBeVisible();
+});
+
+test("shipper assigns a carrier and advances a shipment", async ({ page }) => {
+  await seedWmsSession(page, ["SHIPPER"], "Shipper User");
+  let shipmentStatus = "PENDING";
+  let carrierId: string | undefined;
+  let trackingNumber: string | undefined;
+  const carrier = {
+    code: "GHN",
+    contactInfo: { phone: "1900636677" },
+    id: "carrier-1",
+    name: "Giao Hàng Nhanh",
+    status: "ACTIVE",
+  };
+  const shipment = () => ({
+    attempts: 0,
+    carrierId,
+    codAmount: 320000,
+    createdAt: "2026-07-21T00:00:00.000Z",
+    fulfillWarehouseId: "warehouse-1",
+    goodsIssueId: "issue-1",
+    id: "shipment-1",
+    orderId: "ORD-001",
+    paymentMethod: "COD",
+    recipient: {
+      address: { line: "12 Nguyễn Văn Linh", province: "Hồ Chí Minh" },
+      name: "Nguyễn An",
+      phone: "0901000000",
+    },
+    shipmentStatus,
+    statusHistory: [],
+    trackingNumber,
+    updatedAt: "2026-07-21T00:00:00.000Z",
+  });
+
+  await page.route("**/api/wms/carriers**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ data: [carrier] }),
+    });
+  });
+  await page.route("**/api/wms/shipments**", async (route) => {
+    const request = route.request();
+    const url = request.url();
+
+    if (request.method() === "PATCH") {
+      const payload = request.postDataJSON();
+      if (url.endsWith("/assign")) {
+        carrierId = payload.carrierId;
+        trackingNumber = payload.trackingNumber;
+      } else {
+        shipmentStatus = payload.status;
+      }
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ data: shipment() }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: url.includes("/shipments/shipment-1") ? shipment() : [shipment()],
+      }),
+    });
+  });
+
+  await page.goto("/shipping");
+  await expect(page.getByRole("heading", { name: /^Giao hàng$/i })).toBeVisible();
+  await page.getByRole("row", { name: /ORD-001/i }).click();
+  await page.getByRole("button", { name: /^Gán hãng và mã vận đơn$/i }).click();
+  const assignDialog = page.getByRole("dialog", { name: /Gán hãng vận chuyển/i });
+  await assignDialog.getByRole("combobox", { name: "Hãng vận chuyển" }).click();
+  await page.getByRole("option", { name: /Giao Hàng Nhanh.*GHN/i }).click();
+  await assignDialog.getByLabel("Mã vận đơn").fill("GHN-0002");
+  await assignDialog.getByRole("button", { name: /^Lưu gán hãng$/i }).click();
+  await expect(page.getByText(/Đã gán hãng vận chuyển/i)).toBeVisible();
+
+  await page.getByRole("button", { name: /^Cập nhật trạng thái$/i }).click();
+  const statusDialog = page.getByRole("dialog", { name: /Cập nhật trạng thái giao hàng/i });
+  await statusDialog.getByRole("combobox", { name: "Trạng thái" }).click();
+  await page.getByRole("option", { name: "Đã nhận hàng" }).click();
+  await statusDialog.getByRole("button", { name: /^Lưu trạng thái$/i }).click();
+  await expect(page.getByText(/Đã cập nhật trạng thái giao hàng/i)).toBeVisible();
+});
+
+test("manager creates a carrier but cannot change shipment operations", async ({
+  page,
+}) => {
+  await seedWmsSession(page, ["MANAGER"], "Manager User");
+  const carrier = {
+    code: "GHN",
+    contactInfo: { phone: "1900636677" },
+    id: "carrier-1",
+    name: "Giao Hàng Nhanh",
+    status: "ACTIVE",
+  };
+  await page.route("**/api/wms/shipments**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ data: [] }),
+    });
+  });
+  await page.route("**/api/wms/carriers**", async (route) => {
+    const request = route.request();
+    const created = request.method() === "POST";
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: created
+          ? { ...carrier, code: "JNT", name: "J&T Express" }
+          : [carrier],
+      }),
+    });
+  });
+
+  await page.goto("/shipping");
+  await expect(
+    page.getByRole("button", { name: /^Gán hãng và mã vận đơn$/i }),
+  ).toHaveCount(0);
+  await page.getByRole("tab", { name: /^Hãng vận chuyển$/i }).click();
+  await page.getByRole("button", { name: /^Thêm hãng vận chuyển$/i }).click();
+  const carrierDialog = page.getByRole("dialog", {
+    name: /^Thêm hãng vận chuyển$/i,
+  });
+  await carrierDialog.getByLabel("Tên hãng").fill("J&T Express");
+  await carrierDialog.getByLabel("Mã hãng").fill("JNT");
+  await carrierDialog.getByRole("button", { name: /^Tạo hãng$/i }).click();
+  await expect(page.getByText(/Đã thêm hãng vận chuyển/i)).toBeVisible();
 });
