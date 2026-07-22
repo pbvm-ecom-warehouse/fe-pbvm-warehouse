@@ -17,7 +17,7 @@ vi.mock("@/features/staff/services/staff.service", () => ({
   resetWmsUserPassword: vi.fn(),
   unlockWmsUser: vi.fn(),
   updateWmsUser: vi.fn(),
-  updateWmsUserRoles: vi.fn(),
+  updateWmsUserRole: vi.fn(),
 }));
 
 vi.mock("sonner", () => ({
@@ -72,7 +72,7 @@ describe("staff page", () => {
           id: "admin-001",
           mustChangePassword: false,
           name: "Administrator",
-          roles: ["ADMIN"],
+          role: "ADMIN",
           status: "ACTIVE",
           updatedAt: "2026-07-16T01:31:58.557Z",
           username: "admin",
@@ -84,7 +84,7 @@ describe("staff page", () => {
           id: "printer-001",
           mustChangePassword: false,
           name: "Le Anh Thu",
-          roles: ["PRINTER"],
+          role: "PRINTER",
           status: "LOCKED",
           updatedAt: "2026-07-16T03:35:00.000Z",
           username: "printer01",
@@ -133,7 +133,7 @@ describe("staff page", () => {
           id: "admin-001",
           username: "admin",
           name: "Administrator",
-          roles: ["ADMIN"],
+          role: "ADMIN",
           status: "ACTIVE",
           mustChangePassword: false,
         },
@@ -153,6 +153,10 @@ describe("staff page", () => {
     expect(screen.getByRole("button", { name: /^Khóa$/i })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: /Tạo nhân viên/i }));
+    const roleSelect = screen.getByRole("combobox", {
+      name: "Vai trò khi tạo nhân viên",
+    });
+    expect(roleSelect).toHaveTextContent("Receiver");
     expect(
       screen.queryByRole("checkbox", { name: "Admin" }),
     ).not.toBeInTheDocument();
@@ -167,7 +171,7 @@ describe("staff page", () => {
           id: activeUser.id,
           username: "current-admin",
           name: "Current Admin",
-          roles: ["ADMIN"],
+          role: "ADMIN",
           status: "ACTIVE",
           mustChangePassword: false,
         },
@@ -196,7 +200,7 @@ describe("staff page", () => {
           id: "receiver-001",
           username: "receiver01",
           name: "Receiver 01",
-          roles: ["RECEIVER"],
+          role: "RECEIVER",
           status: "ACTIVE",
           mustChangePassword: false,
         },

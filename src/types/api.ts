@@ -24,7 +24,8 @@ export type WmsUserResponse = {
   username: string;
   email?: string;
   name?: string;
-  roles: string[];
+  role: string;
+  roles?: string[];
   status: WmsUserStatus;
   mustChangePassword: boolean;
   warehouseId?: string;
@@ -47,14 +48,14 @@ export type CreateUserInput = {
   password: string;
   email?: string;
   name?: string;
-  roles?: string[];
+  role?: string;
 };
 
 export type CreateUserResponse = {
   id: string;
   username: string;
   email?: string;
-  roles: string[];
+  role: string;
   mustChangePassword: boolean;
 };
 
@@ -64,8 +65,8 @@ export type UpdateUserInput = {
   warehouseId?: string;
 };
 
-export type UpdateUserRolesInput = {
-  roles: string[];
+export type UpdateUserRoleInput = {
+  role: string;
 };
 
 export type ResetUserPasswordInput = {

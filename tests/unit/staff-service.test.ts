@@ -9,7 +9,7 @@ import {
   resetWmsUserPassword,
   unlockWmsUser,
   updateWmsUser,
-  updateWmsUserRoles,
+  updateWmsUserRole,
 } from "@/features/staff/services/staff.service";
 import { apiClient } from "@/lib/api-client";
 
@@ -32,7 +32,7 @@ const userResponse = {
   username: "receiver01",
   email: "receiver01@example.com",
   name: "Receiver 01",
-  roles: ["RECEIVER"],
+  role: "RECEIVER",
   status: "ACTIVE" as const,
   mustChangePassword: true,
   warehouseId: "central",
@@ -80,7 +80,7 @@ describe("staff service", () => {
     const createInput = {
       username: "receiver01",
       password: "TempP@ssw0rd123!",
-      roles: ["RECEIVER"],
+      role: "RECEIVER",
     };
     const updateInput = {
       name: "Receiver Updated",
@@ -96,7 +96,7 @@ describe("staff service", () => {
           id: userResponse.id,
           username: userResponse.username,
           email: userResponse.email,
-          roles: userResponse.roles,
+          role: userResponse.role,
           mustChangePassword: true,
         },
         meta: { requestId: "create-1" },
@@ -121,9 +121,9 @@ describe("staff service", () => {
     expect(mockedPatch).toHaveBeenCalledWith("/users/user%2F1", updateInput);
   });
 
-  it("updates roles, lock state and password through /users/{id}", async () => {
+  it("updates the single role, lock state and password through /users/{id}", async () => {
     mockedPatch.mockResolvedValueOnce({
-      data: { data: { ...userResponse, roles: ["RECEIVER", "PICKER"] } },
+      data: { data: { ...userResponse, role: "PICKER" } },
     });
     mockedPost
       .mockResolvedValueOnce({
@@ -134,15 +134,15 @@ describe("staff service", () => {
         data: { data: { success: true, mustChangePassword: true } },
       });
 
-    await updateWmsUserRoles("user-1", { roles: ["RECEIVER", "PICKER"] });
+    await updateWmsUserRole("user-1", { role: "PICKER" });
     await lockWmsUser("user-1");
     await unlockWmsUser("user-1");
     await resetWmsUserPassword("user-1", {
       temporaryPassword: "TempP@ssw0rd123!",
     });
 
-    expect(mockedPatch).toHaveBeenCalledWith("/users/user-1/roles", {
-      roles: ["RECEIVER", "PICKER"],
+    expect(mockedPatch).toHaveBeenCalledWith("/users/user-1/role", {
+      role: "PICKER",
     });
     expect(mockedPost).toHaveBeenNthCalledWith(1, "/users/user-1/lock");
     expect(mockedPost).toHaveBeenNthCalledWith(2, "/users/user-1/unlock");

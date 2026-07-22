@@ -20,7 +20,6 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogClose,
@@ -63,7 +62,7 @@ import {
   resetWmsUserPassword,
   unlockWmsUser,
   updateWmsUser,
-  updateWmsUserRoles,
+  updateWmsUserRole,
 } from "@/features/staff/services/staff.service";
 import { useSessionUser } from "@/hooks/use-session-user";
 import { getApiErrorMessage } from "@/lib/api-contract";
@@ -96,7 +95,7 @@ const defaultCreateForm = {
   email: "",
   name: "",
   password: "",
-  roles: ["RECEIVER"] as WmsRole[],
+  role: "RECEIVER" as WmsRole,
   username: "",
 };
 const defaultFilters = {
@@ -118,28 +117,22 @@ function formatError(error: unknown) {
 
 function buildCreatePayload(
   form: typeof defaultCreateForm,
-  roles: readonly WmsRole[],
+  role: WmsRole,
 ): CreateUserInput {
   return {
     email: optionalText(form.email),
     name: optionalText(form.name),
     password: form.password,
-    roles: [...roles],
+    role,
     username: form.username.trim(),
   };
 }
 
-function toggleRole(current: readonly WmsRole[], role: WmsRole) {
-  return current.includes(role)
-    ? current.filter((currentRole) => currentRole !== role)
-    : [...current, role];
-}
-
-function formatRoles(roles: readonly string[]) {
-  const normalized = normalizeRoles(roles);
+function formatRole(role: string | undefined, legacyRoles?: readonly string[]) {
+  const normalized = normalizeRoles(role ?? legacyRoles);
   return normalized.length > 0
     ? normalized.map((role) => ROLE_LABELS[role]).join(", ")
-    : roles.join(", ") || "Chưa phân quyền";
+    : role || legacyRoles?.join(", ") || "Chưa phân quyền";
 }
 
 function formatDate(value: string | undefined) {
@@ -150,36 +143,37 @@ function formatDate(value: string | undefined) {
     : new Intl.DateTimeFormat("vi-VN").format(date);
 }
 
-function RoleCheckboxes({
+function RoleSelect({
   availableRoles,
-  idPrefix,
+  id,
+  label,
   onChange,
-  roles,
+  role,
 }: {
   availableRoles: readonly WmsRole[];
-  idPrefix: string;
-  onChange: (roles: WmsRole[]) => void;
-  roles: readonly WmsRole[];
+  id: string;
+  label: string;
+  onChange: (role: WmsRole) => void;
+  role: WmsRole;
 }) {
   return (
-    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-      {availableRoles.map((role) => {
-        const id = `${idPrefix}-${role.toLowerCase()}`;
-        return (
-          <Label
-            className="flex items-center gap-2 rounded-lg border border-border/70 px-3 py-2 text-sm font-medium"
-            htmlFor={id}
-            key={role}
-          >
-            <Checkbox
-              checked={roles.includes(role)}
-              id={id}
-              onCheckedChange={() => onChange(toggleRole(roles, role))}
-            />
-            {ROLE_LABELS[role]}
-          </Label>
-        );
-      })}
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Select
+        value={role}
+        onValueChange={(value) => onChange(value as WmsRole)}
+      >
+        <SelectTrigger id={id} className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {availableRoles.map((availableRole) => (
+            <SelectItem key={availableRole} value={availableRole}>
+              {ROLE_LABELS[availableRole]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
@@ -251,20 +245,22 @@ export function StaffClient() {
   const [editingStaff, setEditingStaff] = useState<StaffListRow | null>(null);
   const [deletingStaff, setDeletingStaff] = useState<StaffListRow | null>(null);
   const [editProfile, setEditProfile] = useState(defaultProfile);
-  const [editRoles, setEditRoles] = useState<WmsRole[]>(["RECEIVER"]);
+  const [editRole, setEditRole] = useState<WmsRole>("RECEIVER");
   const [temporaryPassword, setTemporaryPassword] =
     useState("TempP@ssw0rd123!");
 
-  const selectedCreateRoles = createForm.roles.filter((role) =>
-    availableRoles.includes(role),
-  );
+  const selectedCreateRole = availableRoles.includes(createForm.role)
+    ? createForm.role
+    : (availableRoles[0] ?? "RECEIVER");
   const createFormValid =
     createForm.username.trim().length >= 3 &&
     createForm.password.length >= 8 &&
-    selectedCreateRoles.length > 0;
+    availableRoles.length > 0;
 
   function canManageTarget(staff: StaffListRow) {
-    return isAdmin || !normalizeRoles(staff.roles).includes("ADMIN");
+    return (
+      isAdmin || !normalizeRoles(staff.role ?? staff.roles).includes("ADMIN")
+    );
   }
 
   async function refreshStaff() {
@@ -273,8 +269,8 @@ export function StaffClient() {
 
   function openStaffEditor(staff: StaffListRow) {
     if (!canManageTarget(staff)) return;
-    const roles = normalizeRoles(staff.roles).filter((role) =>
-      availableRoles.includes(role),
+    const role = normalizeRoles(staff.role ?? staff.roles).find((candidate) =>
+      availableRoles.includes(candidate),
     );
     setEditingStaff(staff);
     setEditProfile({
@@ -282,7 +278,7 @@ export function StaffClient() {
       name: staff.name ?? "",
       warehouseId: staff.warehouseId ?? "",
     });
-    setEditRoles(roles.length > 0 ? roles : ["RECEIVER"]);
+    setEditRole(role ?? "RECEIVER");
     setTemporaryPassword("TempP@ssw0rd123!");
   }
 
@@ -300,15 +296,15 @@ export function StaffClient() {
   const saveStaffMutation = useMutation({
     mutationFn: async ({
       profile,
-      roles,
+      role,
       staff,
     }: {
       profile: UpdateUserInput;
-      roles: WmsRole[];
+      role: WmsRole;
       staff: StaffListRow;
     }) => {
       await updateWmsUser(staff.id, profile);
-      await updateWmsUserRoles(staff.id, { roles });
+      await updateWmsUserRole(staff.id, { role });
     },
     onError: (error) => toast.error(formatError(error)),
     onSuccess: async () => {
@@ -360,7 +356,7 @@ export function StaffClient() {
   function handleCreateUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     createUserMutation.mutate(
-      buildCreatePayload(createForm, selectedCreateRoles),
+      buildCreatePayload(createForm, selectedCreateRole),
     );
   }
 
@@ -379,7 +375,7 @@ export function StaffClient() {
         name: optionalText(editProfile.name),
         warehouseId: optionalText(editProfile.warehouseId),
       },
-      roles: editRoles,
+      role: editRole,
       staff: editingStaff,
     });
   }
@@ -462,13 +458,13 @@ export function StaffClient() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Vai trò khi tạo nhân viên</Label>
-                  <RoleCheckboxes
+                  <RoleSelect
                     availableRoles={availableRoles}
-                    idPrefix="create-role"
-                    roles={selectedCreateRoles}
-                    onChange={(roles) =>
-                      setCreateForm((current) => ({ ...current, roles }))
+                    id="create-role"
+                    label="Vai trò khi tạo nhân viên"
+                    role={selectedCreateRole}
+                    onChange={(role) =>
+                      setCreateForm((current) => ({ ...current, role }))
                     }
                   />
                 </div>
@@ -627,7 +623,7 @@ export function StaffClient() {
                       {staff.email ?? "Chưa khai báo"}
                       <div>{staff.warehouseId ?? "Chưa gán kho"}</div>
                     </TableCell>
-                    <TableCell>{formatRoles(staff.roles)}</TableCell>
+                    <TableCell>{formatRole(staff.role, staff.roles)}</TableCell>
                     <TableCell>
                       <StatusBadge
                         tone={staff.status === "ACTIVE" ? "success" : "danger"}
@@ -787,20 +783,20 @@ export function StaffClient() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Vai trò</Label>
-                  <RoleCheckboxes
+                  <RoleSelect
                     availableRoles={availableRoles}
-                    idPrefix="edit-role"
-                    roles={editRoles}
-                    onChange={setEditRoles}
+                    id="edit-role"
+                    label="Vai trò"
+                    role={editRole}
+                    onChange={setEditRole}
                   />
                 </div>
                 <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/20 p-3 md:grid-cols-[1fr_auto_auto]">
-                <TextField
-                  id="staff-temporary-password"
-                  label="Mật khẩu tạm mới"
-                  required={false}
-                  type="password"
+                  <TextField
+                    id="staff-temporary-password"
+                    label="Mật khẩu tạm mới"
+                    required={false}
+                    type="password"
                     value={temporaryPassword}
                     onChange={setTemporaryPassword}
                   />
@@ -868,10 +864,7 @@ export function StaffClient() {
                       Đóng
                     </Button>
                   </DialogClose>
-                  <Button
-                    disabled={editBusy || editRoles.length === 0}
-                    type="submit"
-                  >
+                  <Button disabled={editBusy} type="submit">
                     {saveStaffMutation.isPending ? (
                       <LoaderCircle
                         className="animate-spin"
