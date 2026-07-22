@@ -50,3 +50,11 @@ export function clearAuthTokens() {
   window.localStorage.removeItem(ACCESS_TOKEN_KEY);
   window.localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
+
+export function clearTenantId() {
+  if (!isBrowser()) {
+    return;
+  }
+
+  window.localStorage.removeItem(TENANT_ID_KEY);
+}

@@ -2,6 +2,7 @@ import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
 
 import {
   clearAuthTokens,
+  clearTenantId,
   getAccessToken,
   getRefreshToken,
   getTenantId,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/auth-token";
 import { getApiBaseUrl, type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
 import { env } from "@/lib/env";
+import { useAuthStore } from "@/stores/auth-store";
 
 type RetryRequestConfig = InternalAxiosRequestConfig & {
   _retry?: boolean;
@@ -109,6 +111,8 @@ apiClient.interceptors.response.use(
       return apiClient(originalRequest);
     } catch (refreshError) {
       clearAuthTokens();
+      clearTenantId();
+      useAuthStore.getState().clearUser();
       return Promise.reject(refreshError);
     }
   },
