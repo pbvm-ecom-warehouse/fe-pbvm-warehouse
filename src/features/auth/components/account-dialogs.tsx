@@ -27,14 +27,17 @@ function formatError(error: unknown) {
   return getApiErrorMessage(error) ?? "Không kết nối được WMS.";
 }
 
-function formatRoles(roles: WmsUserResponse["roles"]) {
-  const normalized = normalizeRoles(roles);
+function formatRole(
+  role: WmsUserResponse["role"],
+  legacyRoles?: WmsUserResponse["roles"],
+) {
+  const normalized = normalizeRoles(role ?? legacyRoles);
 
   if (normalized.length > 0) {
     return normalized.map((role) => ROLE_LABELS[role]).join(", ");
   }
 
-  return roles.length > 0 ? roles.join(", ") : "Chưa phân quyền";
+  return role || legacyRoles?.join(", ") || "Chưa phân quyền";
 }
 
 function formatDateTime(value: string | undefined) {
@@ -114,7 +117,10 @@ export function AccountProfileDialog({
             <ProfileRow label="Tên đăng nhập" value={profile.username} />
             <ProfileRow label="Tên hiển thị" value={profile.name} />
             <ProfileRow label="Email" value={profile.email} />
-            <ProfileRow label="Vai trò" value={formatRoles(profile.roles)} />
+            <ProfileRow
+              label="Vai trò"
+              value={formatRole(profile.role, profile.roles)}
+            />
             <ProfileRow label="Kho phụ trách" value={profile.warehouseId} />
             <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/20 px-3 py-2 sm:grid-cols-[150px_1fr] sm:items-center">
               <span className="text-xs font-medium text-muted-foreground">

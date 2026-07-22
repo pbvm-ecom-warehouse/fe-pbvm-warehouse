@@ -18,7 +18,6 @@ describe("WMS auth bootstrap service", () => {
       password: "P@ssw0rd123!",
       email: "admin@example.com",
       name: "System Admin",
-      roles: ["ADMIN"],
     };
     mockedPost.mockResolvedValueOnce({
       data: {
@@ -26,7 +25,7 @@ describe("WMS auth bootstrap service", () => {
           id: "admin-1",
           username: "admin",
           email: "admin@example.com",
-          roles: ["ADMIN"],
+          role: "ADMIN",
           mustChangePassword: true,
         },
         meta: { requestId: "bootstrap-1" },
@@ -35,7 +34,7 @@ describe("WMS auth bootstrap service", () => {
 
     await expect(bootstrapAdmin(input)).resolves.toMatchObject({
       username: "admin",
-      roles: ["ADMIN"],
+      role: "ADMIN",
       mustChangePassword: true,
     });
     expect(mockedPost).toHaveBeenCalledWith("/auth/bootstrap-admin", input);

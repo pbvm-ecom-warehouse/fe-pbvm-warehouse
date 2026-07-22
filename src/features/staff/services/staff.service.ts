@@ -8,7 +8,7 @@ import type {
   ResetUserPasswordInput,
   ResetUserPasswordResponse,
   UpdateUserInput,
-  UpdateUserRolesInput,
+  UpdateUserRoleInput,
   WmsUserResponse,
 } from "@/types/api";
 
@@ -48,13 +48,13 @@ export async function updateWmsUser(userId: string, input: UpdateUserInput) {
   return unwrapApiData(response.data);
 }
 
-export async function updateWmsUserRoles(
+export async function updateWmsUserRole(
   userId: string,
-  input: UpdateUserRolesInput,
+  input: UpdateUserRoleInput,
 ) {
   const response = await apiClient.patch<
     ApiEnvelope<WmsUserResponse> | WmsUserResponse
-  >(`${userPath(userId)}/roles`, input);
+  >(`${userPath(userId)}/role`, input);
 
   return unwrapApiData(response.data);
 }

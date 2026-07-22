@@ -99,7 +99,7 @@ export function sessionUserFromWmsUserResponse(
   fallback: SessionUser | null = null,
   fallbackTenantId = "demo-tenant",
 ): SessionUser | null {
-  const roles = normalizeRoles(user.roles);
+  const roles = normalizeRoles(user.role ?? user.roles);
 
   if (roles.length === 0 || user.status !== "ACTIVE") {
     return null;

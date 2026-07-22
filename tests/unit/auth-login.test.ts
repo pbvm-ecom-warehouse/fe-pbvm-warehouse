@@ -2,9 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "@/lib/api-client";
 import { loginSchema } from "@/features/auth/schemas/login.schema";
-import {
-  changePasswordSchema,
-} from "@/features/auth/schemas/change-password.schema";
+import { changePasswordSchema } from "@/features/auth/schemas/change-password.schema";
 import {
   changePassword,
   login,
@@ -74,7 +72,7 @@ describe("wms login schema", () => {
           username: "receiver01",
           email: "receiver01@example.com",
           name: "Receiver 01",
-          roles: ["RECEIVER"],
+          role: "RECEIVER",
           status: "ACTIVE",
           mustChangePassword: false,
           warehouseId: "central",
