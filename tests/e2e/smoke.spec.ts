@@ -264,13 +264,15 @@ test("manager creates a template-driven warehouse item", async ({ page }) => {
   });
 
   await page.goto("/products");
-  await page.getByRole("tab", { name: /^Tạo SKU$/i }).click();
-  const skuPanel = page.getByRole("tabpanel", { name: /^Tạo SKU$/i });
-  await expect(skuPanel).toBeVisible();
+  const itemPanel = page.getByRole("tabpanel", { name: /^Mặt hàng$/i });
+  await itemPanel.getByRole("button", { name: /^Tạo mặt hàng$/i }).click();
+  await expect(
+    itemPanel.getByRole("heading", { name: /^Tạo mặt hàng$/i }),
+  ).toBeVisible();
 
   const skuFieldBoxes = await Promise.all(
     ["Kiểu ly", "Chất liệu", "Dung tích", "Màu sắc"].map((label) =>
-      skuPanel.getByRole("combobox", { name: label }).boundingBox(),
+      itemPanel.getByRole("combobox", { name: label }).boundingBox(),
     ),
   );
   const skuFieldTopPositions = skuFieldBoxes.map((box) => box?.y ?? -1);
@@ -284,7 +286,7 @@ test("manager creates a template-driven warehouse item", async ({ page }) => {
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  await skuPanel.getByLabel("Tên nội bộ").fill("Ly nắp tim PET 500ml");
+  await itemPanel.getByLabel("Tên nội bộ").fill("Ly nắp tim PET 500ml");
 
   for (const [label, optionName] of [
     ["Kiểu ly", "Ly nắp tim (HRT)"],
@@ -292,18 +294,18 @@ test("manager creates a template-driven warehouse item", async ({ page }) => {
     ["Dung tích", "500 ml (500)"],
     ["Màu sắc", "Trong suốt (CLR)"],
   ]) {
-    await skuPanel.getByRole("combobox", { name: label }).click();
+    await itemPanel.getByRole("combobox", { name: label }).click();
     await page.getByRole("option", { name: optionName }).click();
   }
 
-  await expect(skuPanel.getByText("CUP-HRT-PET-500-CLR")).toBeVisible();
-  await expect(skuPanel.getByText("Đã xác nhận cấu hình")).toBeVisible();
-  await skuPanel.getByRole("button", { name: /^Tạo mặt hàng$/i }).click();
+  await expect(itemPanel.getByText("CUP-HRT-PET-500-CLR")).toBeVisible();
+  await expect(itemPanel.getByText("Đã xác nhận cấu hình")).toBeVisible();
+  await itemPanel.getByRole("button", { name: /^Tạo mặt hàng$/i }).click();
 
   await expect(
-    skuPanel.getByRole("heading", { name: /Đã tạo mặt hàng/i }),
+    itemPanel.getByRole("heading", { name: /Đã tạo mặt hàng/i }),
   ).toBeVisible();
-  await expect(skuPanel.getByText("2000000000015")).toBeVisible();
+  await expect(itemPanel.getByText("2000000000015")).toBeVisible();
   expect(createBody).toMatchObject({
     attributeOptionIds: [
       optionByKey.CUP_STYLE.id,

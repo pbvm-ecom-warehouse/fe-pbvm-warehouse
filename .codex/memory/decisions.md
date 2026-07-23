@@ -97,3 +97,71 @@
   - `/staff` remains ADMIN-only. The staff page now follows the list-first route pattern: header button `Tạo nhân viên`, table below, row actions for edit and lock/unlock, and edit dialog for roles/reset password.
   - Backend still has no staff list endpoint. The staff table uses typed frontend mock rows and appends users created through existing admin auth endpoints until backend adds `GET /auth/users`.
   - Verification after this work: `pnpm typecheck`, `pnpm lint`, `pnpm test` (`97/97`), and full `pnpm test:e2e` (`13/13`) passed.
+- 2026-07-21: WMS shipping UI compact:
+  - Backend Swagger now exposes WMS shipping contracts for `carriers` and `shipments`; these are Warehouse/WMS APIs, not ecommerce frontend scope.
+  - Frontend route `/shipping` was added with sidebar label `Giao hàng` and Truck icon.
+  - Shipping UI owns two tabs: `Vận đơn` and `Hãng vận chuyển`.
+  - `src/features/shipping/services/shipping.service.ts` connects real endpoints:
+    - `GET /shipments`, `GET /shipments/:id`, `PATCH /shipments/:id/assign`, `PATCH /shipments/:id/status`.
+    - `GET /carriers`, `GET /carriers/:id`, `POST /carriers`, `PATCH /carriers/:id`.
+  - Role `SHIPPER` is supported in RBAC, legacy lower-case mapping, header placeholder, dashboard role panel, and `/shipping` route access.
+  - Shipment operations:
+    - SHIPPER and ADMIN can assign carrier/tracking code and update shipment status.
+    - MANAGER can view shipments but cannot assign carrier or advance status.
+    - Status transitions currently modeled in FE: `PENDING -> PICKED_UP -> IN_TRANSIT -> DELIVERED`; `IN_TRANSIT -> FAILED`; `FAILED -> IN_TRANSIT|RETURNING`; `RETURNING -> RETURNED`.
+  - Carrier operations:
+    - MANAGER and ADMIN can create/update carriers.
+    - Carrier create/edit uses name, code, phone, email, note, and status where supported; carrier code is immutable in edit UI.
+  - UI currently fetches the first page of shipments/carriers and does not yet expose full filters, pagination controls, shipping address detail, payment detail, status-history timeline, or fail-reason-specific input.
+  - Tests updated:
+    - Unit service contract coverage in `tests/unit/wms-swagger-services.test.ts`.
+    - RBAC coverage in `tests/unit/rbac.test.ts`.
+    - Playwright smoke coverage for SHIPPER shipment assign/status flow and MANAGER carrier create/view-only shipment flow.
+  - Verification passed before merge: `pnpm lint`, `pnpm typecheck`, `pnpm test` (`104/104`), `pnpm test:e2e` (`15/15`), `pnpm build`, and `git diff --check`.
+  - Feature commit: `1557dc5 feat(wms): add shipping operations workspace`.
+  - Merged into local `main` with `--no-ff` as merge commit `9c08e61 merge: wms shipping workspace`.
+  - Current local `main` is ahead of `origin/main` by 2 commits; not pushed yet unless a later note says otherwise. Push command should be plain `git push origin main`, never force-push.
+- 2026-07-23: WMS product SKU sync compact:
+  - Backend pull `64c800a..dfbcc2a` effectively delivered the SKU-template and attribute-option flow needed for FE issue `#15`; the implementation corresponds to BE issue `#25`.
+  - Frontend product workspace `/products` follows a two-tab pattern consistent with shipping:
+    - `Mặt hàng`: list/filter/detail/edit/deactivate existing warehouse items, plus an inline `Tạo mặt hàng` action that opens the template-driven item form in this tab.
+    - `Tạo SKU`: directly displays ADMIN-only SKU attribute-value administration; this tab does not create warehouse items.
+  - Header actions are simplified for this screen:
+    - Keep `Làm mới`.
+    - Keep item creation inside the `Mặt hàng` tab instead of the page header.
+    - Render SKU option administration directly in `Tạo SKU`, not behind a separate dialog/action button.
+  - Product detail behavior:
+    - Row action `Xem chi tiết` opens a detail dialog with two sections: `Mặt hàng` and `SKU được tạo`.
+    - Detail dialog can continue into `Sửa mặt hàng`.
+  - SKU creation behavior:
+    - Creation no longer asks FE users to type SKU or the main barcode.
+    - FE loads template metadata from `GET /stock/item-types/:type/sku-template`.
+    - FE loads selectable option values from `GET /stock/attribute-options`.
+    - FE previews generated SKU through `POST /stock/items/sku-preview`.
+    - FE creates the item through `POST /stock/items` with `type`, `templateId`, `attributeOptionIds`, `name`, `unit`, and stock config fields.
+    - Desktop layout keeps SKU configuration selectors on one horizontal row where space allows; mobile has no horizontal overflow.
+  - UI/content decisions:
+    - Remove visible `EAN-13` wording from the create flow.
+    - Keep copy generic as `Mã vạch nội bộ` because barcode assignment is backend-owned after item creation.
+    - For update flow, FE must not send `sku`, `barcode`, `type`, or freeform `attributes`.
+  - Backend contract limits observed during sync:
+    - Create DTO currently does not accept `altBarcodes` even though older FE assumptions expected it.
+    - SKU preview currently returns only `{ sku }`; there is no duplicate/availability flag.
+    - Create conflict handling remains FE-side through normal `409` API error handling.
+    - BE issue `#25` still appeared open on GitHub at the time of sync even though the implementation was already present in the pulled backend branch.
+  - Product service/contracts updated in `src/features/products/services/warehouse-items.service.ts`:
+    - Added `CREATABLE_WAREHOUSE_ITEM_TYPES`, `AttributeOption`, `SkuTemplate`, and preview/attribute-option APIs.
+    - `createWarehouseItem()` now sends template-driven payloads instead of manual SKU/barcode payloads.
+  - Product UI implementation added:
+    - `src/features/products/components/create-warehouse-item-panel.tsx`
+    - `src/features/products/components/attribute-options-admin-dialog.tsx`
+    - `src/features/products/components/warehouse-items-client.tsx` updated to own the tabbed product workflow.
+  - Tests and verification:
+    - `tests/unit/wms-swagger-services.test.ts` updated for SKU template, preview, and attribute-option endpoints.
+    - `tests/e2e/smoke.spec.ts` updated for detail dialog flow and template-driven item creation.
+    - Passed: `pnpm exec eslint .`, `pnpm exec tsc --noEmit`, targeted Playwright `pnpm test:e2e -- --grep "admin edits a product|manager creates a template-driven warehouse item"`, `pnpm build`, and `git diff --check`.
+    - Backend verification from the paired audit: BE build passed; focused product tests passed, but several BE Jest suites were locally blocked by Node `22.12` vs tool/runtime requirements expecting Node `>=24.9`.
+  - Git history for this FE sync:
+    - Feature commit: `3a5be14 feat(wms): sync template-driven product SKU flow`.
+    - Merged into `main` with `--no-ff` as `2428910 merge: sync template-driven product SKU flow`.
+    - Pushed to `origin/main` without force on 2026-07-23.

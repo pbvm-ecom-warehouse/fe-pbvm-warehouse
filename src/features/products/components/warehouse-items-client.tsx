@@ -57,7 +57,7 @@ import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { useSessionUser } from "@/hooks/use-session-user";
 
-import { AttributeOptionsAdminDialog } from "./attribute-options-admin-dialog";
+import { AttributeOptionsAdminPanel } from "./attribute-options-admin-dialog";
 import { CreateWarehouseItemPanel } from "./create-warehouse-item-panel";
 import {
   deleteWarehouseItem,
@@ -230,7 +230,7 @@ export function WarehouseItemsClient() {
   const [editingItem, setEditingItem] = useState<WarehouseItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<WarehouseItem | null>(null);
 
-  const [optionsDialogOpen, setOptionsDialogOpen] = useState(false);
+  const [showCreateItem, setShowCreateItem] = useState(false);
 
   const itemsQuery = useQuery({
     queryFn: () =>
@@ -308,13 +308,6 @@ export function WarehouseItemsClient() {
         }
       />
 
-      {canAdministerOptions ? (
-        <AttributeOptionsAdminDialog
-          open={optionsDialogOpen}
-          onOpenChange={setOptionsDialogOpen}
-        />
-      ) : null}
-
       <Tabs defaultValue="items">
         <TabsList className="h-9 rounded-lg border bg-card p-1">
           <TabsTrigger className="px-3" value="items">
@@ -336,6 +329,30 @@ export function WarehouseItemsClient() {
           ) : null}
 
           {itemsQuery.error ? <ErrorBanner error={itemsQuery.error} /> : null}
+
+          {canManage ? (
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant={showCreateItem ? "outline" : "default"}
+                onClick={() => setShowCreateItem((current) => !current)}
+              >
+                <Plus data-icon="inline-start" />
+                {showCreateItem ? "Đóng biểu mẫu" : "Tạo mặt hàng"}
+              </Button>
+            </div>
+          ) : null}
+
+          {canManage && showCreateItem ? (
+            <CreateWarehouseItemPanel
+              canManage={canManage}
+              onCreated={() => {
+                void queryClient.invalidateQueries({
+                  queryKey: ["stock-items"],
+                });
+              }}
+            />
+          ) : null}
 
           <TablePanel
             count={`${total} bản ghi · trang ${page}/${totalPages}`}
@@ -491,31 +508,12 @@ export function WarehouseItemsClient() {
         </TabsContent>
 
         <TabsContent className="mt-4 space-y-4" value="create-sku">
-          {canAdministerOptions ? (
-            <div className="flex justify-end">
-              <Button
-                onClick={() => setOptionsDialogOpen(true)}
-                type="button"
-                variant="outline"
-              >
-                <Settings2 data-icon="inline-start" />
-                Giá trị SKU
-              </Button>
-            </div>
-          ) : null}
-          {!canManage ? (
+          {!canAdministerOptions ? (
             <PermissionNotice>
-              Quyền tạo SKU dành cho quản lý kho.
+              Quyền tạo và quản lý giá trị SKU dành cho quản trị viên.
             </PermissionNotice>
           ) : (
-            <CreateWarehouseItemPanel
-              canManage={canManage}
-              onCreated={() => {
-                void queryClient.invalidateQueries({
-                  queryKey: ["stock-items"],
-                });
-              }}
-            />
+            <AttributeOptionsAdminPanel />
           )}
         </TabsContent>
       </Tabs>
