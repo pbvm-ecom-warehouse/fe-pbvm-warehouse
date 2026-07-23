@@ -865,37 +865,21 @@ function ItemDetailDialog({
         </DialogHeader>
 
         <div className="space-y-5">
-          <section className="space-y-3" aria-labelledby="item-detail-title">
-            <h3 id="item-detail-title" className="text-sm font-semibold">
-              Mặt hàng
+          <section className="space-y-3" aria-labelledby="item-info-title">
+            <h3
+              id="item-info-title"
+              className="text-sm font-semibold text-foreground"
+            >
+              Thông tin chung
             </h3>
-            <div className="grid gap-2 rounded-lg border bg-muted/20 p-3 text-sm sm:grid-cols-2">
-              <InfoRow label="Tên" value={item.name} />
-              <InfoRow label="Loại" value={typeLabel(item.type)} />
-              <InfoRow label="Đơn vị cơ sở" value={item.unit} />
-              <div className="space-y-2 sm:col-span-2">
-                <span className="text-muted-foreground">Mã vạch nội bộ</span>
-                {item.barcode ? (
-                  <Barcode value={item.barcode} />
-                ) : (
-                  <div className="font-medium">Chưa có</div>
-                )}
-              </div>
-              <InfoRow
-                label="Mức tồn tối thiểu"
-                value={item.minQuantity?.toString() ?? "Chưa đặt"}
-              />
-              <InfoRow label="Kích thước S × R × C" value={dimensions} />
-              <InfoRow
-                label="Hạn sử dụng"
-                value={
-                  item.isPerishable
-                    ? `Cảnh báo trước ${item.nearExpiryDays ?? 0} ngày`
-                    : "Không theo dõi"
-                }
-              />
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-muted-foreground">Trạng thái</span>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DetailCard label="Tên" value={item.name} />
+              <DetailCard label="Loại" value={typeLabel(item.type)} />
+              <DetailCard label="Đơn vị cơ sở" value={item.unit} />
+              <div className="flex items-center justify-between rounded-lg border bg-muted/20 p-3">
+                <span className="text-sm text-muted-foreground">
+                  Trạng thái
+                </span>
                 <StatusBadge tone={item.isActive ? "success" : "neutral"}>
                   {item.isActive ? "Đang dùng" : "Ngưng dùng"}
                 </StatusBadge>
@@ -905,9 +889,58 @@ function ItemDetailDialog({
 
           <section
             className="space-y-3 border-t pt-4"
+            aria-labelledby="item-barcode-title"
+          >
+            <h3
+              id="item-barcode-title"
+              className="text-sm font-semibold text-foreground"
+            >
+              Mã vạch nội bộ
+            </h3>
+            <div className="rounded-lg border bg-muted/20 p-3">
+              {item.barcode ? (
+                <Barcode value={item.barcode} />
+              ) : (
+                <div className="text-sm text-muted-foreground">Chưa có</div>
+              )}
+            </div>
+          </section>
+
+          <section
+            className="space-y-3 border-t pt-4"
+            aria-labelledby="item-specs-title"
+          >
+            <h3
+              id="item-specs-title"
+              className="text-sm font-semibold text-foreground"
+            >
+              Thông số kỹ thuật
+            </h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DetailCard
+                label="Mức tồn tối thiểu"
+                value={item.minQuantity?.toString() ?? "Chưa đặt"}
+              />
+              <DetailCard label="Kích thước S × R × C" value={dimensions} />
+              <DetailCard
+                label="Hạn sử dụng"
+                value={
+                  item.isPerishable
+                    ? `Cảnh báo trước ${item.nearExpiryDays ?? 0} ngày`
+                    : "Không theo dõi"
+                }
+              />
+            </div>
+          </section>
+
+          <section
+            className="space-y-3 border-t pt-4"
             aria-labelledby="item-sku-title"
           >
-            <h3 id="item-sku-title" className="text-sm font-semibold">
+            <h3
+              id="item-sku-title"
+              className="text-sm font-semibold text-foreground"
+            >
               SKU được tạo
             </h3>
             <div className="rounded-lg border bg-muted/20 p-3">
@@ -1064,6 +1097,15 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between gap-3">
       <span className="text-muted-foreground">{label}</span>
       <span className="min-w-0 truncate font-medium">{value}</span>
+    </div>
+  );
+}
+
+function DetailCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3">
+      <div className="text-sm text-muted-foreground">{label}</div>
+      <div className="mt-1 text-sm font-medium">{value}</div>
     </div>
   );
 }
