@@ -2,10 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "@/lib/api-client";
 import {
+  createAttributeOption,
   createWarehouseItem,
   deleteWarehouseItem,
+  getSkuTemplate,
+  listAttributeOptions,
   listWarehouseItems,
   normalizeWarehouseItemListResponse,
+  previewWarehouseItemSku,
+  suggestAttributeOptionCode,
+  updateAttributeOption,
   updateWarehouseItem,
 } from "@/features/products/services/warehouse-items.service";
 import {
@@ -320,8 +326,9 @@ describe("Swagger-backed WMS services", () => {
       type: "CUP_BLANK",
     });
     await createWarehouseItem({
+      attributeOptionIds: ["66a100000000000000000001"],
       name: "Ly trắng 500ml",
-      sku: "CUP-BLANK-500",
+      templateId: "CUP_BLANK",
       type: "CUP_BLANK",
       unit: "cái",
     });
@@ -338,8 +345,9 @@ describe("Swagger-backed WMS services", () => {
       },
     });
     expect(mockedPost).toHaveBeenCalledWith("/stock/items", {
+      attributeOptionIds: ["66a100000000000000000001"],
       name: "Ly trắng 500ml",
-      sku: "CUP-BLANK-500",
+      templateId: "CUP_BLANK",
       type: "CUP_BLANK",
       unit: "cái",
     });
@@ -349,6 +357,83 @@ describe("Swagger-backed WMS services", () => {
     expect(mockedDelete).toHaveBeenCalledWith("/stock/items/item-1");
   });
 
+  it("calls template, preview and attribute-option endpoints", async () => {
+    const option = {
+      code: "HRT",
+      id: "66a100000000000000000001",
+      isActive: true,
+      key: "CUP_STYLE" as const,
+      name: "Ly nắp tim",
+      sortOrder: 1,
+    };
+    const template = {
+      fields: [{ key: "CUP_STYLE" as const }],
+      itemType: "CUP_BLANK" as const,
+      kind: "template" as const,
+      prefix: "CUP",
+      templateId: "CUP_BLANK",
+    };
+
+    mockedGet
+      .mockResolvedValueOnce({ data: { data: template, meta: {} } })
+      .mockResolvedValueOnce({ data: { data: [option], meta: {} } });
+    mockedPost
+      .mockResolvedValueOnce({
+        data: { data: { sku: "CUP-HRT" }, meta: {} },
+      })
+      .mockResolvedValueOnce({ data: { data: { code: "HRT" }, meta: {} } })
+      .mockResolvedValueOnce({ data: { data: option, meta: {} } });
+    mockedPatch.mockResolvedValueOnce({
+      data: { data: { ...option, isActive: false }, meta: {} },
+    });
+
+    await expect(getSkuTemplate("CUP_BLANK")).resolves.toEqual(template);
+    await expect(listAttributeOptions("CUP_STYLE", true)).resolves.toEqual([
+      option,
+    ]);
+    await expect(
+      previewWarehouseItemSku({
+        attributeOptionIds: [option.id],
+        templateId: "CUP_BLANK",
+        type: "CUP_BLANK",
+      }),
+    ).resolves.toEqual({ sku: "CUP-HRT" });
+    await suggestAttributeOptionCode({ key: "CUP_STYLE", name: option.name });
+    await createAttributeOption({
+      code: option.code,
+      key: option.key,
+      name: option.name,
+    });
+    await updateAttributeOption(option.id, { isActive: false });
+
+    expect(mockedGet).toHaveBeenNthCalledWith(
+      1,
+      "/stock/item-types/CUP_BLANK/sku-template",
+      { params: { categoryOptionId: undefined } },
+    );
+    expect(mockedGet).toHaveBeenNthCalledWith(2, "/stock/attribute-options", {
+      params: { includeInactive: true, key: "CUP_STYLE" },
+    });
+    expect(mockedPost).toHaveBeenNthCalledWith(1, "/stock/items/sku-preview", {
+      attributeOptionIds: [option.id],
+      templateId: "CUP_BLANK",
+      type: "CUP_BLANK",
+    });
+    expect(mockedPost).toHaveBeenNthCalledWith(
+      2,
+      "/stock/attribute-options/code-suggestion",
+      { key: "CUP_STYLE", name: option.name },
+    );
+    expect(mockedPost).toHaveBeenNthCalledWith(3, "/stock/attribute-options", {
+      code: option.code,
+      key: option.key,
+      name: option.name,
+    });
+    expect(mockedPatch).toHaveBeenCalledWith(
+      `/stock/attribute-options/${option.id}`,
+      { isActive: false },
+    );
+  });
   it("calls goods receipt note endpoints from Swagger", async () => {
     mockedGet.mockResolvedValueOnce({ data: [grn] });
     mockedPost.mockResolvedValue({ data: grn });
