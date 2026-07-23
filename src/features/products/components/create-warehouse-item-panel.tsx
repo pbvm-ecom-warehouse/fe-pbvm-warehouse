@@ -331,10 +331,10 @@ export function CreateWarehouseItemPanel({
     >
       <header className="mb-5">
         <h2 id="create-item-title" className="text-base font-semibold">
-          Tạo SKU
+          Tạo mặt hàng
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Chọn cấu hình để hệ thống tạo SKU chuẩn.
+          Nhập thông tin mặt hàng và chọn cấu hình để hệ thống cấp SKU.
         </p>
       </header>
 
