@@ -182,3 +182,19 @@
   - FE issue audit: `#15` implementation and acceptance are complete and can be proposed for closure; `#17` and `#18` are resolved here; `#5` fixes now include list limit, supplier-item payload, and barcode handling. FE `#19-#21` remain deferred; `#19` also needs BE to allow role `COUNTER` on stock-count create.
   - Verification passed: `pnpm lint`, `pnpm typecheck`, `pnpm test` (`127/127`), full `pnpm test:e2e` (`18/18`), `pnpm build`, and `git diff --check`.
   - Git workflow for this batch: feature branch `feat/wms-list-ux-be-sync-20260723`, merge into `main` with `--no-ff`, then plain push to `origin/main`; never force-push.
+- 2026-07-23: Product/purchase overlay and scroll correction compact:
+  - Dashboard shell is viewport-bound (`h-dvh overflow-hidden`); the document/body no longer grows with WMS content. The main workspace, sidebar navigation, and `Table scrollable` own their scroll areas.
+  - Scrollable table headers use an opaque sticky surface so editable rows cannot show through or overlap the header.
+  - Shared Radix select content defaults to portal-based `popper` positioning below the trigger with collision padding and overlay layer `z-[70]`; popover item pickers use the same overlay layer.
+  - `Tạo mặt hàng` belongs to the `Mặt hàng` tab but opens a `5xl` dialog with a vertically scrollable body. Do not render the creation form inline in the page.
+  - GRN creation displays `Tên mặt hàng`, resolved through `GET /stock/items/:id`; raw `itemId` remains payload-only. `lotNumber` and expiry stay editable and become required for perishable items.
+  - SKU option administration is type-first: select `Loại mặt hàng`, then only attribute groups discovered for that type. Category keys such as `PACKAGING_CATEGORY` are normal creatable values with name and SKU code; adding one invalidates both attribute-option and SKU-template caches.
+  - The global SKU option search/status list remains independent from the type/group used by the creation form.
+  - Responsive acceptance at 1280px keeps type, group, name, code, suggestion, and `Thêm giá trị` on one row without clipping.
+  - Verification passed: `pnpm lint`, `pnpm typecheck`, `pnpm test` (127/127), `pnpm test:e2e` (18/18), `pnpm build`, visual Playwright screenshots, and `git diff --check`.
+- 2026-07-23: Purchase tabs, detail dialogs, and internal barcode compact:
+  - `/purchases` uses two segmented tabs: `Đơn mua` and `Phiếu nhập`. Purchase-order rows no longer auto-expand a detail card below the table.
+  - `Xem chi tiết` opens a scroll-contained PO dialog with supplier, warehouse, dates, notes, named item lines, and related GRNs. The GRN tab has an independent scrollable list and detail dialog.
+  - Raw stock `itemId` stays payload-only. Purchase and GRN detail tables label the field `Tên mặt hàng` and resolve it through the stock-item detail cache.
+  - Internal item barcodes render as accessible CODE128 SVG graphics through shared `Barcode` and `jsbarcode`; the human-readable value remains under the bars. EAN-13 is not forced.
+  - Verification passed: `pnpm lint`, `pnpm typecheck`, `pnpm test` (127/127), `pnpm test:e2e` (18/18), `pnpm build`, visual Playwright review, and `git diff --check`.

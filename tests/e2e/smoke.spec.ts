@@ -264,15 +264,29 @@ test("manager creates a template-driven warehouse item", async ({ page }) => {
   });
 
   await page.goto("/products");
+  await expect(page.getByRole("heading", { name: "Sản phẩm" })).toBeVisible();
+  const scrollState = await page.evaluate(() => {
+    const main = document.querySelector("main");
+    return {
+      bodyFitsViewport: document.body.scrollHeight <= window.innerHeight,
+      documentFitsViewport:
+        document.documentElement.scrollHeight <= window.innerHeight,
+      mainOverflowY: main ? getComputedStyle(main).overflowY : "",
+    };
+  });
+  expect(scrollState).toEqual({
+    bodyFitsViewport: true,
+    documentFitsViewport: true,
+    mainOverflowY: "auto",
+  });
   const itemPanel = page.getByRole("tabpanel", { name: /^Mặt hàng$/i });
   await itemPanel.getByRole("button", { name: /^Tạo mặt hàng$/i }).click();
-  await expect(
-    itemPanel.getByRole("heading", { name: /^Tạo mặt hàng$/i }),
-  ).toBeVisible();
+  const createDialog = page.getByRole("dialog", { name: /^Tạo mặt hàng$/i });
+  await expect(createDialog).toBeVisible();
 
   const skuFieldBoxes = await Promise.all(
     ["Kiểu ly", "Chất liệu", "Dung tích", "Màu sắc"].map((label) =>
-      itemPanel.getByRole("combobox", { name: label }).boundingBox(),
+      createDialog.getByRole("combobox", { name: label }).boundingBox(),
     ),
   );
   const skuFieldTopPositions = skuFieldBoxes.map((box) => box?.y ?? -1);
@@ -286,7 +300,7 @@ test("manager creates a template-driven warehouse item", async ({ page }) => {
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  await itemPanel.getByLabel("Tên nội bộ").fill("Ly nắp tim PET 500ml");
+  await createDialog.getByLabel("Tên nội bộ").fill("Ly nắp tim PET 500ml");
 
   for (const [label, optionName] of [
     ["Kiểu ly", "Ly nắp tim (HRT)"],
@@ -294,18 +308,23 @@ test("manager creates a template-driven warehouse item", async ({ page }) => {
     ["Dung tích", "500 ml (500)"],
     ["Màu sắc", "Trong suốt (CLR)"],
   ]) {
-    await itemPanel.getByRole("combobox", { name: label }).click();
+    await createDialog.getByRole("combobox", { name: label }).click();
     await page.getByRole("option", { name: optionName }).click();
   }
 
-  await expect(itemPanel.getByText("CUP-HRT-PET-500-CLR")).toBeVisible();
-  await expect(itemPanel.getByText("Đã xác nhận cấu hình")).toBeVisible();
-  await itemPanel.getByRole("button", { name: /^Tạo mặt hàng$/i }).click();
+  await expect(createDialog.getByText("CUP-HRT-PET-500-CLR")).toBeVisible();
+  await expect(createDialog.getByText("Đã xác nhận cấu hình")).toBeVisible();
+  await createDialog.getByRole("button", { name: /^Tạo mặt hàng$/i }).click();
 
   await expect(
-    itemPanel.getByRole("heading", { name: /Đã tạo mặt hàng/i }),
+    createDialog.getByRole("heading", { name: /Đã tạo mặt hàng/i }),
   ).toBeVisible();
-  await expect(itemPanel.getByText("2000000000015")).toBeVisible();
+  await expect(createDialog.getByText("2000000000015")).toBeVisible();
+  await expect(
+    createDialog.getByRole("img", {
+      name: "Mã vạch nội bộ 2000000000015",
+    }),
+  ).toBeVisible();
   expect(createBody).toMatchObject({
     attributeOptionIds: [
       optionByKey.CUP_STYLE.id,
@@ -458,12 +477,13 @@ test("manager opens purchases when purchase order items are missing", async ({
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
-        data: url.includes("/purchase-orders/po-no-items")
+        data: new URL(url).pathname.endsWith("/po-no-items")
           ? purchaseOrderWithoutItems
           : [purchaseOrderWithoutItems],
         limit: 20,
         page: 1,
         total: 1,
+        meta: { requestId: "purchase-order" },
       }),
     });
   });
@@ -482,14 +502,39 @@ test("manager opens purchases when purchase order items are missing", async ({
   await expect(
     page.getByRole("cell", { name: "PO-20260713-0002", exact: true }),
   ).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Đơn mua" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Phiếu nhập" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Chi tiết đơn mua" }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Xem chi tiết đơn mua PO-20260713-0002" })
+    .click();
+  const detailDialog = page.getByRole("dialog", { name: "Chi tiết đơn mua" });
+  await expect(detailDialog).toBeVisible();
+  await expect(
+    detailDialog.getByText("PO-20260713-0002", { exact: true }).first(),
+  ).toBeVisible();
+  await detailDialog.getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: /^Tạo đơn mua$/i }).click();
+
   const dialog = page.getByRole("dialog", { name: /^Tạo đơn mua$/i });
   expect(
     await dialog.evaluate(
       (element) => element.scrollWidth <= element.clientWidth,
     ),
   ).toBe(true);
-  await dialog.getByRole("combobox").nth(0).click();
+  const supplierSelect = dialog.getByRole("combobox").nth(0);
+  const supplierTriggerBox = await supplierSelect.boundingBox();
+  await supplierSelect.click();
+  const supplierOptionsBox = await page
+    .locator('[data-slot="select-content"][data-state="open"]')
+    .boundingBox();
+  expect(supplierTriggerBox).not.toBeNull();
+  expect(supplierOptionsBox).not.toBeNull();
+  expect(supplierOptionsBox!.y).toBeGreaterThanOrEqual(
+    supplierTriggerBox!.y + supplierTriggerBox!.height - 1,
+  );
   await page
     .getByText(/NCC-001/i)
     .last()
@@ -1328,7 +1373,7 @@ test("manager creates a carrier but cannot change shipment operations", async ({
   await expect(page.getByText(/Đã thêm hãng vận chuyển/i)).toBeVisible();
 });
 
-test("admin searches SKU values independently from the creation group", async ({
+test("admin selects an item type before managing SKU values", async ({
   page,
 }) => {
   await seedWmsSession(page, ["ADMIN"], "Admin User");
@@ -1336,7 +1381,6 @@ test("admin searches SKU values independently from the creation group", async ({
   for (const [type, fields] of [
     ["CUP_BLANK", [{ key: "MATERIAL" }, { key: "CAPACITY" }]],
     ["MATERIAL", [{ key: "MATERIAL" }]],
-    ["PACKAGING", [{ key: "SIZE" }]],
   ] as const) {
     await page.route(
       `**/api/wms/stock/item-types/${type}/sku-template**`,
@@ -1357,6 +1401,42 @@ test("admin searches SKU values independently from the creation group", async ({
       },
     );
   }
+  await page.route(
+    "**/api/wms/stock/item-types/PACKAGING/sku-template**",
+    async (route) => {
+      const categoryOptionId = new URL(route.request().url()).searchParams.get(
+        "categoryOptionId",
+      );
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: categoryOptionId
+            ? {
+                fields: [{ key: "SIZE" }],
+                itemType: "PACKAGING",
+                kind: "template",
+                prefix: "PKG-LID",
+                templateId: "PACKAGING_LID",
+              }
+            : {
+                categoryKey: "PACKAGING_CATEGORY",
+                kind: "category-options",
+                options: [
+                  {
+                    code: "LID",
+                    id: "packaging-lid",
+                    isActive: true,
+                    key: "PACKAGING_CATEGORY",
+                    name: "Nắp ly",
+                    sortOrder: 1,
+                  },
+                ],
+              },
+          meta: { requestId: "template-PACKAGING" },
+        }),
+      });
+    },
+  );
   await page.route("**/api/wms/stock/attribute-options**", async (route) => {
     const key = new URL(route.request().url()).searchParams.get("key");
     const optionByKey: Record<string, object[]> = {
@@ -1377,6 +1457,16 @@ test("admin searches SKU values independently from the creation group", async ({
           isActive: true,
           key: "MATERIAL",
           name: "Nhựa PET",
+          sortOrder: 1,
+        },
+      ],
+      PACKAGING_CATEGORY: [
+        {
+          code: "LID",
+          id: "packaging-lid",
+          isActive: true,
+          key: "PACKAGING_CATEGORY",
+          name: "Nắp ly",
           sortOrder: 1,
         },
       ],
@@ -1418,6 +1508,13 @@ test("admin searches SKU values independently from the creation group", async ({
     panel.getByRole("row", { name: /Dung tích.*500 ml.*500/i }),
   ).toBeVisible();
   await expect(panel.getByText("Nhựa PET", { exact: true })).toHaveCount(0);
+
+  await panel.getByLabel("Loại mặt hàng").click();
+  await page.getByRole("option", { name: "Bao bì" }).click();
+  await panel.getByLabel("Nhóm thuộc tính").click();
+  await page.getByRole("option", { name: "Nhóm bao bì" }).click();
+  await expect(panel.getByLabel("Tên giá trị")).toBeEnabled();
+  await expect(panel.getByRole("textbox", { name: "Mã SKU" })).toBeEnabled();
 });
 
 test("supplier code suggestion stops after a manual edit", async ({ page }) => {

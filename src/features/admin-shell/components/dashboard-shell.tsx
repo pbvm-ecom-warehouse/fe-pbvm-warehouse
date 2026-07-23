@@ -44,13 +44,15 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="flex">
+    <div className="h-dvh overflow-hidden bg-background">
+      <div className="flex h-full min-h-0">
         <AppSidebar />
-        <div className="min-w-0 flex-1 lg:pl-0">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:pl-0">
           <DashboardHeader />
-          <main className="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-5 lg:px-6">
-            <DashboardAccessBoundary>{children}</DashboardAccessBoundary>
+          <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <div className="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-5 lg:px-6">
+              <DashboardAccessBoundary>{children}</DashboardAccessBoundary>
+            </div>
           </main>
         </div>
       </div>

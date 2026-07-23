@@ -45,7 +45,8 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
       data-slot="table-header"
       className={cn(
         "bg-muted/45 [&_tr]:border-b",
-        scrollable && "sticky top-0 z-10",
+        scrollable &&
+          "sticky top-0 z-20 bg-muted shadow-[0_1px_0_0_var(--border)]",
         className,
       )}
       {...props}

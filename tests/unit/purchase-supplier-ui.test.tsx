@@ -99,6 +99,7 @@ vi.mock(
 
     return {
       ...actual,
+      getWarehouseItem: vi.fn(),
       listWarehouseItems: vi.fn(),
     };
   },
@@ -129,6 +130,7 @@ const mockedListSuppliers = vi.mocked(supplierService.listSuppliers);
 const mockedListSupplierItems = vi.mocked(
   supplierService.listSupplierItemsBySupplier,
 );
+const mockedGetWarehouseItem = vi.mocked(warehouseItemService.getWarehouseItem);
 const mockedGetSupplierItem = vi.mocked(supplierService.getSupplierItem);
 const mockedListWarehouses = vi.mocked(warehouseService.listWarehouses);
 const mockedListWarehouseItems = vi.mocked(
@@ -218,6 +220,17 @@ describe("purchase and supplier UX", () => {
         updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ]);
+    mockedGetWarehouseItem.mockResolvedValue({
+      createdAt: "2026-07-01T00:00:00.000Z",
+      id: "item-1",
+      isActive: true,
+      isPerishable: true,
+      name: "Ly nhựa 500 ml",
+      sku: "SKU-001",
+      type: "CUP_BLANK",
+      unit: "cái",
+      updatedAt: "2026-07-23T00:00:00.000Z",
+    });
     mockedListWarehouseItems.mockResolvedValue({
       data: [],
       limit: 100,
@@ -301,21 +314,40 @@ describe("purchase and supplier UX", () => {
     renderWithQueryClient(<PurchaseOrdersClient />);
 
     expect(
-      await screen.findByRole("button", {
-        name: "Xem chi tiết đơn mua PO-001",
-      }),
+      await screen.findByRole("tab", { name: "Đơn mua" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Phiếu nhập" })).toBeInTheDocument();
+
+    const detailButton = await screen.findByRole("button", {
+      name: "Xem chi tiết đơn mua PO-001",
+    });
+    expect(
+      screen.queryByRole("heading", { name: "Chi tiết đơn mua" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(detailButton);
+
+    expect(
+      await screen.findByRole("heading", { name: "Chi tiết đơn mua" }),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(mockedGetWarehouseItem).toHaveBeenCalledWith("item-1"),
+    );
+    expect(await screen.findByText("Ly nhựa 500 ml")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Tạo phiếu nhập" }));
 
     expect(
-      screen.getByText("Mã mặt hàng", { selector: "label" }),
+      screen.getByText("Tên mặt hàng", { selector: "label" }),
     ).toBeVisible();
+    expect(screen.getByLabelText("Tên mặt hàng phiếu nhập dòng 1")).toHaveValue(
+      "Ly nhựa 500 ml",
+    );
     expect(screen.getByText("SKU", { selector: "label" })).toBeVisible();
     expect(
       screen.getByText("Số lượng thực nhập", { selector: "label" }),
     ).toBeVisible();
     expect(screen.getByText("Đơn vị", { selector: "label" })).toBeVisible();
     expect(screen.getByText("Mã lô", { selector: "label" })).toBeVisible();
+    expect(screen.getByLabelText("Mã lô phiếu nhập dòng 1")).toBeRequired();
     expect(
       screen.getByText("Hạn sử dụng", { selector: "label" }),
     ).toBeVisible();
