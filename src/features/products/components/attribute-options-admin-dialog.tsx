@@ -40,6 +40,7 @@ import {
   updateAttributeOption,
   type AttributeKey,
   type AttributeOption,
+  type CreatableWarehouseItemType,
 } from "../services/warehouse-items.service";
 
 type OptionDraft = Pick<AttributeOption, "name" | "isActive" | "sortOrder">;
@@ -50,6 +51,8 @@ function formatError(error: unknown) {
 
 export function AttributeOptionsAdminPanel() {
   const queryClient = useQueryClient();
+  const [selectedType, setSelectedType] =
+    useState<CreatableWarehouseItemType>("CUP_BLANK");
   const [selectedKey, setSelectedKey] = useState<AttributeKey | "">("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -89,28 +92,54 @@ export function AttributeOptionsAdminPanel() {
     })),
   });
 
-  const availableKeys = useMemo(() => {
-    const keys = new Set<AttributeKey>();
-    rootQueries.forEach((query) => {
+  const keysByType = useMemo(() => {
+    const result = new Map<CreatableWarehouseItemType, Set<AttributeKey>>();
+    CREATABLE_WAREHOUSE_ITEM_TYPES.forEach((type) => {
+      result.set(type, new Set<AttributeKey>());
+    });
+    rootQueries.forEach((query, index) => {
+      const type = CREATABLE_WAREHOUSE_ITEM_TYPES[index];
+      const keys = result.get(type)!;
       if (query.data?.kind === "category-options") {
         keys.add(query.data.categoryKey);
       } else if (query.data?.kind === "template") {
         query.data.fields.forEach((field) => keys.add(field.key));
       }
     });
-    childQueries.forEach((query) => {
+    childQueries.forEach((query, index) => {
+      const lookup = categoryLookups[index];
       if (query.data?.kind === "template") {
+        const keys = result.get(lookup.type)!;
         query.data.fields.forEach((field) => keys.add(field.key));
       }
+    });
+
+    return result;
+  }, [categoryLookups, childQueries, rootQueries]);
+
+  const availableKeys = useMemo(
+    () =>
+      Array.from(keysByType.get(selectedType) ?? []).sort((left, right) =>
+        ATTRIBUTE_LABELS[left].localeCompare(ATTRIBUTE_LABELS[right], "vi"),
+      ),
+    [keysByType, selectedType],
+  );
+  const allAvailableKeys = useMemo(() => {
+    const keys = new Set<AttributeKey>();
+    keysByType.forEach((typeKeys) => {
+      typeKeys.forEach((key) => keys.add(key));
     });
     return Array.from(keys).sort((left, right) =>
       ATTRIBUTE_LABELS[left].localeCompare(ATTRIBUTE_LABELS[right], "vi"),
     );
-  }, [childQueries, rootQueries]);
+  }, [keysByType]);
 
-  const effectiveSelectedKey = selectedKey || availableKeys[0] || "";
+  const effectiveSelectedKey =
+    selectedKey && availableKeys.includes(selectedKey)
+      ? selectedKey
+      : availableKeys[0] || "";
   const optionQueries = useQueries({
-    queries: availableKeys.map((key) => ({
+    queries: allAvailableKeys.map((key) => ({
       queryFn: () => listAttributeOptions(key, true),
       queryKey: ["stock-attribute-options", key, true],
     })),
@@ -124,7 +153,6 @@ export function AttributeOptionsAdminPanel() {
     [allOptions, search, status],
   );
 
-  const isCategory = effectiveSelectedKey.endsWith("_CATEGORY");
   const metadataLoading =
     rootQueries.some((query) => query.isLoading) ||
     childQueries.some((query) => query.isLoading);
@@ -152,9 +180,15 @@ export function AttributeOptionsAdminPanel() {
     onSuccess: async () => {
       setCode("");
       setName("");
-      await queryClient.invalidateQueries({
-        queryKey: ["stock-attribute-options"],
-      });
+
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["stock-attribute-options"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["stock-sku-template"],
+        }),
+      ]);
       toast.success("Đã thêm giá trị thuộc tính");
     },
   });
@@ -178,10 +212,38 @@ export function AttributeOptionsAdminPanel() {
 
   function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!isCategory && effectiveSelectedKey && name.trim() && code.trim()) {
+    if (effectiveSelectedKey && name.trim() && code.trim()) {
       createMutation.mutate();
     }
   }
+
+  const itemTypeField = (
+    <div className="space-y-2">
+      <Label htmlFor="attribute-item-type">Loại mặt hàng</Label>
+      <Select
+        value={selectedType}
+        onValueChange={(value) => {
+          setSelectedType(value as CreatableWarehouseItemType);
+          setSelectedKey("");
+          setCode("");
+          setName("");
+        }}
+      >
+        <SelectTrigger
+          id="attribute-item-type"
+          aria-label="Loại mặt hàng"
+          className="w-full"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="CUP_BLANK">Ly chưa in</SelectItem>
+          <SelectItem value="MATERIAL">Nguyên liệu</SelectItem>
+          <SelectItem value="PACKAGING">Bao bì</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
 
   const attributeGroupField = (
     <div className="space-y-2">
@@ -233,87 +295,78 @@ export function AttributeOptionsAdminPanel() {
         </div>
       ) : (
         <div className="space-y-5">
-          {!isCategory ? (
-            <form
-              className="grid gap-3 border-y py-4 md:grid-cols-2 lg:grid-cols-[minmax(220px,0.8fr)_minmax(320px,1.7fr)_260px_auto]"
-              onSubmit={handleCreate}
-            >
-              {attributeGroupField}
-              <div className="space-y-2">
-                <Label htmlFor="attribute-option-name">Tên giá trị</Label>
+          <form
+            className="grid gap-3 border-y py-4 md:grid-cols-2 xl:grid-cols-[minmax(130px,0.7fr)_minmax(145px,0.8fr)_minmax(180px,1.4fr)_minmax(160px,0.9fr)_auto]"
+            onSubmit={handleCreate}
+          >
+            {itemTypeField}
+            {attributeGroupField}
+            <div className="space-y-2">
+              <Label htmlFor="attribute-option-name">Tên giá trị</Label>
+              <Input
+                id="attribute-option-name"
+                value={name}
+                onBlur={() => {
+                  if (
+                    name.trim() &&
+                    !code.trim() &&
+                    !suggestMutation.isPending
+                  ) {
+                    suggestMutation.mutate();
+                  }
+                }}
+                onChange={(event) => {
+                  setName(event.target.value);
+                  setCode("");
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="attribute-option-code">Mã SKU</Label>
+              <div className="flex gap-2">
                 <Input
-                  id="attribute-option-name"
-                  value={name}
-                  onBlur={() => {
-                    if (
-                      name.trim() &&
-                      !code.trim() &&
-                      !suggestMutation.isPending
-                    ) {
-                      suggestMutation.mutate();
-                    }
-                  }}
-                  onChange={(event) => {
-                    setName(event.target.value);
-                    setCode("");
-                  }}
+                  id="attribute-option-code"
+                  className="font-mono uppercase"
+                  maxLength={6}
+                  value={code}
+                  onChange={(event) =>
+                    setCode(event.target.value.toUpperCase())
+                  }
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="attribute-option-code">Mã SKU</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="attribute-option-code"
-                    className="font-mono uppercase"
-                    maxLength={6}
-                    value={code}
-                    onChange={(event) =>
-                      setCode(event.target.value.toUpperCase())
-                    }
-                  />
-                  <Button
-                    aria-label="Gợi ý mã SKU"
-                    disabled={!name.trim() || suggestMutation.isPending}
-                    size="icon"
-                    type="button"
-                    variant="outline"
-                    onClick={() => suggestMutation.mutate()}
-                  >
-                    {suggestMutation.isPending ? (
-                      <LoaderCircle className="animate-spin" />
-                    ) : (
-                      <Sparkles />
-                    )}
-                  </Button>
-                </div>
-              </div>
-              <Button
-                className="self-end"
-                disabled={
-                  !name.trim() || !code.trim() || createMutation.isPending
-                }
-                type="submit"
-              >
-                {createMutation.isPending ? (
-                  <LoaderCircle
-                    className="animate-spin"
-                    data-icon="inline-start"
-                  />
-                ) : (
-                  <Plus data-icon="inline-start" />
-                )}
-                Thêm giá trị
-              </Button>
-            </form>
-          ) : (
-            <div className="grid gap-3 border-y py-4 md:grid-cols-[minmax(220px,0.8fr)_minmax(320px,2fr)] md:items-end">
-              {attributeGroupField}
-              <div className="flex min-h-9 items-center text-sm text-muted-foreground">
-                Nhóm này đi cùng cấu hình SKU của hệ thống nên không thể thêm
-                giá trị tại đây.
+                <Button
+                  aria-label="Gợi ý mã SKU"
+                  disabled={!name.trim() || suggestMutation.isPending}
+                  size="icon"
+                  type="button"
+                  variant="outline"
+                  onClick={() => suggestMutation.mutate()}
+                >
+                  {suggestMutation.isPending ? (
+                    <LoaderCircle className="animate-spin" />
+                  ) : (
+                    <Sparkles />
+                  )}
+                </Button>
               </div>
             </div>
-          )}
+            <Button
+              className="self-end"
+              disabled={
+                !name.trim() || !code.trim() || createMutation.isPending
+              }
+              type="submit"
+            >
+              {createMutation.isPending ? (
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
+              ) : (
+                <Plus data-icon="inline-start" />
+              )}
+              Thêm giá trị
+            </Button>
+          </form>
 
           <div className="grid gap-3 md:grid-cols-[minmax(280px,1fr)_220px]">
             <div className="space-y-2">

@@ -1,7 +1,12 @@
 "use client";
 
 import { FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   Check,
   ChevronsUpDown,
@@ -57,6 +62,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -91,6 +97,7 @@ import {
   type WarehouseStructureWarehouse,
 } from "@/features/warehouse-structure/services/warehouse-structure.service";
 import {
+  getWarehouseItem,
   listWarehouseItems,
   type WarehouseItem,
 } from "@/features/products/services/warehouse-items.service";
@@ -114,9 +121,14 @@ import {
   type GoodsReceiptNoteItem,
 } from "../services/goods-receipt-note.service";
 
-const PAGE_SIZE = 20;
+import {
+  GoodsReceiptNoteDetailDialog,
+  GoodsReceiptNotesList,
+} from "./goods-receipt-notes-list";
 
+const PAGE_SIZE = 20;
 const purchaseKeys = {
+  allGrns: ["goods-receipt-notes", "all"] as const,
   detail: (purchaseOrderId: string) =>
     ["purchase-orders", "detail", purchaseOrderId] as const,
   grns: (purchaseOrderId: string) =>
@@ -139,7 +151,9 @@ type PurchaseOrderItemForm = {
 type GoodsReceiptItemForm = {
   actualQty: string;
   expiryDate: string;
+  isPerishable: boolean;
   itemId: string;
+  itemName: string;
   lotNumber: string;
   note: string;
   sku: string;
@@ -230,17 +244,24 @@ function toGoodsReceiptItems(
 
 function buildGoodsReceiptForms(
   purchaseOrder: PurchaseOrder | undefined,
+  warehouseItemById: Map<string, WarehouseItem>,
 ): GoodsReceiptItemForm[] {
   return (
-    purchaseOrder?.items?.map((item) => ({
-      actualQty: String(item.expectedQty),
-      expiryDate: "",
-      itemId: item.itemId,
-      lotNumber: "",
-      note: "",
-      sku: item.sku,
-      unit: item.unit,
-    })) ?? []
+    purchaseOrder?.items?.map((item) => {
+      const warehouseItem = warehouseItemById.get(item.itemId);
+
+      return {
+        actualQty: String(item.expectedQty),
+        expiryDate: "",
+        isPerishable: warehouseItem?.isPerishable ?? false,
+        itemId: item.itemId,
+        itemName: warehouseItem?.name ?? item.sku,
+        lotNumber: "",
+        note: "",
+        sku: item.sku,
+        unit: item.unit,
+      };
+    }) ?? []
   );
 }
 
@@ -275,6 +296,11 @@ export function PurchaseOrdersClient() {
   const [supplierFilter, setSupplierFilter] = useState("");
   const [page, setPage] = useState(1);
   const [selectedPurchaseOrderId, setSelectedPurchaseOrderId] = useState("");
+  const [purchaseDetailOpen, setPurchaseDetailOpen] = useState(false);
+  const [selectedGoodsReceiptNote, setSelectedGoodsReceiptNote] =
+    useState<GoodsReceiptNote>();
+  const [activeTab, setActiveTab] = useState("purchase-orders");
+
   const [createForm, setCreateForm] = useState(defaultCreateForm);
   const [itemForms, setItemForms] = useState<PurchaseOrderItemForm[]>([
     defaultItemForm,
@@ -327,9 +353,9 @@ export function PurchaseOrdersClient() {
 
   const total = purchaseOrdersQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const selectedPurchaseOrder =
-    purchaseOrders.find((po) => po.id === selectedPurchaseOrderId) ??
-    purchaseOrders[0];
+  const selectedPurchaseOrder = purchaseOrders.find(
+    (po) => po.id === selectedPurchaseOrderId,
+  );
   const activePurchaseOrderId = selectedPurchaseOrder?.id ?? "";
 
   const detailQuery = useQuery({
@@ -338,6 +364,38 @@ export function PurchaseOrdersClient() {
     queryKey: purchaseKeys.detail(activePurchaseOrderId),
   });
   const detail = detailQuery.data ?? selectedPurchaseOrder;
+  const allGrnsQuery = useQuery({
+    enabled: canUsePurchaseOrderApi,
+    queryFn: () => listGoodsReceiptNotes({ limit: 100, page: 1 }),
+    queryKey: purchaseKeys.allGrns,
+  });
+  const allGoodsReceiptNotes = useMemo(
+    () => allGrnsQuery.data?.data ?? [],
+    [allGrnsQuery.data?.data],
+  );
+  const warehouseItemIds = Array.from(
+    new Set([
+      ...(detail?.items ?? []).map((item) => item.itemId),
+      ...allGoodsReceiptNotes.flatMap((grn) =>
+        grn.items.map((item) => item.itemId),
+      ),
+    ]),
+  );
+  const warehouseItemQueries = useQueries({
+    queries: warehouseItemIds.map((itemId) => ({
+      enabled: canUsePurchaseOrderApi,
+      queryFn: () => getWarehouseItem(itemId),
+      queryKey: ["stock-items", "detail", itemId],
+    })),
+  });
+  const warehouseItemById = useMemo(() => {
+    const entries = warehouseItemQueries
+      .map((query) => query.data)
+      .filter((item): item is WarehouseItem => Boolean(item))
+      .map((item) => [item.id, item] as const);
+
+    return new Map(entries);
+  }, [warehouseItemQueries]);
   const grnsQuery = useQuery({
     enabled: canUsePurchaseOrderApi && Boolean(activePurchaseOrderId),
     queryFn: () =>
@@ -460,7 +518,7 @@ export function PurchaseOrdersClient() {
   }
 
   function openGrnDialog() {
-    setGrnItemForms(buildGoodsReceiptForms(detail));
+    setGrnItemForms(buildGoodsReceiptForms(detail, warehouseItemById));
     setGrnImages([]);
     setGrnDialogOpen(true);
   }
@@ -666,163 +724,226 @@ export function PurchaseOrdersClient() {
         <ErrorBanner error={purchaseOrdersQuery.error} />
       ) : null}
 
-      <div className="grid gap-4">
-        <Card>
-          <CardHeader className="border-b bg-muted/20">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ShoppingCart className="size-4 text-primary" />
-              Đơn mua
-            </CardTitle>
-            <CardDescription>
-              {total} bản ghi · trang {page}/{totalPages}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-4">
-            <form
-              className="grid gap-3 md:grid-cols-[180px_1fr_auto]"
-              onSubmit={handleFilter}
-            >
-              <div className="space-y-2">
-                <Label>Trạng thái</Label>
-                <Select
-                  value={statusFilter}
-                  onValueChange={(value) => {
-                    setPage(1);
-                    setStatusFilter(value as PurchaseOrderStatus | "ALL");
-                  }}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="h-9 rounded-lg border bg-card p-1">
+          <TabsTrigger value="purchase-orders">
+            <ShoppingCart data-icon="inline-start" />
+            Đơn mua
+          </TabsTrigger>
+          <TabsTrigger value="goods-receipts">
+            <ClipboardCheck data-icon="inline-start" />
+            Phiếu nhập
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="purchase-orders">
+          <div className="grid gap-4">
+            <Card>
+              <CardHeader className="border-b bg-muted/20">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ShoppingCart className="size-4 text-primary" />
+                  Đơn mua
+                </CardTitle>
+                <CardDescription>
+                  {total} bản ghi · trang {page}/{totalPages}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-4">
+                <form
+                  className="grid gap-3 md:grid-cols-[180px_1fr_auto]"
+                  onSubmit={handleFilter}
                 >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Tất cả</SelectItem>
-                    {PURCHASE_ORDER_STATUSES.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {statusLabel(status)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Nhà cung cấp</Label>
-                <Select
-                  value={supplierFilter || "ALL"}
-                  onValueChange={(value) => {
-                    setPage(1);
-                    setSupplierFilter(value === "ALL" ? "" : value);
+                  <div className="space-y-2">
+                    <Label>Trạng thái</Label>
+                    <Select
+                      value={statusFilter}
+                      onValueChange={(value) => {
+                        setPage(1);
+                        setStatusFilter(value as PurchaseOrderStatus | "ALL");
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">Tất cả</SelectItem>
+                        {PURCHASE_ORDER_STATUSES.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {statusLabel(status)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Nhà cung cấp</Label>
+                    <Select
+                      value={supplierFilter || "ALL"}
+                      onValueChange={(value) => {
+                        setPage(1);
+                        setSupplierFilter(value === "ALL" ? "" : value);
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">Tất cả</SelectItem>
+                        {suppliers.map((supplier) => (
+                          <SelectItem key={supplier.id} value={supplier.id}>
+                            {supplier.code} · {supplier.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    className="self-end"
+                    disabled={!canUsePurchaseOrderApi}
+                    type="submit"
+                  >
+                    <Search data-icon="inline-start" />
+                    Lọc
+                  </Button>
+                </form>
+
+                {purchaseOrdersQuery.isLoading ? (
+                  <TableSkeleton columns={5} />
+                ) : (
+                  <PurchaseOrderTable
+                    purchaseOrders={purchaseOrders}
+                    selectedId={activePurchaseOrderId}
+                    supplierById={supplierById}
+                    warehouseById={warehouseById}
+                    onSelect={(purchaseOrder) => {
+                      setSelectedPurchaseOrderId(purchaseOrder.id);
+                      setPurchaseDetailOpen(true);
+                    }}
+                  />
+                )}
+
+                <div className="flex items-center justify-between gap-3">
+                  <Button
+                    disabled={page <= 1}
+                    onClick={() =>
+                      setPage((current) => Math.max(1, current - 1))
+                    }
+                    type="button"
+                    variant="outline"
+                  >
+                    Trang trước
+                  </Button>
+                  <span className="text-sm text-muted-foreground">
+                    {page}/{totalPages}
+                  </span>
+                  <Button
+                    disabled={page >= totalPages}
+                    onClick={() =>
+                      setPage((current) => Math.min(totalPages, current + 1))
+                    }
+                    type="button"
+                    variant="outline"
+                  >
+                    Trang sau
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+        <TabsContent value="goods-receipts">
+          <GoodsReceiptNotesList
+            grns={allGoodsReceiptNotes}
+            loading={allGrnsQuery.isLoading}
+            purchaseOrderById={new Map(purchaseOrders.map((po) => [po.id, po]))}
+            warehouseById={warehouseById}
+            onSelect={setSelectedGoodsReceiptNote}
+          />
+        </TabsContent>
+      </Tabs>
+
+      {allGrnsQuery.error ? <ErrorBanner error={allGrnsQuery.error} /> : null}
+
+      <Dialog
+        open={purchaseDetailOpen && Boolean(detail)}
+        onOpenChange={setPurchaseDetailOpen}
+      >
+        <DialogContent
+          size="5xl"
+          className="max-h-[90dvh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-0"
+        >
+          <DialogHeader className="border-b px-6 py-4 pr-12">
+            <DialogTitle>Chi tiết đơn mua</DialogTitle>
+            <DialogDescription>
+              {detail?.poNumber ?? "Đang tải đơn mua..."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 space-y-5 overflow-y-auto px-6 py-4">
+            {detail ? (
+              <>
+                <PurchaseOrderDetail
+                  detail={detail}
+                  loading={detailQuery.isFetching}
+                  supplier={supplierById.get(detail.supplierId)}
+                  warehouse={warehouseById.get(detail.warehouseId)}
+                  warehouseItemById={warehouseItemById}
+                />
+                <GoodsReceiptNotesPanel
+                  approveBusyId={
+                    approveGrnMutation.isPending
+                      ? approveGrnMutation.variables
+                      : undefined
+                  }
+                  canManage={canUsePurchaseOrderApi}
+                  confirmBusyId={
+                    confirmGrnMutation.isPending
+                      ? confirmGrnMutation.variables
+                      : undefined
+                  }
+                  createBusy={createGrnMutation.isPending}
+                  dialogOpen={grnDialogOpen}
+                  grnItemForms={grnItemForms}
+                  grnImages={grnImages}
+                  grns={goodsReceiptNotes}
+                  loading={grnsQuery.isFetching}
+                  purchaseOrder={detail}
+                  onApprove={(goodsReceiptNoteId) =>
+                    approveGrnMutation.mutate(goodsReceiptNoteId)
+                  }
+                  onConfirm={(goodsReceiptNoteId) =>
+                    confirmGrnMutation.mutate(goodsReceiptNoteId)
+                  }
+                  onCreate={handleCreateGrn}
+                  onDialogOpenChange={(open) => {
+                    if (open) {
+                      openGrnDialog();
+                    } else {
+                      setGrnDialogOpen(false);
+                      setGrnImages([]);
+                    }
                   }}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Tất cả</SelectItem>
-                    {suppliers.map((supplier) => (
-                      <SelectItem key={supplier.id} value={supplier.id}>
-                        {supplier.code} · {supplier.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                className="self-end"
-                disabled={!canUsePurchaseOrderApi}
-                type="submit"
-              >
-                <Search data-icon="inline-start" />
-                Lọc
-              </Button>
-            </form>
+                  onFormChange={setGrnItemForms}
+                  onImagesChange={setGrnImages}
+                />
+              </>
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
 
-            {purchaseOrdersQuery.isLoading ? (
-              <TableSkeleton columns={5} />
-            ) : (
-              <PurchaseOrderTable
-                purchaseOrders={purchaseOrders}
-                selectedId={activePurchaseOrderId}
-                supplierById={supplierById}
-                warehouseById={warehouseById}
-                onSelect={(purchaseOrder) =>
-                  setSelectedPurchaseOrderId(purchaseOrder.id)
-                }
-              />
-            )}
-
-            <div className="flex items-center justify-between gap-3">
-              <Button
-                disabled={page <= 1}
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-                type="button"
-                variant="outline"
-              >
-                Trang trước
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                {page}/{totalPages}
-              </span>
-              <Button
-                disabled={page >= totalPages}
-                onClick={() =>
-                  setPage((current) => Math.min(totalPages, current + 1))
-                }
-                type="button"
-                variant="outline"
-              >
-                Trang sau
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {detail ? (
-        <>
-          <PurchaseOrderDetail
-            detail={detail}
-            loading={detailQuery.isFetching}
-            supplier={supplierById.get(detail.supplierId)}
-            warehouse={warehouseById.get(detail.warehouseId)}
-          />
-          <GoodsReceiptNotesPanel
-            approveBusyId={
-              approveGrnMutation.isPending
-                ? approveGrnMutation.variables
-                : undefined
+      {selectedGoodsReceiptNote ? (
+        <GoodsReceiptNoteDetailDialog
+          grn={selectedGoodsReceiptNote}
+          itemById={warehouseItemById}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSelectedGoodsReceiptNote(undefined);
             }
-            canManage={canUsePurchaseOrderApi}
-            confirmBusyId={
-              confirmGrnMutation.isPending
-                ? confirmGrnMutation.variables
-                : undefined
-            }
-            createBusy={createGrnMutation.isPending}
-            dialogOpen={grnDialogOpen}
-            grnItemForms={grnItemForms}
-            grnImages={grnImages}
-            grns={goodsReceiptNotes}
-            loading={grnsQuery.isFetching}
-            purchaseOrder={detail}
-            onApprove={(goodsReceiptNoteId) =>
-              approveGrnMutation.mutate(goodsReceiptNoteId)
-            }
-            onConfirm={(goodsReceiptNoteId) =>
-              confirmGrnMutation.mutate(goodsReceiptNoteId)
-            }
-            onCreate={handleCreateGrn}
-            onDialogOpenChange={(open) => {
-              if (open) {
-                openGrnDialog();
-              } else {
-                setGrnDialogOpen(false);
-                setGrnImages([]);
-              }
-            }}
-            onFormChange={setGrnItemForms}
-            onImagesChange={setGrnImages}
-          />
-        </>
+          }}
+          purchaseOrder={purchaseOrders.find(
+            (po) => po.id === selectedGoodsReceiptNote.purchaseOrderId,
+          )}
+          warehouse={warehouseById.get(selectedGoodsReceiptNote.warehouseId)}
+        />
       ) : null}
     </div>
   );
@@ -1146,11 +1267,13 @@ function PurchaseOrderDetail({
   loading,
   supplier,
   warehouse,
+  warehouseItemById,
 }: {
   detail: PurchaseOrder;
   loading: boolean;
   supplier: Supplier | undefined;
   warehouse: WarehouseStructureWarehouse | undefined;
+  warehouseItemById: Map<string, WarehouseItem>;
 }) {
   const items = detail.items ?? [];
 
@@ -1185,7 +1308,7 @@ function PurchaseOrderDetail({
         <Table scrollable>
           <TableHeader>
             <TableRow>
-              <TableHead>Mã mặt hàng</TableHead>
+              <TableHead>Tên mặt hàng</TableHead>
               <TableHead>SKU</TableHead>
               <TableHead>Số lượng</TableHead>
               <TableHead>Đơn vị</TableHead>
@@ -1195,7 +1318,9 @@ function PurchaseOrderDetail({
           <TableBody>
             {items.map((item) => (
               <TableRow key={`${item.itemId}-${item.sku}`}>
-                <TableCell className="font-medium">{item.itemId}</TableCell>
+                <TableCell className="font-medium">
+                  {warehouseItemById.get(item.itemId)?.name ?? item.sku}
+                </TableCell>
                 <TableCell>{item.sku}</TableCell>
                 <TableCell>{item.expectedQty}</TableCell>
                 <TableCell>{item.unit}</TableCell>
@@ -1441,12 +1566,13 @@ function GoodsReceiptItemFields({
   return (
     <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-12">
       <div className="min-w-0 space-y-2 lg:col-span-3">
-        <Label htmlFor={`${fieldId}-item`}>Mã mặt hàng</Label>
+        <Label htmlFor={`${fieldId}-item`}>Tên mặt hàng</Label>
         <Input
-          aria-label={`Mã mặt hàng phiếu nhập dòng ${index + 1}`}
+          aria-label={`Tên mặt hàng phiếu nhập dòng ${index + 1}`}
           id={`${fieldId}-item`}
           readOnly
-          value={item.itemId}
+          title={item.itemName}
+          value={item.itemName}
         />
       </div>
       <div className="min-w-0 space-y-2 lg:col-span-3">
@@ -1485,6 +1611,8 @@ function GoodsReceiptItemFields({
         <Input
           aria-label={`Mã lô phiếu nhập dòng ${index + 1}`}
           id={`${fieldId}-lot`}
+          placeholder="Nhập mã lô"
+          required={item.isPerishable}
           value={item.lotNumber}
           onChange={(event) =>
             onChange({ ...item, lotNumber: event.target.value })
@@ -1496,6 +1624,7 @@ function GoodsReceiptItemFields({
         <Input
           aria-label={`Hạn sử dụng phiếu nhập dòng ${index + 1}`}
           id={`${fieldId}-expiry`}
+          required={item.isPerishable}
           type="date"
           value={item.expiryDate}
           onChange={(event) =>

@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Barcode } from "@/components/barcode";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -230,7 +231,7 @@ export function WarehouseItemsClient() {
   const [editingItem, setEditingItem] = useState<WarehouseItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<WarehouseItem | null>(null);
 
-  const [showCreateItem, setShowCreateItem] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   const itemsQuery = useQuery({
     queryFn: () =>
@@ -332,26 +333,11 @@ export function WarehouseItemsClient() {
 
           {canManage ? (
             <div className="flex justify-end">
-              <Button
-                type="button"
-                variant={showCreateItem ? "outline" : "default"}
-                onClick={() => setShowCreateItem((current) => !current)}
-              >
+              <Button type="button" onClick={() => setCreateDialogOpen(true)}>
                 <Plus data-icon="inline-start" />
-                {showCreateItem ? "Đóng biểu mẫu" : "Tạo mặt hàng"}
+                Tạo mặt hàng
               </Button>
             </div>
-          ) : null}
-
-          {canManage && showCreateItem ? (
-            <CreateWarehouseItemPanel
-              canManage={canManage}
-              onCreated={() => {
-                void queryClient.invalidateQueries({
-                  queryKey: ["stock-items"],
-                });
-              }}
-            />
           ) : null}
 
           <TablePanel
@@ -517,6 +503,33 @@ export function WarehouseItemsClient() {
           )}
         </TabsContent>
       </Tabs>
+
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent
+          size="5xl"
+          className="max-h-[90dvh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-0"
+        >
+          <DialogHeader className="border-b px-6 py-4 pr-12">
+            <DialogTitle>Tạo mặt hàng</DialogTitle>
+            <DialogDescription>
+              Nhập thông tin mặt hàng và chọn cấu hình để hệ thống cấp SKU.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 overflow-y-auto px-6 py-4">
+            {createDialogOpen ? (
+              <CreateWarehouseItemPanel
+                canManage={canManage}
+                layout="dialog"
+                onCreated={() => {
+                  void queryClient.invalidateQueries({
+                    queryKey: ["stock-items"],
+                  });
+                }}
+              />
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {viewingItem ? (
         <ItemDetailDialog
@@ -860,10 +873,14 @@ function ItemDetailDialog({
               <InfoRow label="Tên" value={item.name} />
               <InfoRow label="Loại" value={typeLabel(item.type)} />
               <InfoRow label="Đơn vị cơ sở" value={item.unit} />
-              <InfoRow
-                label="Mã vạch nội bộ"
-                value={item.barcode || "Chưa có"}
-              />
+              <div className="space-y-2 sm:col-span-2">
+                <span className="text-muted-foreground">Mã vạch nội bộ</span>
+                {item.barcode ? (
+                  <Barcode value={item.barcode} />
+                ) : (
+                  <div className="font-medium">Chưa có</div>
+                )}
+              </div>
               <InfoRow
                 label="Mức tồn tối thiểu"
                 value={item.minQuantity?.toString() ?? "Chưa đặt"}

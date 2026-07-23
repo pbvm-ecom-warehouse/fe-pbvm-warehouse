@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Barcode } from "@/components/barcode";
 import { Checkbox } from "@/components/ui/checkbox";
 
 import { Input } from "@/components/ui/input";
@@ -142,9 +143,11 @@ function formatError(error: unknown) {
 
 export function CreateWarehouseItemPanel({
   canManage,
+  layout = "panel",
   onCreated,
 }: {
   canManage: boolean;
+  layout?: "dialog" | "panel";
   onCreated: (item: WarehouseItem) => void;
 }) {
   const [form, setForm] = useState<CreateForm>(initialForm);
@@ -308,7 +311,11 @@ export function CreateWarehouseItemPanel({
   if (createdItem) {
     return (
       <section
-        className="space-y-5 rounded-lg border bg-card p-4 shadow-sm"
+        className={
+          layout === "dialog"
+            ? "space-y-5"
+            : "space-y-5 rounded-lg border bg-card p-4 shadow-sm"
+        }
         aria-labelledby="created-item-title"
       >
         <header>
@@ -326,18 +333,24 @@ export function CreateWarehouseItemPanel({
 
   return (
     <section
-      className="rounded-lg border bg-card p-4 shadow-sm"
-      aria-labelledby="create-item-title"
+      className={
+        layout === "dialog"
+          ? "space-y-5"
+          : "rounded-lg border bg-card p-4 shadow-sm"
+      }
+      aria-label={layout === "dialog" ? "Biểu mẫu tạo mặt hàng" : undefined}
+      aria-labelledby={layout === "panel" ? "create-item-title" : undefined}
     >
-      <header className="mb-5">
-        <h2 id="create-item-title" className="text-base font-semibold">
-          Tạo mặt hàng
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Nhập thông tin mặt hàng và chọn cấu hình để hệ thống cấp SKU.
-        </p>
-      </header>
-
+      {layout === "panel" ? (
+        <header className="mb-5">
+          <h2 id="create-item-title" className="text-base font-semibold">
+            Tạo mặt hàng
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Nhập thông tin mặt hàng và chọn cấu hình để hệ thống cấp SKU.
+          </p>
+        </header>
+      ) : null}
       <form className="space-y-5" onSubmit={handleSubmit}>
         <section
           className="space-y-3"
@@ -611,23 +624,25 @@ function CreateResult({
             </Button>
           }
         />
-        <ResultRow
-          label="Mã vạch nội bộ"
-          value={item.barcode || "Chưa được cấp"}
-          action={
-            item.barcode ? (
-              <Button
-                aria-label="Sao chép mã vạch"
-                size="icon-sm"
-                type="button"
-                variant="ghost"
-                onClick={() => void copy(item.barcode!, "mã vạch")}
-              >
-                <Copy />
-              </Button>
-            ) : null
-          }
-        />
+        <div className="grid gap-2 sm:grid-cols-[160px_1fr_auto] sm:items-center">
+          <span className="text-sm text-muted-foreground">Mã vạch nội bộ</span>
+          {item.barcode ? (
+            <Barcode value={item.barcode} />
+          ) : (
+            <span className="text-sm font-semibold">Chưa được cấp</span>
+          )}
+          {item.barcode ? (
+            <Button
+              aria-label="Sao chép mã vạch"
+              size="icon-sm"
+              type="button"
+              variant="ghost"
+              onClick={() => void copy(item.barcode!, "mã vạch")}
+            >
+              <Copy />
+            </Button>
+          ) : null}
+        </div>
       </div>
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="outline" onClick={onReset}>
