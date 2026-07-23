@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ClipboardCheck,
   ClipboardList,
+  Eye,
   LoaderCircle,
   Plus,
   RefreshCw,
@@ -16,6 +17,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  EvidenceImageGallery,
+  EvidenceImagePicker,
+} from "@/components/evidence-images";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -214,7 +219,9 @@ export function AdjustmentsClient() {
         actions={
           <Button
             onClick={() => {
-              void queryClient.invalidateQueries({ queryKey: ["stock-counts"] });
+              void queryClient.invalidateQueries({
+                queryKey: ["stock-counts"],
+              });
               void queryClient.invalidateQueries({ queryKey: ["scrap-notes"] });
             }}
             type="button"
@@ -268,6 +275,7 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
   const [createForm, setCreateForm] = useState(defaultStockCountForm);
   const [countTarget, setCountTarget] = useState<StockCountItem | null>(null);
   const [countForm, setCountForm] = useState(defaultCountForm);
+  const [countImages, setCountImages] = useState<File[]>([]);
   const [approveReason, setApproveReason] = useState("");
 
   const listQuery = useQuery({
@@ -299,7 +307,8 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
     queryFn: () => getStockCount(activeId),
     queryKey: stockCountKeys.detail(activeId),
   });
-  const detail = detailQuery.data ?? stockCounts.find((item) => item.id === activeId);
+  const detail =
+    detailQuery.data ?? stockCounts.find((item) => item.id === activeId);
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -331,6 +340,7 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
         stockCountId,
         input: {
           actualQty: parseNonNegativeNumber(countForm.actualQty),
+          images: countImages,
           lotId: optionalText(countForm.lotId),
           reason: optionalText(countForm.reason),
           shelfId: requiredText(countForm.shelfId),
@@ -340,6 +350,7 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
     onSuccess: () => {
       setCountTarget(null);
       setCountForm(defaultCountForm);
+      setCountImages([]);
       void queryClient.invalidateQueries({ queryKey: ["stock-counts"] });
       toast.success("Đã ghi nhận số đếm");
     },
@@ -375,6 +386,7 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
 
   function openCountDialog(item: StockCountItem) {
     setCountTarget(item);
+    setCountImages([]);
     setCountForm({
       actualQty: item.actualQty?.toString() ?? "",
       lotId: item.lotId ?? "",
@@ -522,11 +534,7 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
           />
         )}
 
-        <Pager
-          page={page}
-          totalPages={totalPages}
-          onPageChange={setPage}
-        />
+        <Pager page={page} totalPages={totalPages} onPageChange={setPage} />
       </TablePanel>
 
       {detailQuery.error ? <ErrorBanner error={detailQuery.error} /> : null}
@@ -593,13 +601,21 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
                 setCountForm((current) => ({ ...current, reason }))
               }
             />
+            <EvidenceImagePicker
+              files={countImages}
+              id="stock-count-line-images"
+              onChange={setCountImages}
+            />
             <DialogFooter>
               <DialogClose asChild>
                 <Button type="button" variant="outline">
                   Hủy
                 </Button>
               </DialogClose>
-              <Button disabled={!canCount || countMutation.isPending} type="submit">
+              <Button
+                disabled={!canCount || countMutation.isPending}
+                type="submit"
+              >
                 {countMutation.isPending ? (
                   <LoaderCircle
                     className="animate-spin"
@@ -628,7 +644,7 @@ function StockCountTable({
   onSelect: (id: string) => void;
 }) {
   return (
-    <Table>
+    <Table scrollable>
       <TableHeader>
         <TableRow>
           <TableHead>Mã phiếu</TableHead>
@@ -636,11 +652,12 @@ function StockCountTable({
           <TableHead>Khu vực</TableHead>
           <TableHead>Trạng thái</TableHead>
           <TableHead>Số dòng</TableHead>
+          <TableHead className="text-right">Thao tác</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {items.length === 0 ? (
-          <EmptyRow colSpan={5} label="Chưa có phiếu kiểm." />
+          <EmptyRow colSpan={6} label="Chưa có phiếu kiểm." />
         ) : (
           items.map((item) => (
             <TableRow
@@ -651,7 +668,9 @@ function StockCountTable({
               key={item.id}
               onClick={() => onSelect(item.id)}
             >
-              <TableCell className="font-mono font-semibold">{item.id}</TableCell>
+              <TableCell className="font-mono font-semibold">
+                {item.id}
+              </TableCell>
               <TableCell>{item.warehouseId}</TableCell>
               <TableCell>{item.zoneId ?? "Toàn kho"}</TableCell>
               <TableCell>
@@ -660,6 +679,19 @@ function StockCountTable({
                 </StatusBadge>
               </TableCell>
               <TableCell>{item.items.length}</TableCell>
+              <TableCell className="text-right">
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelect(item.id);
+                  }}
+                >
+                  <Eye data-icon="inline-start" /> Xem chi tiết
+                </Button>
+              </TableCell>
             </TableRow>
           ))
         )}
@@ -704,7 +736,7 @@ function StockCountDetail({
         </div>
 
         <div className="overflow-x-auto rounded-lg border border-border/70">
-          <Table>
+          <Table scrollable>
             <TableHeader>
               <TableRow>
                 <TableHead>SKU</TableHead>
@@ -712,12 +744,13 @@ function StockCountDetail({
                 <TableHead>Tồn hệ thống</TableHead>
                 <TableHead>Thực đếm</TableHead>
                 <TableHead>Chênh lệch</TableHead>
+                <TableHead>Ảnh minh chứng</TableHead>
                 <TableHead className="text-right">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {detail.items.length === 0 ? (
-                <EmptyRow colSpan={6} label="Phiếu kiểm chưa có dòng hàng." />
+                <EmptyRow colSpan={7} label="Phiếu kiểm chưa có dòng hàng." />
               ) : (
                 detail.items.map((item) => (
                   <TableRow key={`${item.itemId}-${item.shelfId}`}>
@@ -728,6 +761,13 @@ function StockCountDetail({
                     <TableCell>{formatQty(item.systemQty)}</TableCell>
                     <TableCell>{formatQty(item.actualQty)}</TableCell>
                     <TableCell>{formatQty(item.delta)}</TableCell>
+                    <TableCell className="min-w-48">
+                      <EvidenceImageGallery
+                        emptyLabel="Không có ảnh"
+                        images={item.images}
+                        label={`${item.images?.length ?? 0} ảnh`}
+                      />
+                    </TableCell>
                     <TableCell>
                       <div className="flex justify-end">
                         <Button
@@ -765,7 +805,9 @@ function StockCountDetail({
           />
           <Button
             className="self-end"
-            disabled={!canApprove || detail.status === "APPROVED" || approveBusy}
+            disabled={
+              !canApprove || detail.status === "APPROVED" || approveBusy
+            }
             type="submit"
           >
             {approveBusy ? (
@@ -795,6 +837,7 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
   const [selectedId, setSelectedId] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState(defaultScrapForm);
+  const [scrapImages, setScrapImages] = useState<File[]>([]);
   const [rejectReason, setRejectReason] = useState("");
 
   const listQuery = useQuery({
@@ -826,13 +869,15 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
     queryFn: () => getScrapNote(activeId),
     queryKey: scrapNoteKeys.detail(activeId),
   });
-  const detail = detailQuery.data ?? scrapNotes.find((item) => item.id === activeId);
+  const detail =
+    detailQuery.data ?? scrapNotes.find((item) => item.id === activeId);
 
   const createMutation = useMutation({
     mutationFn: () =>
       createScrapNote({
         note: optionalText(createForm.note),
         warehouseId: requiredText(createForm.warehouseId),
+        itemImages: [scrapImages],
         items: [
           {
             itemId: requiredText(createForm.itemId),
@@ -846,6 +891,7 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
     onError: (error) => toast.error(formatError(error)),
     onSuccess: (scrapNote) => {
       setCreateForm(defaultScrapForm);
+      setScrapImages([]);
       setCreateOpen(false);
       setSelectedId(scrapNote.id);
       void queryClient.invalidateQueries({ queryKey: ["scrap-notes"] });
@@ -864,7 +910,9 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
 
   const rejectMutation = useMutation({
     mutationFn: (scrapNoteId: string) =>
-      rejectScrapNote(scrapNoteId, { rejectReason: requiredText(rejectReason) }),
+      rejectScrapNote(scrapNoteId, {
+        rejectReason: requiredText(rejectReason),
+      }),
     onError: (error) => toast.error(formatError(error)),
     onSuccess: () => {
       setRejectReason("");
@@ -1023,6 +1071,11 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
                     setCreateForm((current) => ({ ...current, note }))
                   }
                 />
+                <EvidenceImagePicker
+                  files={scrapImages}
+                  id="scrap-create-images"
+                  onChange={setScrapImages}
+                />
                 <DialogFooter>
                   <DialogClose asChild>
                     <Button type="button" variant="outline">
@@ -1056,11 +1109,7 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
           />
         )}
 
-        <Pager
-          page={page}
-          totalPages={totalPages}
-          onPageChange={setPage}
-        />
+        <Pager page={page} totalPages={totalPages} onPageChange={setPage} />
       </TablePanel>
 
       {detailQuery.error ? <ErrorBanner error={detailQuery.error} /> : null}
@@ -1100,7 +1149,7 @@ function ScrapNoteTable({
   onSelect: (id: string) => void;
 }) {
   return (
-    <Table>
+    <Table scrollable>
       <TableHeader>
         <TableRow>
           <TableHead>Mã phiếu</TableHead>
@@ -1108,11 +1157,12 @@ function ScrapNoteTable({
           <TableHead>Trạng thái</TableHead>
           <TableHead>Số dòng</TableHead>
           <TableHead>Ngày tạo</TableHead>
+          <TableHead className="text-right">Thao tác</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {items.length === 0 ? (
-          <EmptyRow colSpan={5} label="Chưa có phiếu hủy." />
+          <EmptyRow colSpan={6} label="Chưa có phiếu hủy." />
         ) : (
           items.map((item) => (
             <TableRow
@@ -1123,7 +1173,9 @@ function ScrapNoteTable({
               key={item.id}
               onClick={() => onSelect(item.id)}
             >
-              <TableCell className="font-mono font-semibold">{item.id}</TableCell>
+              <TableCell className="font-mono font-semibold">
+                {item.id}
+              </TableCell>
               <TableCell>{item.warehouseId}</TableCell>
               <TableCell>
                 <StatusBadge tone={statusTone(item.status)}>
@@ -1132,6 +1184,19 @@ function ScrapNoteTable({
               </TableCell>
               <TableCell>{item.items.length}</TableCell>
               <TableCell>{formatDate(item.createdAt)}</TableCell>
+              <TableCell className="text-right">
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelect(item.id);
+                  }}
+                >
+                  <Eye data-icon="inline-start" /> Xem chi tiết
+                </Button>
+              </TableCell>
             </TableRow>
           ))
         )}
@@ -1171,7 +1236,10 @@ function ScrapNoteDetail({
         <div className="grid gap-3 md:grid-cols-4">
           <InfoBox label="Trạng thái" value={statusLabel(detail.status)} />
           <InfoBox label="Người tạo" value={detail.createdBy} />
-          <InfoBox label="Người duyệt" value={detail.approvedBy ?? "Chưa duyệt"} />
+          <InfoBox
+            label="Người duyệt"
+            value={detail.approvedBy ?? "Chưa duyệt"}
+          />
           <InfoBox label="Số dòng" value={detail.items.length.toString()} />
         </div>
 
@@ -1182,7 +1250,7 @@ function ScrapNoteDetail({
         ) : null}
 
         <div className="overflow-x-auto rounded-lg border border-border/70">
-          <Table>
+          <Table scrollable>
             <TableHeader>
               <TableRow>
                 <TableHead>SKU</TableHead>
@@ -1191,11 +1259,12 @@ function ScrapNoteDetail({
                 <TableHead>Mã lô</TableHead>
                 <TableHead>Số lượng</TableHead>
                 <TableHead>Lý do</TableHead>
+                <TableHead>Ảnh minh chứng</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {detail.items.length === 0 ? (
-                <EmptyRow colSpan={6} label="Phiếu hủy chưa có dòng hàng." />
+                <EmptyRow colSpan={7} label="Phiếu hủy chưa có dòng hàng." />
               ) : (
                 detail.items.map((item) => (
                   <TableRow key={`${item.itemId}-${item.shelfId}`}>
@@ -1207,6 +1276,13 @@ function ScrapNoteDetail({
                     <TableCell>{item.lotId ?? "Không có"}</TableCell>
                     <TableCell>{formatQty(item.quantity)}</TableCell>
                     <TableCell>{item.reason}</TableCell>
+                    <TableCell className="min-w-48">
+                      <EvidenceImageGallery
+                        emptyLabel="Không có ảnh"
+                        images={item.images}
+                        label={`${item.images?.length ?? 0} ảnh`}
+                      />
+                    </TableCell>
                   </TableRow>
                 ))
               )}

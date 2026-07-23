@@ -10,6 +10,7 @@ import {
 import {
   Barcode,
   ClipboardList,
+  Eye,
   LoaderCircle,
   PackageSearch,
   RefreshCw,
@@ -185,7 +186,9 @@ export function GoodsIssuesClient() {
   const [confirmForm, setConfirmForm] = useState(defaultConfirmForm);
   const [sceneMode, setSceneMode] = useState<WarehouseSceneMode>("map");
   const [selectedRackCode, setSelectedRackCode] = useState<string | null>(null);
-  const [selectedShelfCode, setSelectedShelfCode] = useState<string | null>(null);
+  const [selectedShelfCode, setSelectedShelfCode] = useState<string | null>(
+    null,
+  );
 
   const issuesQuery = useQuery({
     enabled: canUseGoodsIssueApi,
@@ -198,7 +201,10 @@ export function GoodsIssuesClient() {
     queryKey: goodsIssueKeys.list({ page, status: statusFilter }),
   });
 
-  const issues = useMemo(() => issuesQuery.data?.data ?? [], [issuesQuery.data]);
+  const issues = useMemo(
+    () => issuesQuery.data?.data ?? [],
+    [issuesQuery.data],
+  );
   const selectedIssue =
     issues.find((issue) => issue.id === selectedIssueId) ?? issues[0];
   const activeIssueId = selectedIssue?.id ?? "";
@@ -218,7 +224,8 @@ export function GoodsIssuesClient() {
   const activeWarehouseId = detail?.warehouseId ?? "";
 
   const suggestionsQuery = useQuery({
-    enabled: canUseGoodsIssueApi && Boolean(activeIssueId) && Boolean(activeItemId),
+    enabled:
+      canUseGoodsIssueApi && Boolean(activeIssueId) && Boolean(activeItemId),
     queryFn: () =>
       listGoodsIssuePickSuggestions({
         goodsIssueId: activeIssueId,
@@ -274,9 +281,9 @@ export function GoodsIssuesClient() {
   const rackGroup = useMemo(
     () =>
       activeSelectedRackCode
-        ? groupShelvesByRack(layoutShelves).find(
+        ? (groupShelvesByRack(layoutShelves).find(
             (group) => group.rackCode === activeSelectedRackCode,
-          ) ?? null
+          ) ?? null)
         : null,
     [activeSelectedRackCode, layoutShelves],
   );
@@ -377,7 +384,7 @@ export function GoodsIssuesClient() {
     event.preventDefault();
 
     if (!activeIssueId || !confirmForm.itemBarcode || !confirmForm.shelfCode) {
-      toast.error("Cần nhập mã vạch SKU và mã vị trí.");
+      toast.error("Cần quét mã vạch mặt hàng và mã vị trí.");
       return;
     }
 
@@ -396,7 +403,7 @@ export function GoodsIssuesClient() {
   function selectItem(item: GoodsIssueItem) {
     setSelectedItemId(item.itemId);
     setConfirmForm({
-      itemBarcode: item.sku,
+      itemBarcode: "",
       lotId: "",
       quantity: String(Math.max(1, item.remainingQty)),
       shelfCode: "",
@@ -417,7 +424,9 @@ export function GoodsIssuesClient() {
     setConfirmForm((current) => ({
       ...current,
       lotId: suggestion.lotId ?? "",
-      quantity: String(Math.min(suggestion.quantity, selectedItem?.remainingQty ?? 1)),
+      quantity: String(
+        Math.min(suggestion.quantity, selectedItem?.remainingQty ?? 1),
+      ),
       shelfCode: suggestion.shelfCode,
     }));
   }
@@ -445,21 +454,21 @@ export function GoodsIssuesClient() {
       <PageHeader
         title="Xuất kho"
         actions={
-        <Button
-          disabled={!canUseGoodsIssueApi}
-          onClick={() =>
-            void queryClient.invalidateQueries({ queryKey: ["goods-issues"] })
-          }
-          type="button"
-          variant="outline"
-        >
-          {issuesQuery.isFetching || detailQuery.isFetching ? (
-            <LoaderCircle className="animate-spin" data-icon="inline-start" />
-          ) : (
-            <RefreshCw data-icon="inline-start" />
-          )}
-          Làm mới
-        </Button>
+          <Button
+            disabled={!canUseGoodsIssueApi}
+            onClick={() =>
+              void queryClient.invalidateQueries({ queryKey: ["goods-issues"] })
+            }
+            type="button"
+            variant="outline"
+          >
+            {issuesQuery.isFetching || detailQuery.isFetching ? (
+              <LoaderCircle className="animate-spin" data-icon="inline-start" />
+            ) : (
+              <RefreshCw data-icon="inline-start" />
+            )}
+            Làm mới
+          </Button>
         }
       />
 
@@ -510,7 +519,11 @@ export function GoodsIssuesClient() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button className="self-end" disabled={!canUseGoodsIssueApi} type="submit">
+                <Button
+                  className="self-end"
+                  disabled={!canUseGoodsIssueApi}
+                  type="submit"
+                >
                   <Search data-icon="inline-start" />
                   Lọc
                 </Button>
@@ -656,7 +669,7 @@ export function GoodsIssuesClient() {
                 <form className="space-y-3" onSubmit={handleConfirm}>
                   <TextField
                     id="goods-issue-barcode"
-                    label="Mã vạch SKU"
+                    label="Mã vạch mặt hàng"
                     value={confirmForm.itemBarcode}
                     onChange={(itemBarcode) =>
                       setConfirmForm((current) => ({ ...current, itemBarcode }))
@@ -727,18 +740,19 @@ function GoodsIssueTable({
   selectedId: string;
 }) {
   return (
-    <Table>
+    <Table scrollable>
       <TableHeader>
         <TableRow>
           <TableHead>Mã phiếu</TableHead>
           <TableHead>Mã đơn hàng</TableHead>
           <TableHead>Trạng thái</TableHead>
           <TableHead>Số dòng</TableHead>
+          <TableHead className="text-right">Thao tác</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {issues.length === 0 ? (
-          <EmptyRow colSpan={4} label="Chưa có phiếu xuất." />
+          <EmptyRow colSpan={5} label="Chưa có phiếu xuất." />
         ) : (
           issues.map((issue) => (
             <TableRow
@@ -759,6 +773,19 @@ function GoodsIssueTable({
                 </StatusBadge>
               </TableCell>
               <TableCell>{issue.items.length}</TableCell>
+              <TableCell className="text-right">
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelect(issue);
+                  }}
+                >
+                  <Eye data-icon="inline-start" /> Xem chi tiết
+                </Button>
+              </TableCell>
             </TableRow>
           ))
         )}
@@ -785,7 +812,7 @@ function GoodsIssueDetail({
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-4">
-        <Table>
+        <Table scrollable>
           <TableHeader>
             <TableRow>
               <TableHead>SKU</TableHead>

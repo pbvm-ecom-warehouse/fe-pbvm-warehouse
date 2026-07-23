@@ -31,6 +31,7 @@ function migrateUser(user: unknown): SessionUser | null {
 
   return sessionUserFromClaims(
     {
+      avatarUrl: persistedUser.avatarUrl,
       email: persistedUser.email,
       id: persistedUser.id,
       name: persistedUser.name,

@@ -12,6 +12,7 @@ import {
   ArrowRight,
   Barcode,
   ClipboardCheck,
+  Eye,
   LoaderCircle,
   MapPinned,
   PackageCheck,
@@ -63,7 +64,10 @@ import {
   WarehouseArchitectureScene,
   type WarehouseSceneMode,
 } from "@/features/warehouse-navigation/components/warehouse-architecture-scene";
-import { getApiErrorMessage, isMissingBackendEndpoint } from "@/lib/api-contract";
+import {
+  getApiErrorMessage,
+  isMissingBackendEndpoint,
+} from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
@@ -108,7 +112,14 @@ const putawayKeys = {
     sku: string;
     warehouseId: string;
   }) =>
-    ["putaway-tasks", "suggestions", warehouseId, itemId, sku, quantity] as const,
+    [
+      "putaway-tasks",
+      "suggestions",
+      warehouseId,
+      itemId,
+      sku,
+      quantity,
+    ] as const,
 };
 
 const defaultConfirmForm = {
@@ -207,7 +218,9 @@ export function WarehouseNavigationClient() {
   const [confirmForm, setConfirmForm] = useState(defaultConfirmForm);
   const [sceneMode, setSceneMode] = useState<WarehouseSceneMode>("map");
   const [selectedRackCode, setSelectedRackCode] = useState<string | null>(null);
-  const [selectedShelfCode, setSelectedShelfCode] = useState<string | null>(null);
+  const [selectedShelfCode, setSelectedShelfCode] = useState<string | null>(
+    null,
+  );
 
   const tasksQuery = useQuery({
     enabled: canUsePutawayApi,
@@ -307,9 +320,9 @@ export function WarehouseNavigationClient() {
   const rackGroup = useMemo(
     () =>
       activeSelectedRackCode
-        ? groupShelvesByRack(layoutShelves).find(
+        ? (groupShelvesByRack(layoutShelves).find(
             (group) => group.rackCode === activeSelectedRackCode,
-          ) ?? null
+          ) ?? null)
         : null,
     [activeSelectedRackCode, layoutShelves],
   );
@@ -377,7 +390,6 @@ export function WarehouseNavigationClient() {
     [contentQueries, rackGroup],
   );
 
-
   const confirmMutation = useMutation({
     mutationFn: () =>
       confirmPutawayLine(activeTaskId, {
@@ -403,7 +415,7 @@ export function WarehouseNavigationClient() {
     event.preventDefault();
 
     if (!activeTaskId || !confirmForm.itemBarcode || !confirmForm.shelfCode) {
-      toast.error("Cần nhập mã vạch SKU và mã vị trí.");
+      toast.error("Cần quét mã vạch mặt hàng và mã vị trí.");
       return;
     }
 
@@ -424,7 +436,7 @@ export function WarehouseNavigationClient() {
 
     setSelectedItemId(item.itemId);
     setConfirmForm({
-      itemBarcode: item.sku,
+      itemBarcode: "",
       lotId: item.lotId ?? "",
       quantity: String(Math.max(1, qty)),
       shelfCode: "",
@@ -474,9 +486,10 @@ export function WarehouseNavigationClient() {
     selectedShelfCode ?? apiSuggestions[0]?.shelfCode ?? "";
   const shouldShowShelfFallback =
     Boolean(fallbackShelfCode) &&
-    (!layout || !visualSuggestions.some(
-      (suggestion) => suggestion.shelf.code === fallbackShelfCode,
-    ));
+    (!layout ||
+      !visualSuggestions.some(
+        (suggestion) => suggestion.shelf.code === fallbackShelfCode,
+      ));
 
   return (
     <div className="space-y-5">
@@ -484,30 +497,35 @@ export function WarehouseNavigationClient() {
         title="Cất hàng"
         actions={
           <>
-          <Button
-            disabled={!canUsePutawayApi}
-            onClick={() =>
-              void queryClient.invalidateQueries({ queryKey: ["putaway-tasks"] })
-            }
-            type="button"
-            variant="outline"
-          >
-            {tasksQuery.isFetching || detailQuery.isFetching ? (
-              <LoaderCircle className="animate-spin" data-icon="inline-start" />
-            ) : (
-              <RefreshCw data-icon="inline-start" />
-            )}
-            Làm mới
-          </Button>
-          {canManageStructure ? (
-            <Button asChild variant="outline">
-              <Link href="/warehouses">
-                <Warehouse data-icon="inline-start" />
-                Quản lý vị trí
-                <ArrowRight data-icon="inline-end" />
-              </Link>
+            <Button
+              disabled={!canUsePutawayApi}
+              onClick={() =>
+                void queryClient.invalidateQueries({
+                  queryKey: ["putaway-tasks"],
+                })
+              }
+              type="button"
+              variant="outline"
+            >
+              {tasksQuery.isFetching || detailQuery.isFetching ? (
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
+              ) : (
+                <RefreshCw data-icon="inline-start" />
+              )}
+              Làm mới
             </Button>
-          ) : null}
+            {canManageStructure ? (
+              <Button asChild variant="outline">
+                <Link href="/warehouses">
+                  <Warehouse data-icon="inline-start" />
+                  Quản lý vị trí
+                  <ArrowRight data-icon="inline-end" />
+                </Link>
+              </Button>
+            ) : null}
           </>
         }
       />
@@ -559,7 +577,11 @@ export function WarehouseNavigationClient() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button className="self-end" disabled={!canUsePutawayApi} type="submit">
+                <Button
+                  className="self-end"
+                  disabled={!canUsePutawayApi}
+                  type="submit"
+                >
                   <Search data-icon="inline-start" />
                   Lọc
                 </Button>
@@ -658,8 +680,7 @@ export function WarehouseNavigationClient() {
                   {warning}
                 </div>
               ) : null}
-              {apiSuggestions.length === 0 &&
-              suggestionsQuery.isSuccess ? (
+              {apiSuggestions.length === 0 && suggestionsQuery.isSuccess ? (
                 <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
                   Chưa có vị trí phù hợp cho mặt hàng và số lượng này.
                 </div>
@@ -695,71 +716,75 @@ export function WarehouseNavigationClient() {
           </Card>
 
           {selectedItem ? (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Barcode className="size-4 text-primary" />
-                Xác nhận cất hàng
-              </CardTitle>
-              <CardDescription>
-                Quét SKU, quét mã vị trí và nhập số lượng thực cất.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form className="space-y-3" onSubmit={handleConfirm}>
-                <TextField
-                  id="putaway-confirm-barcode"
-                  label="Mã vạch SKU"
-                  value={confirmForm.itemBarcode}
-                  onChange={(itemBarcode) =>
-                    setConfirmForm((current) => ({ ...current, itemBarcode }))
-                  }
-                />
-                <TextField
-                  id="putaway-confirm-shelf"
-                  label="Mã vị trí"
-                  value={confirmForm.shelfCode}
-                  onChange={(shelfCode) =>
-                    setConfirmForm((current) => ({ ...current, shelfCode }))
-                  }
-                />
-                <TextField
-                  id="putaway-confirm-qty"
-                  label="Số lượng"
-                  type="number"
-                  value={confirmForm.quantity}
-                  onChange={(quantity) =>
-                    setConfirmForm((current) => ({ ...current, quantity }))
-                  }
-                />
-                <TextField
-                  id="putaway-confirm-lot"
-                  label="Mã lô"
-                  required={false}
-                  value={confirmForm.lotId}
-                  onChange={(lotId) =>
-                    setConfirmForm((current) => ({ ...current, lotId }))
-                  }
-                />
-                <Button
-                  className="w-full"
-                  disabled={
-                    !canUsePutawayApi ||
-                    !activeTaskId ||
-                    confirmMutation.isPending
-                  }
-                  type="submit"
-                >
-                  {confirmMutation.isPending ? (
-                    <LoaderCircle className="animate-spin" data-icon="inline-start" />
-                  ) : (
-                    <Save data-icon="inline-start" />
-                  )}
-                  Xác nhận
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Barcode className="size-4 text-primary" />
+                  Xác nhận cất hàng
+                </CardTitle>
+                <CardDescription>
+                  Quét mã vạch mặt hàng, quét mã vị trí và nhập số lượng thực
+                  cất.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form className="space-y-3" onSubmit={handleConfirm}>
+                  <TextField
+                    id="putaway-confirm-barcode"
+                    label="Mã vạch mặt hàng"
+                    value={confirmForm.itemBarcode}
+                    onChange={(itemBarcode) =>
+                      setConfirmForm((current) => ({ ...current, itemBarcode }))
+                    }
+                  />
+                  <TextField
+                    id="putaway-confirm-shelf"
+                    label="Mã vị trí"
+                    value={confirmForm.shelfCode}
+                    onChange={(shelfCode) =>
+                      setConfirmForm((current) => ({ ...current, shelfCode }))
+                    }
+                  />
+                  <TextField
+                    id="putaway-confirm-qty"
+                    label="Số lượng"
+                    type="number"
+                    value={confirmForm.quantity}
+                    onChange={(quantity) =>
+                      setConfirmForm((current) => ({ ...current, quantity }))
+                    }
+                  />
+                  <TextField
+                    id="putaway-confirm-lot"
+                    label="Mã lô"
+                    required={false}
+                    value={confirmForm.lotId}
+                    onChange={(lotId) =>
+                      setConfirmForm((current) => ({ ...current, lotId }))
+                    }
+                  />
+                  <Button
+                    className="w-full"
+                    disabled={
+                      !canUsePutawayApi ||
+                      !activeTaskId ||
+                      confirmMutation.isPending
+                    }
+                    type="submit"
+                  >
+                    {confirmMutation.isPending ? (
+                      <LoaderCircle
+                        className="animate-spin"
+                        data-icon="inline-start"
+                      />
+                    ) : (
+                      <Save data-icon="inline-start" />
+                    )}
+                    Xác nhận
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
           ) : null}
         </aside>
       </div>
@@ -777,7 +802,7 @@ function PutawayTaskTable({
   tasks: PutawayTask[];
 }) {
   return (
-    <Table>
+    <Table scrollable>
       <TableHeader>
         <TableRow>
           <TableHead>Mã phiếu</TableHead>
@@ -785,11 +810,12 @@ function PutawayTaskTable({
           <TableHead>Kho</TableHead>
           <TableHead>Trạng thái</TableHead>
           <TableHead>Số dòng</TableHead>
+          <TableHead className="text-right">Thao tác</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {tasks.length === 0 ? (
-          <EmptyRow colSpan={5} label="Chưa có phiếu cất hàng." />
+          <EmptyRow colSpan={6} label="Chưa có phiếu cất hàng." />
         ) : (
           tasks.map((task) => (
             <TableRow
@@ -800,7 +826,9 @@ function PutawayTaskTable({
               key={task.id}
               onClick={() => onSelect(task)}
             >
-              <TableCell className="font-mono font-semibold">{task.id}</TableCell>
+              <TableCell className="font-mono font-semibold">
+                {task.id}
+              </TableCell>
               <TableCell>{task.grnId}</TableCell>
               <TableCell>{task.warehouseId}</TableCell>
               <TableCell>
@@ -809,6 +837,19 @@ function PutawayTaskTable({
                 </StatusBadge>
               </TableCell>
               <TableCell>{task.items.length}</TableCell>
+              <TableCell className="text-right">
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelect(task);
+                  }}
+                >
+                  <Eye data-icon="inline-start" /> Xem chi tiết
+                </Button>
+              </TableCell>
             </TableRow>
           ))
         )}
@@ -838,7 +879,7 @@ function PutawayTaskDetail({
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-4">
-        <Table>
+        <Table scrollable>
           <TableHeader>
             <TableRow>
               <TableHead>SKU</TableHead>
@@ -865,7 +906,9 @@ function PutawayTaskDetail({
                   </TableCell>
                   <TableCell>{item.quantity}</TableCell>
                   <TableCell>{item.remainingQty ?? item.quantity}</TableCell>
-                  <TableCell>{item.lotNumber ?? item.lotId ?? "Chưa khai"}</TableCell>
+                  <TableCell>
+                    {item.lotNumber ?? item.lotId ?? "Chưa khai"}
+                  </TableCell>
                 </TableRow>
               ))
             )}
@@ -904,9 +947,3 @@ function TextField({
     </div>
   );
 }
-
-
-
-
-
-

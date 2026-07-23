@@ -3,8 +3,8 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Eye,
   LoaderCircle,
-  Pencil,
   Plus,
   RefreshCw,
   Save,
@@ -61,6 +61,7 @@ import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
 import { useSessionUser } from "@/hooks/use-session-user";
+import { suggestSupplierCode } from "@/features/suppliers/lib/supplier-code";
 
 import {
   changeSupplierStatus,
@@ -194,6 +195,8 @@ export function SuppliersClient() {
   const [deleteSupplierTarget, setDeleteSupplierTarget] =
     useState<Supplier | null>(null);
   const [createForm, setCreateForm] = useState(defaultSupplierForm);
+  const [createCodeManuallyEdited, setCreateCodeManuallyEdited] =
+    useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const suppliersQuery = useQuery({
@@ -220,6 +223,7 @@ export function SuppliersClient() {
     onError: (error) => toast.error(formatError(error)),
     onSuccess: (supplier) => {
       setCreateForm(defaultSupplierForm);
+      setCreateCodeManuallyEdited(false);
       setEditingSupplier(supplier);
       void queryClient.invalidateQueries({ queryKey: ["suppliers", "list"] });
       setDialogOpen(false);
@@ -254,44 +258,52 @@ export function SuppliersClient() {
         title="Nhà cung cấp"
         actions={
           <>
-          <Button
-            disabled={!canManage}
-            onClick={() =>
-              void queryClient.invalidateQueries({ queryKey: ["suppliers"] })
-            }
-            type="button"
-            variant="outline"
-          >
-            {suppliersQuery.isFetching ? (
-              <LoaderCircle className="animate-spin" data-icon="inline-start" />
-            ) : (
-              <RefreshCw data-icon="inline-start" />
-            )}
-            Làm mới
-          </Button>
+            <Button
+              disabled={!canManage}
+              onClick={() =>
+                void queryClient.invalidateQueries({ queryKey: ["suppliers"] })
+              }
+              type="button"
+              variant="outline"
+            >
+              {suppliersQuery.isFetching ? (
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
+              ) : (
+                <RefreshCw data-icon="inline-start" />
+              )}
+              Làm mới
+            </Button>
 
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button disabled={!canManage}>
-                <Plus data-icon="inline-start" />
-                Tạo nhà cung cấp
-              </Button>
-            </DialogTrigger>
-            <DialogContent size="lg" className="max-h-[90vh] overflow-y-auto p-6">
-              <DialogHeader className="mb-5">
-                <DialogTitle>Tạo nhà cung cấp</DialogTitle>
-                <DialogDescription>Thêm nhà cung cấp mới</DialogDescription>
-              </DialogHeader>
-              <SupplierForm
-                busy={createSupplierMutation.isPending}
-                disabled={!canManage}
-                form={createForm}
-                submitLabel="Tạo nhà cung cấp"
-                onChange={setCreateForm}
-                onSubmit={handleCreateSupplier}
-              />
-            </DialogContent>
-          </Dialog>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button disabled={!canManage}>
+                  <Plus data-icon="inline-start" />
+                  Tạo nhà cung cấp
+                </Button>
+              </DialogTrigger>
+              <DialogContent
+                size="lg"
+                className="max-h-[90vh] overflow-y-auto p-6"
+              >
+                <DialogHeader className="mb-5">
+                  <DialogTitle>Tạo nhà cung cấp</DialogTitle>
+                  <DialogDescription>Thêm nhà cung cấp mới</DialogDescription>
+                </DialogHeader>
+                <SupplierForm
+                  autoSuggestCode={!createCodeManuallyEdited}
+                  busy={createSupplierMutation.isPending}
+                  disabled={!canManage}
+                  form={createForm}
+                  submitLabel="Tạo nhà cung cấp"
+                  onChange={setCreateForm}
+                  onCodeManualChange={() => setCreateCodeManuallyEdited(true)}
+                  onSubmit={handleCreateSupplier}
+                />
+              </DialogContent>
+            </Dialog>
           </>
         }
       />
@@ -302,7 +314,9 @@ export function SuppliersClient() {
         </PermissionNotice>
       ) : null}
 
-      {suppliersQuery.error ? <ErrorBanner error={suppliersQuery.error} /> : null}
+      {suppliersQuery.error ? (
+        <ErrorBanner error={suppliersQuery.error} />
+      ) : null}
 
       <div className="grid gap-4">
         <Card>
@@ -360,63 +374,66 @@ export function SuppliersClient() {
             {suppliersQuery.isLoading ? (
               <TableSkeleton columns={4} />
             ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Mã</TableHead>
-                  <TableHead>Tên</TableHead>
-                  <TableHead>Liên hệ</TableHead>
-                  <TableHead>Trạng thái</TableHead>
-                  <TableHead className="w-36 text-right">Thao tác</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {suppliers.length === 0 ? (
-                  <EmptyRow colSpan={5} label="Chưa có nhà cung cấp." />
-                ) : (
-                  suppliers.map((supplier) => (
-                    <TableRow key={supplier.id} className="hover:bg-muted/35">
-                      <TableCell className="font-medium">
-                        {supplier.code}
-                      </TableCell>
-                      <TableCell>{supplier.name}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {supplier.contactName || supplier.phone || "Chưa khai"}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge tone={statusTone(supplier.status)}>
-                          {statusLabel(supplier.status)}
-                        </StatusBadge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            disabled={!canManage}
-                            onClick={() => setEditingSupplier(supplier)}
-                            size="sm"
-                            type="button"
-                            variant="outline"
-                          >
-                            <Pencil data-icon="inline-start" />
-                            Sửa
-                          </Button>
-                          <Button
-                            disabled={!canDelete}
-                            onClick={() => setDeleteSupplierTarget(supplier)}
-                            size="sm"
-                            type="button"
-                            variant="destructive"
-                          >
-                            <Trash2 data-icon="inline-start" />
-                            Xóa
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+              <Table scrollable>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Mã</TableHead>
+                    <TableHead>Tên</TableHead>
+                    <TableHead>Liên hệ</TableHead>
+                    <TableHead>Trạng thái</TableHead>
+                    <TableHead className="w-48 text-right">Thao tác</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {suppliers.length === 0 ? (
+                    <EmptyRow colSpan={5} label="Chưa có nhà cung cấp." />
+                  ) : (
+                    suppliers.map((supplier) => (
+                      <TableRow key={supplier.id} className="hover:bg-muted/35">
+                        <TableCell className="font-medium">
+                          {supplier.code}
+                        </TableCell>
+                        <TableCell>{supplier.name}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {supplier.contactName ||
+                            supplier.phone ||
+                            "Chưa khai"}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge tone={statusTone(supplier.status)}>
+                            {statusLabel(supplier.status)}
+                          </StatusBadge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              aria-label={`Xem chi tiết nhà cung cấp ${supplier.name}`}
+                              disabled={!canManage}
+                              onClick={() => setEditingSupplier(supplier)}
+                              size="sm"
+                              type="button"
+                              variant="outline"
+                            >
+                              <Eye data-icon="inline-start" />
+                              Xem chi tiết
+                            </Button>
+                            <Button
+                              disabled={!canDelete}
+                              onClick={() => setDeleteSupplierTarget(supplier)}
+                              size="sm"
+                              type="button"
+                              variant="destructive"
+                            >
+                              <Trash2 data-icon="inline-start" />
+                              Xóa
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             )}
 
             <div className="flex items-center justify-between gap-3">
@@ -444,7 +461,6 @@ export function SuppliersClient() {
             </div>
           </CardContent>
         </Card>
-
       </div>
       <Dialog
         open={Boolean(editingSupplier)}
@@ -479,8 +495,8 @@ export function SuppliersClient() {
           <DialogHeader>
             <DialogTitle>Xóa nhà cung cấp?</DialogTitle>
             <DialogDescription>
-              Hành động này chỉ dùng khi dữ liệu nhà cung cấp không còn cần
-              quản lý trong WMS.
+              Hành động này chỉ dùng khi dữ liệu nhà cung cấp không còn cần quản
+              lý trong WMS.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -490,7 +506,9 @@ export function SuppliersClient() {
               </Button>
             </DialogClose>
             <Button
-              disabled={!deleteSupplierTarget || deleteSupplierMutation.isPending}
+              disabled={
+                !deleteSupplierTarget || deleteSupplierMutation.isPending
+              }
               onClick={() => {
                 if (deleteSupplierTarget) {
                   deleteSupplierMutation.mutate(deleteSupplierTarget.id);
@@ -535,8 +553,9 @@ function SupplierDetailSection({
   const [itemForm, setItemForm] = useState(defaultSupplierItemForm);
   const [itemEdit, setItemEdit] = useState(defaultSupplierItemForm);
   const [editingItem, setEditingItem] = useState<SupplierItem | null>(null);
-  const [deleteItemTarget, setDeleteItemTarget] =
-    useState<SupplierItem | null>(null);
+  const [deleteItemTarget, setDeleteItemTarget] = useState<SupplierItem | null>(
+    null,
+  );
   const [blacklistConfirmOpen, setBlacklistConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
@@ -576,7 +595,8 @@ function SupplierDetailSection({
   });
 
   const upsertItemMutation = useMutation({
-    mutationFn: () => upsertSupplierItem(supplierItemPayload(itemForm, supplier.id)),
+    mutationFn: () =>
+      upsertSupplierItem(supplierItemPayload(itemForm, supplier.id)),
     onError: (error) => toast.error(formatError(error)),
     onSuccess: () => {
       setItemForm(defaultSupplierItemForm);
@@ -590,12 +610,10 @@ function SupplierDetailSection({
   const updateItemMutation = useMutation({
     mutationFn: (itemId: string) =>
       updateSupplierItem(itemId, {
-        itemId: requiredText(itemEdit.itemId),
         isActive: itemEdit.isActive,
         leadTimeDays: optionalNumber(itemEdit.leadTimeDays),
         minOrderQty: optionalNumber(itemEdit.minOrderQty),
         purchasePrice: optionalNumber(itemEdit.purchasePrice),
-        supplierId: supplier.id,
         supplierItemCode: optionalText(itemEdit.supplierItemCode),
       }),
     onError: (error) => toast.error(formatError(error)),
@@ -692,7 +710,9 @@ function SupplierDetailSection({
               <Label>Trạng thái</Label>
               <Select
                 value={nextStatus}
-                onValueChange={(value) => setNextStatus(value as SupplierStatus)}
+                onValueChange={(value) =>
+                  setNextStatus(value as SupplierStatus)
+                }
               >
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -722,7 +742,10 @@ function SupplierDetailSection({
               type="submit"
             >
               {changeStatusMutation.isPending ? (
-                <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
               ) : (
                 <Save data-icon="inline-start" />
               )}
@@ -810,7 +833,10 @@ function SupplierDetailSection({
         </CardHeader>
         <CardContent className="space-y-4 pt-4">
           {itemsQuery.error ? <ErrorBanner error={itemsQuery.error} /> : null}
-          <form className="grid gap-3 md:grid-cols-3" onSubmit={handleUpsertItem}>
+          <form
+            className="grid gap-3 md:grid-cols-3"
+            onSubmit={handleUpsertItem}
+          >
             <TextField
               id="supplier-item-id"
               label="Mã mặt hàng kho"
@@ -935,17 +961,21 @@ function SupplierDetailSection({
 }
 
 function SupplierForm({
+  autoSuggestCode = false,
   busy,
   disabled,
   form,
   onChange,
+  onCodeManualChange,
   onSubmit,
   submitLabel,
 }: {
+  autoSuggestCode?: boolean;
   busy: boolean;
   disabled: boolean;
   form: typeof defaultSupplierForm;
   onChange: (form: typeof defaultSupplierForm) => void;
+  onCodeManualChange?: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   submitLabel: string;
 }) {
@@ -956,13 +986,22 @@ function SupplierForm({
           id={`${submitLabel}-code`}
           label="Mã NCC"
           value={form.code}
-          onChange={(value) => onChange({ ...form, code: value })}
+          onChange={(value) => {
+            onCodeManualChange?.();
+            onChange({ ...form, code: value });
+          }}
         />
         <TextField
           id={`${submitLabel}-name`}
           label="Tên NCC"
           value={form.name}
-          onChange={(value) => onChange({ ...form, name: value })}
+          onChange={(value) =>
+            onChange({
+              ...form,
+              code: autoSuggestCode ? suggestSupplierCode(value) : form.code,
+              name: value,
+            })
+          }
         />
         <TextField
           id={`${submitLabel}-contact`}
@@ -998,7 +1037,9 @@ function SupplierForm({
         <Input
           id={`${submitLabel}-address`}
           value={form.address}
-          onChange={(event) => onChange({ ...form, address: event.target.value })}
+          onChange={(event) =>
+            onChange({ ...form, address: event.target.value })
+          }
         />
       </div>
       <div className="space-y-2">
@@ -1060,7 +1101,7 @@ function SupplierItemTable({
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border/70">
-      <Table>
+      <Table scrollable>
         <TableHeader>
           <TableRow>
             <TableHead>Mã mặt hàng kho</TableHead>
@@ -1082,7 +1123,9 @@ function SupplierItemTable({
                     {item.supplierItemCode ?? "Chưa có mã NCC"}
                   </div>
                 </TableCell>
-                <TableCell>{item.purchasePrice.toLocaleString("vi-VN")}</TableCell>
+                <TableCell>
+                  {item.purchasePrice.toLocaleString("vi-VN")}
+                </TableCell>
                 <TableCell>
                   {item.leadTimeDays ?? 0} ngày / {item.minOrderQty ?? 0}
                 </TableCell>
@@ -1094,14 +1137,15 @@ function SupplierItemTable({
                 <TableCell>
                   <div className="flex justify-end gap-2">
                     <Button
+                      aria-label={`Xem chi tiết mặt hàng NCC ${item.itemId}`}
                       disabled={!canManage}
                       onClick={() => onEdit(item)}
                       size="sm"
                       type="button"
                       variant="outline"
                     >
-                      <Pencil data-icon="inline-start" />
-                      Sửa
+                      <Eye data-icon="inline-start" />
+                      Xem chi tiết
                     </Button>
                     <Button
                       disabled={!canManage || !item.isActive}
@@ -1143,7 +1187,7 @@ function SupplierItemEditDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="lg">
         <DialogHeader>
-          <DialogTitle>Sửa mặt hàng NCC</DialogTitle>
+          <DialogTitle>Chi tiết mặt hàng NCC</DialogTitle>
           <DialogDescription>
             Cập nhật mã hàng, giá nhập và điều kiện đặt hàng.
           </DialogDescription>
@@ -1207,7 +1251,10 @@ function SupplierItemEditDialog({
             </DialogClose>
             <Button disabled={busy} type="submit">
               {busy ? (
-                <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
               ) : (
                 <Save data-icon="inline-start" />
               )}

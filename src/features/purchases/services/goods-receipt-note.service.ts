@@ -1,3 +1,4 @@
+import { appendEvidenceImages } from "@/components/evidence-images/evidence-image-utils";
 import { apiClient } from "@/lib/api-client";
 import { normalizeApiList, type ApiListLike } from "@/lib/api-list";
 import { type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
@@ -28,6 +29,7 @@ export type GoodsReceiptNote = {
   warehouseId: string;
   status: GoodsReceiptNoteStatus;
   items: GoodsReceiptNoteItem[];
+  images?: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -92,6 +94,21 @@ export async function createGoodsReceiptNote(
   return unwrapApiData(response.data);
 }
 
+export async function uploadGoodsReceiptNoteImage(
+  goodsReceiptNoteId: string,
+  file: File,
+) {
+  const formData = new FormData();
+  appendEvidenceImages(formData, [file], "file");
+  const response = await apiClient.post<
+    ApiEnvelope<GoodsReceiptNote> | GoodsReceiptNote
+  >(
+    `/goods-receipt-notes/${encodeURIComponent(goodsReceiptNoteId)}/images`,
+    formData,
+  );
+
+  return unwrapApiData(response.data);
+}
 export async function confirmGoodsReceiptNote(goodsReceiptNoteId: string) {
   const response = await apiClient.post<
     ApiEnvelope<GoodsReceiptNote> | GoodsReceiptNote

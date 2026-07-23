@@ -6,6 +6,7 @@ import {
   Barcode,
   CheckCircle2,
   ClipboardList,
+  Eye,
   LoaderCircle,
   Printer,
   RefreshCw,
@@ -70,8 +71,7 @@ import {
 const PAGE_SIZE = 20;
 
 const printJobKeys = {
-  detail: (printJobId: string) =>
-    ["print-jobs", "detail", printJobId] as const,
+  detail: (printJobId: string) => ["print-jobs", "detail", printJobId] as const,
   list: (params: { page: number; status: PrintJobStatus | "ALL" }) =>
     ["print-jobs", "list", params] as const,
 };
@@ -226,7 +226,7 @@ export function PrintJobsClient() {
   function handleSelectItem(item: PrintJobItem) {
     setSelectedItemId(item.inputItemId);
     setConsumeForm({
-      itemBarcode: item.sku,
+      itemBarcode: "",
       quantity: String(Math.max(1, item.remainingQty)),
       shelfCode: "",
     });
@@ -240,7 +240,7 @@ export function PrintJobsClient() {
     event.preventDefault();
 
     if (!selectedItem || !consumeForm.itemBarcode || !consumeForm.shelfCode) {
-      toast.error("Cần quét SKU ly chưa in và mã vị trí.");
+      toast.error("Cần quét mã vạch ly chưa in và mã vị trí.");
       return;
     }
 
@@ -263,21 +263,21 @@ export function PrintJobsClient() {
       <PageHeader
         title="In ly"
         actions={
-        <Button
-          disabled={!canViewPrintJobs}
-          onClick={() =>
-            void queryClient.invalidateQueries({ queryKey: ["print-jobs"] })
-          }
-          type="button"
-          variant="outline"
-        >
-          {printJobsQuery.isFetching || detailQuery.isFetching ? (
-            <LoaderCircle className="animate-spin" data-icon="inline-start" />
-          ) : (
-            <RefreshCw data-icon="inline-start" />
-          )}
-          Làm mới
-        </Button>
+          <Button
+            disabled={!canViewPrintJobs}
+            onClick={() =>
+              void queryClient.invalidateQueries({ queryKey: ["print-jobs"] })
+            }
+            type="button"
+            variant="outline"
+          >
+            {printJobsQuery.isFetching || detailQuery.isFetching ? (
+              <LoaderCircle className="animate-spin" data-icon="inline-start" />
+            ) : (
+              <RefreshCw data-icon="inline-start" />
+            )}
+            Làm mới
+          </Button>
         }
       />
 
@@ -287,7 +287,9 @@ export function PrintJobsClient() {
         </PermissionNotice>
       ) : null}
 
-      {printJobsQuery.error ? <ErrorBanner error={printJobsQuery.error} /> : null}
+      {printJobsQuery.error ? (
+        <ErrorBanner error={printJobsQuery.error} />
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="space-y-4">
@@ -328,7 +330,11 @@ export function PrintJobsClient() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button className="self-end" disabled={!canViewPrintJobs} type="submit">
+                <Button
+                  className="self-end"
+                  disabled={!canViewPrintJobs}
+                  type="submit"
+                >
                   <Search data-icon="inline-start" />
                   Lọc
                 </Button>
@@ -402,7 +408,10 @@ export function PrintJobsClient() {
                     value={selectedItem.remainingQty.toLocaleString("vi-VN")}
                   />
                   {selectedItem.designFile ? (
-                    <InfoBox label="File thiết kế" value={selectedItem.designFile} />
+                    <InfoBox
+                      label="File thiết kế"
+                      value={selectedItem.designFile}
+                    />
                   ) : null}
                 </>
               ) : (
@@ -419,14 +428,15 @@ export function PrintJobsClient() {
                   Tiêu thụ ly chưa in
                 </CardTitle>
                 <CardDescription>
-                  Quét SKU CUP_BLANK, quét mã vị trí và nhập số lượng tiêu thụ.
+                  Quét mã vạch CUP_BLANK, quét mã vị trí và nhập số lượng tiêu
+                  thụ.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <form className="space-y-3" onSubmit={handleConsume}>
                   <TextField
                     id="print-consume-barcode"
-                    label="Mã vạch SKU"
+                    label="Mã vạch mặt hàng"
                     value={consumeForm.itemBarcode}
                     onChange={(itemBarcode) =>
                       setConsumeForm((current) => ({ ...current, itemBarcode }))
@@ -459,7 +469,10 @@ export function PrintJobsClient() {
                     type="submit"
                   >
                     {consumeMutation.isPending ? (
-                      <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                      <LoaderCircle
+                        className="animate-spin"
+                        data-icon="inline-start"
+                      />
                     ) : (
                       <Save data-icon="inline-start" />
                     )}
@@ -510,7 +523,10 @@ export function PrintJobsClient() {
                     type="submit"
                   >
                     {completeMutation.isPending ? (
-                      <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                      <LoaderCircle
+                        className="animate-spin"
+                        data-icon="inline-start"
+                      />
                     ) : (
                       <Save data-icon="inline-start" />
                     )}
@@ -548,7 +564,7 @@ function PrintJobTable({
   selectedId: string;
 }) {
   return (
-    <Table>
+    <Table scrollable>
       <TableHeader>
         <TableRow>
           <TableHead>Mã đơn in</TableHead>
@@ -556,11 +572,12 @@ function PrintJobTable({
           <TableHead>Trạng thái</TableHead>
           <TableHead>Số dòng</TableHead>
           <TableHead>Cập nhật</TableHead>
+          <TableHead className="text-right">Thao tác</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {printJobs.length === 0 ? (
-          <EmptyRow colSpan={5} label="Chưa có đơn in ly cần xử lý." />
+          <EmptyRow colSpan={6} label="Chưa có đơn in ly cần xử lý." />
         ) : (
           printJobs.map((printJob) => (
             <TableRow
@@ -582,6 +599,19 @@ function PrintJobTable({
               </TableCell>
               <TableCell>{printJob.items.length}</TableCell>
               <TableCell>{formatDate(printJob.updatedAt)}</TableCell>
+              <TableCell className="text-right">
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelect(printJob);
+                  }}
+                >
+                  <Eye data-icon="inline-start" /> Xem chi tiết
+                </Button>
+              </TableCell>
             </TableRow>
           ))
         )}
@@ -608,7 +638,7 @@ function PrintJobDetail({
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-4">
-        <Table>
+        <Table scrollable>
           <TableHeader>
             <TableRow>
               <TableHead>SKU ly nền</TableHead>

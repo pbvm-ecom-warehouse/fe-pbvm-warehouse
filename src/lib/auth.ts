@@ -10,6 +10,7 @@ import type { WmsUserResponse } from "@/types/api";
 
 export type SessionUser = {
   id: string;
+  avatarUrl?: string;
   name: string;
   email?: string;
   roles: WmsRole[];
@@ -27,6 +28,7 @@ export async function verifyJwt(
 }
 
 type WmsJwtPayload = JWTPayload & {
+  avatarUrl?: unknown;
   email?: unknown;
   id?: unknown;
   name?: unknown;
@@ -72,6 +74,7 @@ export function sessionUserFromClaims(
   }
 
   return {
+    avatarUrl: stringClaim(payload.avatarUrl),
     id:
       stringClaim(payload.sub) ??
       stringClaim(payload.id) ??
@@ -106,6 +109,7 @@ export function sessionUserFromWmsUserResponse(
   }
 
   return {
+    avatarUrl: user.avatarUrl?.trim() || fallback?.avatarUrl,
     id: user.id || fallback?.id || "current-user",
     name:
       user.name?.trim() ||

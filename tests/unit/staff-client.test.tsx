@@ -1,10 +1,19 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createElement, type ComponentProps } from "react";
 
 import { StaffClient } from "@/features/staff/components/staff-client";
 import type { SessionUser } from "@/lib/auth";
 
+vi.mock("@/components/ui/avatar", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/components/ui/avatar")>();
+  return {
+    ...actual,
+    AvatarImage: (props: ComponentProps<"img">) => createElement("img", props),
+  };
+});
 vi.mock("@/hooks/use-session-user", () => ({
   useSessionUser: vi.fn(),
 }));
@@ -12,6 +21,7 @@ vi.mock("@/hooks/use-session-user", () => ({
 vi.mock("@/features/staff/services/staff.service", () => ({
   createWmsUser: vi.fn(),
   deleteWmsUser: vi.fn(),
+  getWmsUser: vi.fn(),
   listWmsUsers: vi.fn(),
   lockWmsUser: vi.fn(),
   resetWmsUserPassword: vi.fn(),
@@ -28,9 +38,10 @@ vi.mock("sonner", () => ({
 }));
 
 const { useSessionUser } = await import("@/hooks/use-session-user");
-const { listWmsUsers } =
+const { getWmsUser, listWmsUsers } =
   await import("@/features/staff/services/staff.service");
 const mockedUseSessionUser = vi.mocked(useSessionUser);
+const mockedGetWmsUser = vi.mocked(getWmsUser);
 const mockedListWmsUsers = vi.mocked(listWmsUsers);
 
 function sessionUser(roles: SessionUser["roles"]): SessionUser {
@@ -59,6 +70,7 @@ function renderStaff() {
 describe("staff page", () => {
   beforeEach(() => {
     mockedUseSessionUser.mockReset();
+    mockedGetWmsUser.mockReset();
     mockedListWmsUsers.mockReset();
   });
 
@@ -216,6 +228,70 @@ describe("staff page", () => {
     expect(screen.getByLabelText("Mật khẩu tạm mới")).not.toBeRequired();
   });
 
+  it("keeps private identifiers out of rows and loads them in the detail drawer", async () => {
+    mockedUseSessionUser.mockReturnValue(sessionUser(["ADMIN"]));
+    mockedListWmsUsers.mockResolvedValue({
+      data: [
+        {
+          id: "receiver-private-id",
+          username: "receiver.private",
+          email: "receiver.private@example.com",
+          name: "Nguyen Van Nhan",
+          role: "RECEIVER",
+          status: "ACTIVE",
+          mustChangePassword: true,
+          warehouseId: "central",
+          updatedAt: "2026-07-23T08:30:00.000Z",
+        },
+      ],
+      limit: 20,
+      page: 1,
+      total: 1,
+    });
+    mockedGetWmsUser.mockResolvedValue({
+      id: "receiver-private-id",
+      username: "receiver.private",
+      email: "receiver.private@example.com",
+      name: "Nguyen Van Nhan",
+      role: "RECEIVER",
+      status: "ACTIVE",
+      mustChangePassword: true,
+      warehouseId: "central",
+      avatarUrl: "https://cdn.example.com/receiver.webp",
+      createdAt: "2026-07-20T08:30:00.000Z",
+      updatedAt: "2026-07-23T08:30:00.000Z",
+    });
+
+    renderStaff();
+
+    const table = await screen.findByRole("table");
+    expect(table).toHaveTextContent("Nguyen Van Nhan");
+    expect(table).not.toHaveTextContent("receiver-private-id");
+    expect(table).not.toHaveTextContent("receiver.private");
+    expect(table).not.toHaveTextContent("receiver.private@example.com");
+    expect(
+      screen.queryByRole("columnheader", { name: "Liên hệ" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Xem chi tiết Nguyen Van Nhan",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mockedGetWmsUser).toHaveBeenCalledWith("receiver-private-id"),
+    );
+    expect(await screen.findByText("Chi tiết nhân viên")).toBeInTheDocument();
+    expect(screen.getByText("receiver-private-id")).toBeInTheDocument();
+    expect(screen.getByText("receiver.private")).toBeInTheDocument();
+    expect(
+      screen.getByText("receiver.private@example.com"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "Nguyen Van Nhan" }),
+    ).toHaveAttribute("src", "https://cdn.example.com/receiver.webp");
+  });
   it("sends search terms to the server instead of filtering client-side", async () => {
     mockedUseSessionUser.mockReturnValue(sessionUser(["ADMIN"]));
     mockedListWmsUsers.mockResolvedValue({

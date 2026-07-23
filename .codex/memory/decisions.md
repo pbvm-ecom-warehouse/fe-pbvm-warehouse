@@ -165,3 +165,20 @@
     - Feature commit: `3a5be14 feat(wms): sync template-driven product SKU flow`.
     - Merged into `main` with `--no-ff` as `2428910 merge: sync template-driven product SKU flow`.
     - Pushed to `origin/main` without force on 2026-07-23.
+- 2026-07-23: WMS BE image/avatar pull and list UX compact:
+  - Backend pull `dfbcc2a..27dfc2e` contains the completed contracts for duplicate user conflict handling, GRN images, goods-return inspection images, scrap images, stock-count images, and user avatar. BE issues `#19-#23`, `#25`, and `#28` are closed.
+  - Staff list deliberately shows only display name, role, status, password-change requirement, update date, and actions. Employee ID, username, email/contact, and warehouse assignment are hidden from rows and shown only in `Xem chi tiết`; detail reloads through `GET /users/:id`.
+  - Avatar contract is `POST /auth/me/avatar` multipart field `file`. `avatarUrl` is part of `WmsUserResponse` and `SessionUser`; successful upload updates React Query profile data and the Zustand session so header/profile/detail stay in sync.
+  - Primary WMS list tables use `Table scrollable`: max height `clamp(20rem, 60dvh, 42rem)`, internal auto-scroll, and sticky header. Aggregate report tables are excluded. Primary rows expose explicit `Xem chi tiết`; existing master-detail panels are reused and list-only carrier/staff details use `EntityDrawer`.
+  - SKU-value administration loads options for every available attribute key. The group selector controls only the creation form; list search matches value name, SKU code, or group label and has an independent active/inactive filter. Desktop creation controls remain on one row.
+  - Purchase create dialog has no horizontal overflow, uses a vertical-scroll body and stable footer, and labels every line field. Warehouse item search is debounced server-side with `limit: 100`; the popover matches trigger width and has its own scroll area. Visible GRN row labels resolve FE `#18`; server-side item search resolves FE `#17`.
+  - Supplier code suggestion is an uppercase, no-diacritic acronym (`Công ty Minh Long` -> `CML`) and stops auto-updating after manual code edits. Supplier-item update strips immutable `itemId` and `supplierId`.
+  - Putaway, goods issue, and print-job forms never prefill `itemBarcode` from SKU. Operators must scan the real item barcode.
+  - Shared evidence image UI accepts JPEG/PNG/WebP up to 5 MB each, supports preview/removal/gallery, and connects:
+    - GRN `POST /goods-receipt-notes/:id/images`, repeated calls with field `file`.
+    - Goods return inspect multipart `warehouseId`, JSON `items`, and `images_<index>`.
+    - Scrap create multipart `warehouseId`, optional `note`, JSON `items`, and `images_<index>`.
+    - Stock count item multipart scalar fields and repeated `images`.
+  - FE issue audit: `#15` implementation and acceptance are complete and can be proposed for closure; `#17` and `#18` are resolved here; `#5` fixes now include list limit, supplier-item payload, and barcode handling. FE `#19-#21` remain deferred; `#19` also needs BE to allow role `COUNTER` on stock-count create.
+  - Verification passed: `pnpm lint`, `pnpm typecheck`, `pnpm test` (`127/127`), full `pnpm test:e2e` (`18/18`), `pnpm build`, and `git diff --check`.
+  - Git workflow for this batch: feature branch `feat/wms-list-ux-be-sync-20260723`, merge into `main` with `--no-ff`, then plain push to `origin/main`; never force-push.

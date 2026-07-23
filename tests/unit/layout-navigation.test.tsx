@@ -1,11 +1,20 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { createElement, type ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DashboardHeader } from "@/components/layout/dashboard-header";
 import { SidebarContent } from "@/components/layout/app-sidebar";
 import type { SessionUser } from "@/lib/auth";
 
+vi.mock("@/components/ui/avatar", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/components/ui/avatar")>();
+  return {
+    ...actual,
+    AvatarImage: (props: ComponentProps<"img">) => createElement("img", props),
+  };
+});
 vi.mock("next/navigation", () => ({
   usePathname: vi.fn(() => "/dashboard"),
   useRouter: vi.fn(() => ({ replace: vi.fn() })),
@@ -19,6 +28,7 @@ vi.mock("@/features/auth/services/auth.service", () => ({
   changePassword: vi.fn(),
   getCurrentUser: vi.fn(),
   logout: vi.fn(),
+  uploadCurrentUserAvatar: vi.fn(),
 }));
 
 const { useSessionUser } = await import("@/hooks/use-session-user");
@@ -84,10 +94,17 @@ describe("dashboard navigation chrome", () => {
   });
 
   it("opens user menu with profile, password, and logout actions", async () => {
-    mockedUseSessionUser.mockReturnValue(sessionUser(["ADMIN"]));
+    mockedUseSessionUser.mockReturnValue({
+      ...sessionUser(["ADMIN"]),
+      avatarUrl: "https://cdn.example.com/admin.webp",
+    });
 
     renderDashboardHeader();
 
+    expect(screen.getByRole("img", { name: "Unit User" })).toHaveAttribute(
+      "src",
+      "https://cdn.example.com/admin.webp",
+    );
     fireEvent.pointerDown(screen.getByRole("button", { name: /Admin/i }));
 
     expect(

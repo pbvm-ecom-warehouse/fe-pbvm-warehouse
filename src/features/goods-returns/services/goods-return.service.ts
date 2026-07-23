@@ -1,3 +1,4 @@
+import { appendIndexedEvidenceImages } from "@/components/evidence-images/evidence-image-utils";
 import { apiClient } from "@/lib/api-client";
 import { normalizeApiList, type ApiListLike } from "@/lib/api-list";
 import { type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
@@ -23,6 +24,7 @@ export type GoodsReturnItem = {
   shelfId: string | null;
   lotId: string | null;
   scrapNoteId: string | null;
+  images: string[];
 };
 
 export type GoodsReturn = {
@@ -66,6 +68,7 @@ export type InspectGoodsReturnItemInput = {
 export type InspectGoodsReturnInput = {
   warehouseId: string;
   items: InspectGoodsReturnItemInput[];
+  itemImages?: File[][];
 };
 
 function optionalText(value: string | undefined) {
@@ -118,9 +121,17 @@ export async function inspectGoodsReturn(
   goodsReturnId: string,
   input: InspectGoodsReturnInput,
 ) {
+  const formData = new FormData();
+  formData.append("warehouseId", input.warehouseId);
+  formData.append("items", JSON.stringify(input.items));
+  appendIndexedEvidenceImages(formData, input.itemImages);
+
   const response = await apiClient.post<ApiEnvelope<GoodsReturn> | GoodsReturn>(
     `/goods-returns/${encodeURIComponent(goodsReturnId)}/inspect`,
-    input,
+    formData,
+    {
+      headers: { "Content-Type": "multipart/form-data" },
+    },
   );
 
   return unwrapApiData(response.data);

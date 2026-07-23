@@ -1,3 +1,4 @@
+import { appendIndexedEvidenceImages } from "@/components/evidence-images/evidence-image-utils";
 import { apiClient } from "@/lib/api-client";
 import { normalizeApiList, type ApiListLike } from "@/lib/api-list";
 import { type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
@@ -13,6 +14,7 @@ export type ScrapNoteItem = {
   lotId?: string | null;
   quantity: number;
   reason: string;
+  images: string[];
 };
 
 export type ScrapNote = {
@@ -47,6 +49,7 @@ export type CreateScrapNoteInput = {
   warehouseId: string;
   note?: string;
   items: CreateScrapNoteItemInput[];
+  itemImages?: File[][];
 };
 
 export type RejectScrapNoteInput = {
@@ -65,18 +68,14 @@ export function normalizeScrapNoteListResponse(
 }
 
 export async function listScrapNotes(input: QueryScrapNotesInput = {}) {
-  const response = await apiClient.get<ApiListLike<ScrapNote>>(
-    "/scrap-notes",
-    {
-      params: {
-        limit: input.limit,
-        page: input.page,
-        status:
-          input.status && input.status !== "ALL" ? input.status : undefined,
-        warehouseId: optionalText(input.warehouseId),
-      },
+  const response = await apiClient.get<ApiListLike<ScrapNote>>("/scrap-notes", {
+    params: {
+      limit: input.limit,
+      page: input.page,
+      status: input.status && input.status !== "ALL" ? input.status : undefined,
+      warehouseId: optionalText(input.warehouseId),
     },
-  );
+  });
 
   return normalizeScrapNoteListResponse(response.data);
 }
@@ -90,9 +89,18 @@ export async function getScrapNote(scrapNoteId: string) {
 }
 
 export async function createScrapNote(input: CreateScrapNoteInput) {
+  const formData = new FormData();
+  formData.append("warehouseId", input.warehouseId);
+  if (input.note) formData.append("note", input.note);
+  formData.append("items", JSON.stringify(input.items));
+  appendIndexedEvidenceImages(formData, input.itemImages);
+
   const response = await apiClient.post<ApiEnvelope<ScrapNote> | ScrapNote>(
     "/scrap-notes",
-    input,
+    formData,
+    {
+      headers: { "Content-Type": "multipart/form-data" },
+    },
   );
 
   return unwrapApiData(response.data);

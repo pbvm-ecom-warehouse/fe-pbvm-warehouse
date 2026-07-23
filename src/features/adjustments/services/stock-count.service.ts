@@ -1,3 +1,4 @@
+import { appendEvidenceImages } from "@/components/evidence-images/evidence-image-utils";
 import { apiClient } from "@/lib/api-client";
 import { normalizeApiList, type ApiListLike } from "@/lib/api-list";
 import { type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
@@ -20,6 +21,7 @@ export type StockCountItem = {
   actualQty?: number | null;
   delta?: number | null;
   reason?: string | null;
+  images: string[];
 };
 
 export type StockCount = {
@@ -55,6 +57,7 @@ export type CountStockCountItemInput = {
   lotId?: string;
   actualQty: number;
   reason?: string;
+  images?: File[];
 };
 
 export type ApproveStockCountInput = {
@@ -115,9 +118,19 @@ export async function countStockCountItem({
   itemId: string;
   stockCountId: string;
 }) {
+  const formData = new FormData();
+  formData.append("shelfId", input.shelfId);
+  if (input.lotId) formData.append("lotId", input.lotId);
+  if (input.reason) formData.append("reason", input.reason);
+  formData.append("actualQty", String(input.actualQty));
+  appendEvidenceImages(formData, input.images);
+
   const response = await apiClient.post<ApiEnvelope<StockCount> | StockCount>(
     `/stock-counts/${encodeURIComponent(stockCountId)}/items/${encodeURIComponent(itemId)}/count`,
-    input,
+    formData,
+    {
+      headers: { "Content-Type": "multipart/form-data" },
+    },
   );
 
   return unwrapApiData(response.data);

@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeft,
   ChevronRight,
+  Eye,
   KeyRound,
   LoaderCircle,
   LockKeyhole,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -49,6 +51,7 @@ import {
 } from "@/components/ui/table";
 import {
   EmptyState,
+  EntityDrawer,
   PageHeader,
   PermissionNotice,
   StatusBadge,
@@ -57,6 +60,7 @@ import {
 import {
   createWmsUser,
   deleteWmsUser,
+  getWmsUser,
   listWmsUsers,
   lockWmsUser,
   resetWmsUserPassword,
@@ -90,6 +94,7 @@ const staffKeys = {
   all: ["staff"] as const,
   list: (query: ListWmsUsersQuery) =>
     [...staffKeys.all, "list", query] as const,
+  detail: (userId: string) => [...staffKeys.all, "detail", userId] as const,
 };
 const defaultCreateForm = {
   email: "",
@@ -143,6 +148,23 @@ function formatDate(value: string | undefined) {
     : new Intl.DateTimeFormat("vi-VN").format(date);
 }
 
+function initials(name: string | undefined) {
+  return (name ?? "")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1 border-b border-border/60 py-3 sm:grid-cols-[150px_1fr] sm:items-center">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="min-w-0 break-words text-sm font-semibold">{value}</span>
+    </div>
+  );
+}
 function RoleSelect({
   availableRoles,
   id,
@@ -231,10 +253,16 @@ export function StaffClient() {
     }),
     [filters, page],
   );
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const staffQuery = useQuery({
     enabled: canAccessStaff,
     queryFn: () => listWmsUsers(query),
     queryKey: staffKeys.list(query),
+  });
+  const staffDetailQuery = useQuery({
+    enabled: canAccessStaff && Boolean(selectedStaffId),
+    queryFn: () => getWmsUser(selectedStaffId as string),
+    queryKey: staffKeys.detail(selectedStaffId ?? ""),
   });
   const staffRows = staffQuery.data?.data ?? [];
   const total = staffQuery.data?.total ?? 0;
@@ -592,14 +620,13 @@ export function StaffClient() {
         ) : staffRows.length === 0 ? (
           <EmptyState title="Không có nhân viên phù hợp" />
         ) : (
-          <Table>
+          <Table scrollable>
             <TableHeader>
               <TableRow>
                 <TableHead>Nhân viên</TableHead>
-                <TableHead>Liên hệ</TableHead>
                 <TableHead>Vai trò</TableHead>
                 <TableHead>Trạng thái</TableHead>
-                <TableHead>Mật khẩu</TableHead>
+                <TableHead>Yêu cầu đổi mật khẩu</TableHead>
                 <TableHead>Cập nhật</TableHead>
                 <TableHead className="w-72 text-right">Thao tác</TableHead>
               </TableRow>
@@ -614,14 +641,7 @@ export function StaffClient() {
                 return (
                   <TableRow key={staff.id}>
                     <TableCell className="font-medium">
-                      <div>{staff.name || staff.username}</div>
-                      <div className="font-mono text-xs text-muted-foreground">
-                        {staff.username} · {staff.id}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {staff.email ?? "Chưa khai báo"}
-                      <div>{staff.warehouseId ?? "Chưa gán kho"}</div>
+                      {staff.name || "Chưa khai báo"}
                     </TableCell>
                     <TableCell>{formatRole(staff.role, staff.roles)}</TableCell>
                     <TableCell>
@@ -643,6 +663,16 @@ export function StaffClient() {
                     <TableCell>{formatDate(staff.updatedAt)}</TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-2">
+                        <Button
+                          aria-label={`Xem chi tiết ${staff.name || "nhân viên"}`}
+                          onClick={() => setSelectedStaffId(staff.id)}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          <Eye data-icon="inline-start" />
+                          Xem chi tiết
+                        </Button>
                         <Button
                           disabled={editBusy || protectedTarget}
                           onClick={() => openStaffEditor(staff)}
@@ -736,6 +766,104 @@ export function StaffClient() {
         </div>
       </TablePanel>
 
+      <EntityDrawer
+        description={staffDetailQuery.data?.name || "Thông tin tài khoản WMS"}
+        onOpenChange={(open) => !open && setSelectedStaffId(null)}
+        open={Boolean(selectedStaffId)}
+        title="Chi tiết nhân viên"
+      >
+        {staffDetailQuery.isLoading ? (
+          <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+            <LoaderCircle className="size-4 animate-spin" />
+            Đang tải thông tin nhân viên...
+          </div>
+        ) : staffDetailQuery.isError ? (
+          <EmptyState
+            title="Không tải được chi tiết nhân viên"
+            description={formatError(staffDetailQuery.error)}
+          />
+        ) : staffDetailQuery.data ? (
+          <div>
+            <div className="mb-4 flex items-center gap-4 rounded-lg border border-border/70 bg-muted/20 p-4">
+              <Avatar className="size-16">
+                {staffDetailQuery.data.avatarUrl ? (
+                  <AvatarImage
+                    alt={
+                      staffDetailQuery.data.name ||
+                      staffDetailQuery.data.username
+                    }
+                    src={staffDetailQuery.data.avatarUrl}
+                  />
+                ) : null}
+                <AvatarFallback className="text-base font-semibold">
+                  {initials(
+                    staffDetailQuery.data.name ||
+                      staffDetailQuery.data.username,
+                  ) || "WM"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <div className="truncate text-base font-semibold">
+                  {staffDetailQuery.data.name || "Chưa khai báo"}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {formatRole(
+                    staffDetailQuery.data.role,
+                    staffDetailQuery.data.roles,
+                  )}
+                </div>
+              </div>
+            </div>
+            <DetailRow
+              label="Mã nhân viên / ID"
+              value={staffDetailQuery.data.id}
+            />
+            <DetailRow
+              label="Tên đăng nhập"
+              value={staffDetailQuery.data.username}
+            />
+            <DetailRow
+              label="Tên hiển thị"
+              value={staffDetailQuery.data.name || "Chưa khai báo"}
+            />
+            <DetailRow
+              label="Email"
+              value={staffDetailQuery.data.email || "Chưa khai báo"}
+            />
+            <DetailRow
+              label="Vai trò"
+              value={formatRole(
+                staffDetailQuery.data.role,
+                staffDetailQuery.data.roles,
+              )}
+            />
+            <DetailRow
+              label="Kho phụ trách"
+              value={staffDetailQuery.data.warehouseId || "Chưa gán kho"}
+            />
+            <DetailRow
+              label="Trạng thái"
+              value={
+                staffDetailQuery.data.status === "ACTIVE"
+                  ? "Đang hoạt động"
+                  : "Đã khóa"
+              }
+            />
+            <DetailRow
+              label="Yêu cầu đổi mật khẩu"
+              value={staffDetailQuery.data.mustChangePassword ? "Có" : "Không"}
+            />
+            <DetailRow
+              label="Ngày tạo"
+              value={formatDate(staffDetailQuery.data.createdAt)}
+            />
+            <DetailRow
+              label="Cập nhật"
+              value={formatDate(staffDetailQuery.data.updatedAt)}
+            />
+          </div>
+        ) : null}
+      </EntityDrawer>
       <Dialog
         open={Boolean(editingStaff)}
         onOpenChange={(open) => !open && setEditingStaff(null)}
