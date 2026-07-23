@@ -480,10 +480,15 @@ test("manager opens purchases when purchase order items are missing", async ({
     page.getByRole("heading", { name: /^Nhập hàng$/i }),
   ).toBeVisible();
   await expect(
-    page.getByRole("cell", { name: "PO-20260713-0002" }),
+    page.getByRole("cell", { name: "PO-20260713-0002", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: /^Tạo đơn mua$/i }).click();
   const dialog = page.getByRole("dialog", { name: /^Tạo đơn mua$/i });
+  expect(
+    await dialog.evaluate(
+      (element) => element.scrollWidth <= element.clientWidth,
+    ),
+  ).toBe(true);
   await dialog.getByRole("combobox").nth(0).click();
   await page
     .getByText(/NCC-001/i)
@@ -583,7 +588,7 @@ test("admin edits and removes supplier items from row actions", async ({
   await page.goto("/suppliers");
   await page
     .getByRole("row", { name: /NCC-002/i })
-    .getByRole("button", { name: /^Sửa$/i })
+    .getByRole("button", { name: /Xem chi tiết nhà cung cấp/i })
     .click();
   const supplierDialog = page.getByRole("dialog", {
     name: /Công ty TNHH ABCD/i,
@@ -598,9 +603,11 @@ test("admin edits and removes supplier items from row actions", async ({
 
   await supplierDialog
     .getByRole("row", { name: /item-1/i })
-    .getByRole("button", { name: /^Sửa$/i })
+    .getByRole("button", { name: /Xem chi tiết mặt hàng NCC/i })
     .click();
-  const editDialog = page.getByRole("dialog", { name: /Sửa mặt hàng NCC/i });
+  const editDialog = page.getByRole("dialog", {
+    name: /Chi tiết mặt hàng NCC/i,
+  });
   await expect(editDialog).toBeVisible();
   await editDialog.getByLabel("Giá nhập").fill("17000");
   await editDialog.getByRole("button", { name: /^Lưu mặt hàng$/i }).click();
@@ -622,20 +629,25 @@ test("admin edits and removes supplier items from row actions", async ({
 test("admin sees system health and staff list management", async ({ page }) => {
   await seedWmsSession(page, ["ADMIN"], "Admin User");
   await page.route("**/api/wms/users**", async (route) => {
+    const detail = route.request().url().includes("/users/employee-id-1");
+    const staff = {
+      avatarUrl: "https://cdn.example.com/avatar.webp",
+      createdAt: "2026-07-01T00:00:00.000Z",
+      email: "administrator@example.com",
+      id: "employee-id-1",
+      mustChangePassword: false,
+      name: "Administrator",
+      role: "ADMIN",
+      status: "ACTIVE",
+      updatedAt: "2026-07-23T00:00:00.000Z",
+      username: "admin_login",
+      warehouseId: "wh-central",
+    };
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
-        data: [
-          {
-            id: "admin-1",
-            mustChangePassword: false,
-            name: "Administrator",
-            role: "ADMIN",
-            status: "ACTIVE",
-            username: "admin",
-          },
-        ],
-        meta: { requestId: "e2e-staff-list" },
+        data: detail ? staff : [staff],
+        meta: { requestId: detail ? "e2e-staff-detail" : "e2e-staff-list" },
       }),
     });
   });
@@ -674,7 +686,31 @@ test("admin sees system health and staff list management", async ({ page }) => {
   await expect(
     page.getByText("Danh sách nhân viên", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("Administrator")).toBeVisible();
+  const staffRow = page.getByRole("row", { name: /Administrator/i });
+  await expect(staffRow).toBeVisible();
+  await expect(
+    staffRow.getByText("employee-id-1", { exact: true }),
+  ).toHaveCount(0);
+  await expect(staffRow.getByText("admin_login", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(
+    staffRow.getByText("administrator@example.com", { exact: true }),
+  ).toHaveCount(0);
+  await staffRow
+    .getByRole("button", { name: /Xem chi tiết Administrator/i })
+    .click();
+  const staffDetail = page.getByRole("dialog", { name: /Chi tiết nhân viên/i });
+  await expect(
+    staffDetail.getByText("employee-id-1", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    staffDetail.getByText("admin_login", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    staffDetail.getByText("administrator@example.com", { exact: true }),
+  ).toBeVisible();
+  await staffDetail.getByRole("button", { name: "Close" }).click();
   await expect(
     page.getByRole("button", { name: /^Tạo nhân viên$/i }),
   ).toBeVisible();
@@ -831,13 +867,14 @@ test("printer can use print jobs but not purchases", async ({ page }) => {
     }),
   ).toHaveCount(0);
   await page.getByRole("row", { name: /CUP-BLANK-500/i }).click();
+  await page.getByLabel("Mã vạch mặt hàng").fill("2000000000015");
   await page.getByLabel("Mã vị trí").fill("A1-S02");
   await page.getByRole("button", { name: /^Tiêu thụ ly chưa in$/i }).click();
   await expect(
     page.getByText(/Đã ghi nhận tiêu thụ ly chưa in/i),
   ).toBeVisible();
   expect(postBodies[0]).toMatchObject({
-    itemBarcode: "CUP-BLANK-500",
+    itemBarcode: "2000000000015",
     quantity: 10,
     shelfCode: "A1-S02",
   });
@@ -1051,6 +1088,8 @@ test("receiver confirms put-away task through warehouse navigation", async ({
   await expect(page.getByText("A1-S02").first()).toBeVisible();
   await page.getByRole("button", { name: /A1-S02/i }).click();
   await expect(page.getByLabel("Mã vị trí")).toHaveValue("A1-S02");
+  await expect(page.getByLabel("Mã vạch mặt hàng")).toHaveValue("");
+  await page.getByLabel("Mã vạch mặt hàng").fill("2000000000015");
   await page.getByRole("button", { name: /^Xác nhận$/i }).click();
   await expect(page.getByText(/Đã xác nhận dòng cất hàng/i)).toBeVisible();
 });
@@ -1144,6 +1183,8 @@ test("picker sees picking location and confirms goods issue line", async ({
   await expect(page.getByText("A1-S02").first()).toBeVisible();
   await page.getByRole("button", { name: /A1-S02/i }).click();
   await expect(page.getByLabel("Mã vị trí")).toHaveValue("A1-S02");
+  await expect(page.getByLabel("Mã vạch mặt hàng")).toHaveValue("");
+  await page.getByLabel("Mã vạch mặt hàng").fill("2000000000015");
   await expect(page.getByLabel("Mã lô")).toHaveValue("lot-1");
   await page.getByRole("button", { name: /^Xác nhận$/i }).click();
   await expect(page.getByText(/Đã xác nhận dòng xuất kho/i)).toBeVisible();
@@ -1285,4 +1326,115 @@ test("manager creates a carrier but cannot change shipment operations", async ({
   await carrierDialog.getByLabel("Mã hãng").fill("JNT");
   await carrierDialog.getByRole("button", { name: /^Tạo hãng$/i }).click();
   await expect(page.getByText(/Đã thêm hãng vận chuyển/i)).toBeVisible();
+});
+
+test("admin searches SKU values independently from the creation group", async ({
+  page,
+}) => {
+  await seedWmsSession(page, ["ADMIN"], "Admin User");
+
+  for (const [type, fields] of [
+    ["CUP_BLANK", [{ key: "MATERIAL" }, { key: "CAPACITY" }]],
+    ["MATERIAL", [{ key: "MATERIAL" }]],
+    ["PACKAGING", [{ key: "SIZE" }]],
+  ] as const) {
+    await page.route(
+      `**/api/wms/stock/item-types/${type}/sku-template**`,
+      async (route) => {
+        await route.fulfill({
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: {
+              fields,
+              itemType: type,
+              kind: "template",
+              prefix: type,
+              templateId: type,
+            },
+            meta: { requestId: "template-" + type },
+          }),
+        });
+      },
+    );
+  }
+  await page.route("**/api/wms/stock/attribute-options**", async (route) => {
+    const key = new URL(route.request().url()).searchParams.get("key");
+    const optionByKey: Record<string, object[]> = {
+      CAPACITY: [
+        {
+          code: "500",
+          id: "capacity-500",
+          isActive: false,
+          key: "CAPACITY",
+          name: "500 ml",
+          sortOrder: 1,
+        },
+      ],
+      MATERIAL: [
+        {
+          code: "PET",
+          id: "material-pet",
+          isActive: true,
+          key: "MATERIAL",
+          name: "Nhựa PET",
+          sortOrder: 1,
+        },
+      ],
+      SIZE: [],
+    };
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: optionByKey[key ?? ""] ?? [],
+        meta: { requestId: `options-${key}` },
+      }),
+    });
+  });
+  await page.route("**/api/wms/stock/items**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ data: [], limit: 20, page: 1, total: 0 }),
+    });
+  });
+
+  await page.goto("/products");
+  await page.getByRole("tab", { name: /^Tạo SKU$/i }).click();
+  const panel = page.getByRole("tabpanel", { name: /^Tạo SKU$/i });
+  await expect(
+    panel.getByRole("heading", { name: /Giá trị thuộc tính SKU/i }),
+  ).toBeVisible();
+  await panel.getByLabel("Nhóm thuộc tính").click();
+  await page.getByRole("option", { name: "Dung tích" }).click();
+  await panel.getByLabel("Tìm kiếm").fill("PET");
+  await expect(
+    panel.getByRole("row", { name: /Chất liệu.*Nhựa PET.*PET/i }),
+  ).toBeVisible();
+  await expect(panel.getByText("500 ml", { exact: true })).toHaveCount(0);
+
+  await panel.getByLabel("Tìm kiếm").fill("");
+  await panel.getByRole("combobox", { name: "Trạng thái" }).click();
+  await page.getByRole("option", { name: "Ngừng dùng" }).click();
+  await expect(
+    panel.getByRole("row", { name: /Dung tích.*500 ml.*500/i }),
+  ).toBeVisible();
+  await expect(panel.getByText("Nhựa PET", { exact: true })).toHaveCount(0);
+});
+
+test("supplier code suggestion stops after a manual edit", async ({ page }) => {
+  await seedWmsSession(page, ["ADMIN"], "Admin User");
+  await page.route(/\/api\/wms\/supplier(?:\?.*)?$/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ data: [], limit: 20, page: 1, total: 0 }),
+    });
+  });
+
+  await page.goto("/suppliers");
+  await page.getByRole("button", { name: /^Tạo nhà cung cấp$/i }).click();
+  const dialog = page.getByRole("dialog", { name: /^Tạo nhà cung cấp$/i });
+  await dialog.getByLabel("Tên NCC").fill("Công ty Minh Long");
+  await expect(dialog.getByLabel("Mã NCC")).toHaveValue("CML");
+  await dialog.getByLabel("Mã NCC").fill("MINHLONG");
+  await dialog.getByLabel("Tên NCC").fill("Công ty Minh Long Việt Nam");
+  await expect(dialog.getByLabel("Mã NCC")).toHaveValue("MINHLONG");
 });

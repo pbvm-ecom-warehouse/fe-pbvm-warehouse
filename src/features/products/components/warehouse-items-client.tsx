@@ -412,7 +412,7 @@ export function WarehouseItemsClient() {
             ) : items.length === 0 ? (
               <EmptyState title="Chưa có mặt hàng" />
             ) : (
-              <Table>
+              <Table scrollable>
                 <TableHeader>
                   <TableRow>
                     <TableHead>SKU</TableHead>

@@ -8,7 +8,7 @@ import {
   Plus,
   RefreshCw,
   Trash2,
-  Map,
+  Eye,
   Warehouse,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -168,7 +168,9 @@ export function WarehouseWorkspaceClient() {
   });
 
   function refreshWarehouses() {
-    void queryClient.invalidateQueries({ queryKey: warehouseWorkspaceKeys.list });
+    void queryClient.invalidateQueries({
+      queryKey: warehouseWorkspaceKeys.list,
+    });
     void queryClient.invalidateQueries({ queryKey: ["warehouse-layout"] });
   }
 
@@ -207,7 +209,10 @@ export function WarehouseWorkspaceClient() {
               variant="outline"
             >
               {warehousesQuery.isFetching ? (
-                <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
               ) : (
                 <RefreshCw data-icon="inline-start" />
               )}
@@ -365,7 +370,7 @@ function WarehouseList({
 
   return (
     <div className="overflow-x-auto rounded-lg border border-border/70">
-      <Table>
+      <Table scrollable>
         <TableHeader>
           <TableRow>
             <TableHead>Kho</TableHead>
@@ -409,8 +414,8 @@ function WarehouseList({
                     type="button"
                     variant={activeId === warehouse.id ? "default" : "outline"}
                   >
-                    <Map data-icon="inline-start" />
-                    Mở sơ đồ
+                    <Eye data-icon="inline-start" />
+                    Xem chi tiết
                   </Button>
                   <Button
                     disabled={!canManage}
@@ -520,7 +525,10 @@ function WarehouseFormDialog({
             </DialogClose>
             <Button disabled={busy} type="submit">
               {busy ? (
-                <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
               ) : (
                 <Plus data-icon="inline-start" />
               )}

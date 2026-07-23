@@ -21,6 +21,7 @@ export type ListWmsUsersQuery = {
 
 export type WmsUserResponse = {
   id: string;
+  avatarUrl?: string;
   username: string;
   email?: string;
   name?: string;

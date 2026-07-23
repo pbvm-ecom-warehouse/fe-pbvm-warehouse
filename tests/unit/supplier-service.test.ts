@@ -6,6 +6,7 @@ import {
   listSupplierItemsBySupplier,
   listSuppliers,
   normalizeSupplierListResponse,
+  updateSupplierItem,
   upsertSupplierItem,
 } from "@/features/suppliers/services/supplier.service";
 
@@ -132,6 +133,28 @@ describe("supplier API service", () => {
       itemId: "item-1",
       purchasePrice: 15000,
       supplierId: "sup-1",
+    });
+  });
+  it("never sends immutable item and supplier ids when updating a supplier item", async () => {
+    mockedPatch.mockResolvedValueOnce({
+      data: {
+        id: "si-1",
+        isActive: true,
+        itemId: "item-1",
+        purchasePrice: 17500,
+        supplierId: "sup-1",
+        updatedAt: "2026-07-23T00:00:00.000Z",
+      },
+    });
+
+    await updateSupplierItem("si-1", {
+      itemId: "item-2",
+      purchasePrice: 17500,
+      supplierId: "sup-2",
+    } as never);
+
+    expect(mockedPatch).toHaveBeenCalledWith("/supplier/items/si-1", {
+      purchasePrice: 17500,
     });
   });
 });

@@ -7,6 +7,7 @@ import {
   changePassword,
   login,
   logout,
+  uploadCurrentUserAvatar,
 } from "@/features/auth/services/auth.service";
 import {
   clearAuthTokens,
@@ -75,6 +76,7 @@ describe("wms login schema", () => {
           role: "RECEIVER",
           status: "ACTIVE",
           mustChangePassword: false,
+          avatarUrl: "https://cdn.example.com/user-1.webp",
           warehouseId: "central",
           createdAt: "2026-06-27T00:00:00.000Z",
           updatedAt: "2026-06-27T00:00:00.000Z",
@@ -99,7 +101,51 @@ describe("wms login schema", () => {
       tenantId: "demo-tenant",
       type: "user",
       warehouseId: "central",
+      avatarUrl: "https://cdn.example.com/user-1.webp",
     });
+  });
+
+  it("uploads the avatar as multipart file and refreshes the session user", async () => {
+    useAuthStore.getState().setUser({
+      id: "user-1",
+      name: "Receiver 01",
+      roles: ["RECEIVER"],
+      tenantId: "demo-tenant",
+      type: "user",
+      warehouseId: "central",
+    });
+    mockedPost.mockResolvedValueOnce({
+      data: {
+        data: {
+          id: "user-1",
+          username: "receiver01",
+          name: "Receiver 01",
+          role: "RECEIVER",
+          status: "ACTIVE",
+          mustChangePassword: false,
+          warehouseId: "central",
+          avatarUrl: "https://cdn.example.com/avatar.webp",
+        },
+        meta: { requestId: "avatar-1" },
+      },
+    });
+    const file = new File(["avatar"], "avatar.webp", {
+      type: "image/webp",
+    });
+
+    await expect(uploadCurrentUserAvatar(file)).resolves.toMatchObject({
+      avatarUrl: "https://cdn.example.com/avatar.webp",
+    });
+
+    expect(mockedPost).toHaveBeenCalledWith(
+      "/auth/me/avatar",
+      expect.any(FormData),
+    );
+    const body = mockedPost.mock.calls[0]?.[1] as FormData;
+    expect(body.get("file")).toBe(file);
+    expect(useAuthStore.getState().user?.avatarUrl).toBe(
+      "https://cdn.example.com/avatar.webp",
+    );
   });
 
   it("validates and posts change-password payloads", async () => {

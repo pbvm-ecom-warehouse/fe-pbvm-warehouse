@@ -1,13 +1,8 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import {
-  useMutation,
-  useQueries,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import { LoaderCircle, Plus, Save, Sparkles } from "lucide-react";
+import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
+import { LoaderCircle, Plus, Save, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -21,9 +16,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { getApiErrorMessage } from "@/lib/api-contract";
 
-import { ATTRIBUTE_LABELS } from "./create-warehouse-item-panel";
+import {
+  ATTRIBUTE_LABELS,
+  filterAttributeOptions,
+  type AttributeOptionStatus,
+} from "../lib/attribute-option-filter";
 import {
   CREATABLE_WAREHOUSE_ITEM_TYPES,
   createAttributeOption,
@@ -46,6 +53,8 @@ export function AttributeOptionsAdminPanel() {
   const [selectedKey, setSelectedKey] = useState<AttributeKey | "">("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<AttributeOptionStatus>("ALL");
   const [drafts, setDrafts] = useState<Record<string, OptionDraft>>({});
 
   const rootQueries = useQueries({
@@ -100,17 +109,27 @@ export function AttributeOptionsAdminPanel() {
   }, [childQueries, rootQueries]);
 
   const effectiveSelectedKey = selectedKey || availableKeys[0] || "";
-  const optionsQuery = useQuery({
-    enabled: Boolean(effectiveSelectedKey),
-    queryFn: () =>
-      listAttributeOptions(effectiveSelectedKey as AttributeKey, true),
-    queryKey: ["stock-attribute-options", effectiveSelectedKey, true],
+  const optionQueries = useQueries({
+    queries: availableKeys.map((key) => ({
+      queryFn: () => listAttributeOptions(key, true),
+      queryKey: ["stock-attribute-options", key, true],
+    })),
   });
+  const allOptions = useMemo(
+    () => optionQueries.flatMap((query) => query.data ?? []),
+    [optionQueries],
+  );
+  const filteredOptions = useMemo(
+    () => filterAttributeOptions(allOptions, search, status),
+    [allOptions, search, status],
+  );
 
   const isCategory = effectiveSelectedKey.endsWith("_CATEGORY");
   const metadataLoading =
     rootQueries.some((query) => query.isLoading) ||
     childQueries.some((query) => query.isLoading);
+  const optionsLoading = optionQueries.some((query) => query.isLoading);
+  const optionsError = optionQueries.find((query) => query.error)?.error;
 
   const suggestMutation = useMutation({
     mutationFn: () =>
@@ -134,7 +153,7 @@ export function AttributeOptionsAdminPanel() {
       setCode("");
       setName("");
       await queryClient.invalidateQueries({
-        queryKey: ["stock-attribute-options", effectiveSelectedKey],
+        queryKey: ["stock-attribute-options"],
       });
       toast.success("Đã thêm giá trị thuộc tính");
     },
@@ -144,9 +163,14 @@ export function AttributeOptionsAdminPanel() {
     mutationFn: ({ id, input }: { id: string; input: OptionDraft }) =>
       updateAttributeOption(id, input),
     onError: (error) => toast.error(formatError(error)),
-    onSuccess: async () => {
+    onSuccess: async (_, variables) => {
+      setDrafts((current) => {
+        const next = { ...current };
+        delete next[variables.id];
+        return next;
+      });
       await queryClient.invalidateQueries({
-        queryKey: ["stock-attribute-options", effectiveSelectedKey],
+        queryKey: ["stock-attribute-options"],
       });
       toast.success("Đã cập nhật giá trị thuộc tính");
     },
@@ -158,6 +182,35 @@ export function AttributeOptionsAdminPanel() {
       createMutation.mutate();
     }
   }
+
+  const attributeGroupField = (
+    <div className="space-y-2">
+      <Label htmlFor="attribute-group">Nhóm thuộc tính</Label>
+      <Select
+        value={effectiveSelectedKey}
+        onValueChange={(value) => {
+          setSelectedKey(value as AttributeKey);
+          setCode("");
+          setName("");
+        }}
+      >
+        <SelectTrigger
+          id="attribute-group"
+          aria-label="Nhóm thuộc tính"
+          className="w-full"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {availableKeys.map((key) => (
+            <SelectItem key={key} value={key}>
+              {ATTRIBUTE_LABELS[key]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
 
   return (
     <section
@@ -180,35 +233,12 @@ export function AttributeOptionsAdminPanel() {
         </div>
       ) : (
         <div className="space-y-5">
-          <div className="max-w-sm space-y-2">
-            <Label>Nhóm thuộc tính</Label>
-            <Select
-              value={effectiveSelectedKey}
-              onValueChange={(value) => {
-                setSelectedKey(value as AttributeKey);
-                setCode("");
-                setDrafts({});
-                setName("");
-              }}
-            >
-              <SelectTrigger aria-label="Nhóm thuộc tính" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {availableKeys.map((key) => (
-                  <SelectItem key={key} value={key}>
-                    {ATTRIBUTE_LABELS[key]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           {!isCategory ? (
             <form
-              className="grid gap-3 border-y py-4 md:grid-cols-[1fr_180px_auto]"
+              className="grid gap-3 border-y py-4 md:grid-cols-2 lg:grid-cols-[minmax(220px,0.8fr)_minmax(320px,1.7fr)_260px_auto]"
               onSubmit={handleCreate}
             >
+              {attributeGroupField}
               <div className="space-y-2">
                 <Label htmlFor="attribute-option-name">Tên giá trị</Label>
                 <Input
@@ -276,115 +306,164 @@ export function AttributeOptionsAdminPanel() {
               </Button>
             </form>
           ) : (
-            <div className="border-y py-3 text-sm text-muted-foreground">
-              Nhóm này đi cùng cấu hình SKU của hệ thống nên không thể thêm giá
-              trị tại đây.
+            <div className="grid gap-3 border-y py-4 md:grid-cols-[minmax(220px,0.8fr)_minmax(320px,2fr)] md:items-end">
+              {attributeGroupField}
+              <div className="flex min-h-9 items-center text-sm text-muted-foreground">
+                Nhóm này đi cùng cấu hình SKU của hệ thống nên không thể thêm
+                giá trị tại đây.
+              </div>
             </div>
           )}
 
-          {optionsQuery.error ? (
+          <div className="grid gap-3 md:grid-cols-[minmax(280px,1fr)_220px]">
+            <div className="space-y-2">
+              <Label htmlFor="attribute-option-search">Tìm kiếm</Label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="attribute-option-search"
+                  className="pl-9"
+                  placeholder="Tên, mã SKU hoặc nhóm thuộc tính"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="attribute-option-status">Trạng thái</Label>
+              <Select
+                value={status}
+                onValueChange={(value) =>
+                  setStatus(value as AttributeOptionStatus)
+                }
+              >
+                <SelectTrigger id="attribute-option-status" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Tất cả</SelectItem>
+                  <SelectItem value="ACTIVE">Đang dùng</SelectItem>
+                  <SelectItem value="INACTIVE">Ngừng dùng</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {optionsError ? (
             <div
               role="alert"
               className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
             >
-              {formatError(optionsQuery.error)}
+              {formatError(optionsError)}
             </div>
-          ) : optionsQuery.isLoading ? (
+          ) : optionsLoading ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
               Đang tải danh sách...
             </div>
-          ) : optionsQuery.data?.length ? (
-            <div className="space-y-2">
-              {optionsQuery.data.map((option) => {
-                const draft = drafts[option.id] ?? option;
-                return (
-                  <div
-                    className="grid gap-3 rounded-lg border p-3 md:grid-cols-[1fr_130px_110px_90px_auto] md:items-end"
-                    key={option.id}
-                  >
-                    <div className="space-y-2">
-                      <Label htmlFor={`option-name-${option.id}`}>Tên</Label>
-                      <Input
-                        id={`option-name-${option.id}`}
-                        value={draft.name}
-                        onChange={(event) =>
-                          setDrafts((current) => ({
-                            ...current,
-                            [option.id]: {
-                              ...draft,
-                              name: event.target.value,
-                            },
-                          }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Mã SKU</Label>
-                      <Input
-                        className="font-mono"
-                        readOnly
-                        value={option.code}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor={`option-order-${option.id}`}>
-                        Thứ tự
-                      </Label>
-                      <Input
-                        id={`option-order-${option.id}`}
-                        min="0"
-                        type="number"
-                        value={draft.sortOrder}
-                        onChange={(event) =>
-                          setDrafts((current) => ({
-                            ...current,
-                            [option.id]: {
-                              ...draft,
-                              sortOrder: Number(event.target.value),
-                            },
-                          }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor={`option-active-${option.id}`}>
-                        Đang dùng
-                      </Label>
-                      <div className="flex h-8 items-center">
-                        <Switch
-                          checked={draft.isActive}
-                          id={`option-active-${option.id}`}
-                          onCheckedChange={(isActive) =>
+          ) : filteredOptions.length ? (
+            <Table scrollable aria-label="Danh sách giá trị thuộc tính SKU">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nhóm</TableHead>
+                  <TableHead>Tên</TableHead>
+                  <TableHead>Mã SKU</TableHead>
+                  <TableHead>Thứ tự</TableHead>
+                  <TableHead>Trạng thái</TableHead>
+                  <TableHead className="text-right">Thao tác</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredOptions.map((option) => {
+                  const draft = drafts[option.id] ?? option;
+                  return (
+                    <TableRow key={option.id}>
+                      <TableCell className="font-medium">
+                        {ATTRIBUTE_LABELS[option.key]}
+                      </TableCell>
+                      <TableCell className="min-w-64">
+                        <Input
+                          aria-label={`Tên ${option.name}`}
+                          value={draft.name}
+                          onChange={(event) =>
                             setDrafts((current) => ({
                               ...current,
-                              [option.id]: { ...draft, isActive },
+                              [option.id]: {
+                                ...draft,
+                                name: event.target.value,
+                              },
                             }))
                           }
                         />
-                      </div>
-                    </div>
-                    <Button
-                      aria-label={`Lưu ${option.name}`}
-                      disabled={updateMutation.isPending || !draft.name.trim()}
-                      size="icon-sm"
-                      type="button"
-                      onClick={() =>
-                        updateMutation.mutate({ id: option.id, input: draft })
-                      }
-                    >
-                      {updateMutation.isPending ? (
-                        <LoaderCircle className="animate-spin" />
-                      ) : (
-                        <Save />
-                      )}
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-mono font-semibold">
+                          {option.code}
+                        </span>
+                      </TableCell>
+                      <TableCell className="w-28">
+                        <Input
+                          aria-label={`Thứ tự ${option.name}`}
+                          min="0"
+                          type="number"
+                          value={draft.sortOrder}
+                          onChange={(event) =>
+                            setDrafts((current) => ({
+                              ...current,
+                              [option.id]: {
+                                ...draft,
+                                sortOrder: Number(event.target.value),
+                              },
+                            }))
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={draft.isActive}
+                            aria-label={`Trạng thái ${option.name}`}
+                            onCheckedChange={(isActive) =>
+                              setDrafts((current) => ({
+                                ...current,
+                                [option.id]: { ...draft, isActive },
+                              }))
+                            }
+                          />
+                          <span>
+                            {draft.isActive ? "Đang dùng" : "Ngừng dùng"}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          aria-label={`Lưu ${option.name}`}
+                          disabled={
+                            updateMutation.isPending || !draft.name.trim()
+                          }
+                          size="icon-sm"
+                          type="button"
+                          onClick={() =>
+                            updateMutation.mutate({
+                              id: option.id,
+                              input: draft,
+                            })
+                          }
+                        >
+                          {updateMutation.isPending ? (
+                            <LoaderCircle className="animate-spin" />
+                          ) : (
+                            <Save />
+                          )}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           ) : (
             <div className="rounded-lg border border-dashed px-3 py-8 text-center text-sm text-muted-foreground">
-              Chưa có giá trị thuộc tính.
+              Không có giá trị phù hợp.
             </div>
           )}
         </div>

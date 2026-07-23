@@ -13,7 +13,7 @@ import {
   UserRound,
 } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -133,6 +133,9 @@ export function DashboardHeader() {
                   type="button"
                 >
                   <Avatar className="size-8">
+                    {user.avatarUrl ? (
+                      <AvatarImage alt={user.name} src={user.avatarUrl} />
+                    ) : null}
                     <AvatarFallback className="bg-secondary text-secondary-foreground">
                       {initials(user.name) || "WM"}
                     </AvatarFallback>

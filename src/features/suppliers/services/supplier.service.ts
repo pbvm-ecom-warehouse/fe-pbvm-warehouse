@@ -6,11 +6,7 @@ import {
   unwrapApiData,
 } from "@/lib/api-contract";
 
-export const SUPPLIER_STATUSES = [
-  "ACTIVE",
-  "INACTIVE",
-  "BLACKLIST",
-] as const;
+export const SUPPLIER_STATUSES = ["ACTIVE", "INACTIVE", "BLACKLIST"] as const;
 
 export type SupplierStatus = (typeof SUPPLIER_STATUSES)[number];
 
@@ -77,7 +73,9 @@ export type CreateSupplierItemInput = {
   minOrderQty?: number;
 };
 
-export type UpdateSupplierItemInput = Partial<CreateSupplierItemInput> & {
+export type UpdateSupplierItemInput = Partial<
+  Omit<CreateSupplierItemInput, "itemId" | "supplierId">
+> & {
   isActive?: boolean;
 };
 
@@ -138,8 +136,7 @@ export async function listSuppliers(input: QuerySuppliersInput = {}) {
       limit: input.limit,
       page: input.page,
       search: toOptionalString(input.search),
-      status:
-        input.status && input.status !== "ALL" ? input.status : undefined,
+      status: input.status && input.status !== "ALL" ? input.status : undefined,
     },
   });
 
@@ -200,17 +197,17 @@ export async function listSupplierItemsBySupplier(supplierId: string) {
 }
 
 export async function getSupplierItemByItem(itemId: string) {
-  const response = await apiClient.get<ApiEnvelope<SupplierItem> | SupplierItem>(
-    `/supplier/items/by-item/${encodeURIComponent(itemId)}`,
-  );
+  const response = await apiClient.get<
+    ApiEnvelope<SupplierItem> | SupplierItem
+  >(`/supplier/items/by-item/${encodeURIComponent(itemId)}`);
 
   return unwrapApiData(response.data);
 }
 
 export async function getSupplierItem(supplierItemId: string) {
-  const response = await apiClient.get<ApiEnvelope<SupplierItem> | SupplierItem>(
-    `/supplier/items/${encodeURIComponent(supplierItemId)}`,
-  );
+  const response = await apiClient.get<
+    ApiEnvelope<SupplierItem> | SupplierItem
+  >(`/supplier/items/${encodeURIComponent(supplierItemId)}`);
 
   return unwrapApiData(response.data);
 }
@@ -219,9 +216,14 @@ export async function updateSupplierItem(
   supplierItemId: string,
   input: UpdateSupplierItemInput,
 ) {
+  const mutableInput = {
+    ...input,
+  } as UpdateSupplierItemInput & { itemId?: string; supplierId?: string };
+  delete mutableInput.itemId;
+  delete mutableInput.supplierId;
   const response = await apiClient.patch<
     ApiEnvelope<SupplierItem> | SupplierItem
-  >(`/supplier/items/${encodeURIComponent(supplierItemId)}`, input);
+  >(`/supplier/items/${encodeURIComponent(supplierItemId)}`, mutableInput);
 
   return unwrapApiData(response.data);
 }

@@ -157,6 +157,7 @@ const goodsReturn = {
   items: [
     {
       condition: null,
+      images: [],
       itemId: "item-1",
       lotId: null,
       quantity: 2,
@@ -198,6 +199,7 @@ const stockCount = {
   items: [
     {
       actualQty: null,
+      images: [],
       itemId: "item-1",
       shelfId: "shelf-1",
       sku: "CUP-BLANK-500",
@@ -216,6 +218,7 @@ const scrapNote = {
   id: "scrap-1",
   items: [
     {
+      images: [],
       itemId: "item-1",
       quantity: 2,
       reason: "Vỡ khi kiểm hàng",
@@ -589,16 +592,22 @@ describe("Swagger-backed WMS services", () => {
       note: "Khách trả tại kho",
       orderId: "order-1",
     });
-    expect(mockedPost).toHaveBeenCalledWith("/goods-returns/return-1/inspect", {
-      items: [
-        {
-          condition: "GOOD",
-          itemId: "item-1",
-          shelfId: "shelf-1",
-        },
-      ],
-      warehouseId: "wh-1",
-    });
+    const inspectBody = mockedPost.mock.calls.find(
+      ([url]) => url === "/goods-returns/return-1/inspect",
+    )?.[1] as FormData;
+    expect(inspectBody.get("warehouseId")).toBe("wh-1");
+    expect(JSON.parse(String(inspectBody.get("items")))).toEqual([
+      {
+        condition: "GOOD",
+        itemId: "item-1",
+        shelfId: "shelf-1",
+      },
+    ]);
+    expect(mockedPost).toHaveBeenCalledWith(
+      "/goods-returns/return-1/inspect",
+      expect.any(FormData),
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
     expect(mockedPost).toHaveBeenCalledWith("/goods-returns/return-1/confirm");
     expect(mockedPost).toHaveBeenCalledWith("/goods-returns/return-1/cancel");
   });
@@ -693,13 +702,18 @@ describe("Swagger-backed WMS services", () => {
       warehouseId: "wh-1",
       zoneId: "zone-1",
     });
+    const countBody = mockedPost.mock.calls.find(
+      ([url]) => url === "/stock-counts/sc-1/items/item-1/count",
+    )?.[1] as FormData;
+    expect(Object.fromEntries(countBody.entries())).toEqual({
+      actualQty: "10",
+      reason: "Lệch do vỡ",
+      shelfId: "shelf-1",
+    });
     expect(mockedPost).toHaveBeenCalledWith(
       "/stock-counts/sc-1/items/item-1/count",
-      {
-        actualQty: 10,
-        reason: "Lệch do vỡ",
-        shelfId: "shelf-1",
-      },
+      expect.any(FormData),
+      { headers: { "Content-Type": "multipart/form-data" } },
     );
     expect(mockedPost).toHaveBeenCalledWith("/stock-counts/sc-1/approve", {
       reason: "Duyệt kiểm kê",
@@ -741,18 +755,24 @@ describe("Swagger-backed WMS services", () => {
         warehouseId: "wh-1",
       },
     });
-    expect(mockedPost).toHaveBeenCalledWith("/scrap-notes", {
-      items: [
-        {
-          itemId: "item-1",
-          quantity: 2,
-          reason: "Vỡ khi kiểm hàng",
-          shelfId: "shelf-1",
-        },
-      ],
-      note: "Hàng vỡ",
-      warehouseId: "wh-1",
-    });
+    const scrapBody = mockedPost.mock.calls.find(
+      ([url]) => url === "/scrap-notes",
+    )?.[1] as FormData;
+    expect(scrapBody.get("warehouseId")).toBe("wh-1");
+    expect(scrapBody.get("note")).toBe("Hàng vỡ");
+    expect(JSON.parse(String(scrapBody.get("items")))).toEqual([
+      {
+        itemId: "item-1",
+        quantity: 2,
+        reason: "Vỡ khi kiểm hàng",
+        shelfId: "shelf-1",
+      },
+    ]);
+    expect(mockedPost).toHaveBeenCalledWith(
+      "/scrap-notes",
+      expect.any(FormData),
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
     expect(mockedPost).toHaveBeenCalledWith("/scrap-notes/scrap-1/approve");
     expect(mockedPost).toHaveBeenCalledWith("/scrap-notes/scrap-1/reject", {
       rejectReason: "Cần kiểm lại số lượng",

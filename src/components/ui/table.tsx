@@ -4,26 +4,50 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+const TableScrollContext = React.createContext(false);
+
+type TableProps = React.ComponentProps<"table"> & {
+  containerClassName?: string;
+  scrollable?: boolean;
+};
+
+function Table({
+  className,
+  containerClassName,
+  scrollable = false,
+  ...props
+}: TableProps) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto rounded-lg border border-border/70"
+      className={cn(
+        "relative w-full overflow-x-auto rounded-lg border border-border/70",
+        scrollable && "max-h-[clamp(20rem,60dvh,42rem)] overflow-auto",
+        containerClassName,
+      )}
     >
-      <table
-        data-slot="table"
-        className={cn("w-full caption-bottom bg-card text-xs", className)}
-        {...props}
-      />
+      <TableScrollContext.Provider value={scrollable}>
+        <table
+          data-slot="table"
+          className={cn("w-full caption-bottom bg-card text-xs", className)}
+          {...props}
+        />
+      </TableScrollContext.Provider>
     </div>
   );
 }
 
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
+  const scrollable = React.useContext(TableScrollContext);
+
   return (
     <thead
       data-slot="table-header"
-      className={cn("bg-muted/45 [&_tr]:border-b", className)}
+      className={cn(
+        "bg-muted/45 [&_tr]:border-b",
+        scrollable && "sticky top-0 z-10",
+        className,
+      )}
       {...props}
     />
   );

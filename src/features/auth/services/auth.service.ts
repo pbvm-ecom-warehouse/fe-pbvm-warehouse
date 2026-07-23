@@ -53,6 +53,26 @@ export async function getCurrentUser() {
   return unwrapApiData(response.data);
 }
 
+export async function uploadCurrentUserAvatar(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await apiClient.post<
+    ApiEnvelope<WmsUserResponse> | WmsUserResponse
+  >("/auth/me/avatar", formData);
+  const currentUser = unwrapApiData(response.data);
+  const sessionUser = sessionUserFromWmsUserResponse(
+    currentUser,
+    useAuthStore.getState().user,
+    env.NEXT_PUBLIC_DEFAULT_TENANT_ID,
+  );
+
+  if (sessionUser) {
+    useAuthStore.getState().setUser(sessionUser);
+  }
+
+  return currentUser;
+}
 export async function login(input: LoginInput) {
   const response = await apiClient.post<
     ApiEnvelope<AuthTokenResponse> | AuthTokenResponse

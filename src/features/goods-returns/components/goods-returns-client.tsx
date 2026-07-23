@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
   ClipboardCheck,
+  Eye,
   LoaderCircle,
   Plus,
   RefreshCw,
@@ -14,6 +15,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  EvidenceImageGallery,
+  EvidenceImagePicker,
+} from "@/components/evidence-images";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -154,6 +159,9 @@ export function GoodsReturnsClient() {
   const [inspectLines, setInspectLines] = useState<
     Record<string, InspectLineForm>
   >({});
+  const [inspectImages, setInspectImages] = useState<Record<string, File[]>>(
+    {},
+  );
 
   const returnsQuery = useQuery({
     enabled: canView,
@@ -232,11 +240,14 @@ export function GoodsReturnsClient() {
           detail?.items.map((item) =>
             toInspectInput(item, inspectLines[item.itemId]),
           ) ?? [],
+        itemImages:
+          detail?.items.map((item) => inspectImages[item.itemId] ?? []) ?? [],
         warehouseId: inspectWarehouseId,
       }),
     onError: (error) => toast.error(formatError(error)),
     onSuccess: (updated) => {
       setInspectLines(toInspectForm(updated.items));
+      setInspectImages({});
       setInspectWarehouseId(updated.warehouseId ?? inspectWarehouseId);
       void queryClient.invalidateQueries({ queryKey: ["goods-returns"] });
       toast.success("Đã ghi nhận phân loại hàng hoàn");
@@ -301,6 +312,7 @@ export function GoodsReturnsClient() {
     setSelectedReturnId(goodsReturn.id);
     setInspectWarehouseId(goodsReturn.warehouseId ?? user?.warehouseId ?? "");
     setInspectLines(toInspectForm(goodsReturn.items));
+    setInspectImages({});
   }
 
   function updateInspectLine(itemId: string, patch: Partial<InspectLineForm>) {
@@ -512,6 +524,7 @@ export function GoodsReturnsClient() {
                       <InspectLineEditor
                         key={item.itemId}
                         item={item}
+                        files={inspectImages[item.itemId] ?? []}
                         disabled={!canMutate || detail.status === "RESTOCKED"}
                         value={
                           inspectLines[item.itemId] ?? {
@@ -522,6 +535,12 @@ export function GoodsReturnsClient() {
                         }
                         onChange={(patch) =>
                           updateInspectLine(item.itemId, patch)
+                        }
+                        onFilesChange={(files) =>
+                          setInspectImages((current) => ({
+                            ...current,
+                            [item.itemId]: files,
+                          }))
                         }
                       />
                     ))}
@@ -629,7 +648,7 @@ function GoodsReturnTable({
   selectedId: string;
 }) {
   return (
-    <Table>
+    <Table scrollable>
       <TableHeader>
         <TableRow>
           <TableHead>Mã phiếu</TableHead>
@@ -637,11 +656,12 @@ function GoodsReturnTable({
           <TableHead>Trạng thái</TableHead>
           <TableHead>Số dòng</TableHead>
           <TableHead>Ngày tạo</TableHead>
+          <TableHead className="text-right">Thao tác</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {goodsReturns.length === 0 ? (
-          <EmptyRow colSpan={5} label="Chưa có phiếu hoàn hàng." />
+          <EmptyRow colSpan={6} label="Chưa có phiếu hoàn hàng." />
         ) : (
           goodsReturns.map((goodsReturn) => (
             <TableRow
@@ -663,6 +683,19 @@ function GoodsReturnTable({
               </TableCell>
               <TableCell>{goodsReturn.items.length}</TableCell>
               <TableCell>{formatDate(goodsReturn.createdAt)}</TableCell>
+              <TableCell className="text-right">
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelect(goodsReturn);
+                  }}
+                >
+                  <Eye data-icon="inline-start" /> Xem chi tiết
+                </Button>
+              </TableCell>
             </TableRow>
           ))
         )}
@@ -689,7 +722,7 @@ function GoodsReturnDetail({
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-4">
-        <Table>
+        <Table scrollable>
           <TableHeader>
             <TableRow>
               <TableHead>SKU</TableHead>
@@ -697,11 +730,12 @@ function GoodsReturnDetail({
               <TableHead>Phân loại</TableHead>
               <TableHead>Vị trí</TableHead>
               <TableHead>Ghi nhận hủy</TableHead>
+              <TableHead>Ảnh minh chứng</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {detail.items.length === 0 ? (
-              <EmptyRow colSpan={5} label="Phiếu chưa có dòng hàng." />
+              <EmptyRow colSpan={6} label="Phiếu chưa có dòng hàng." />
             ) : (
               detail.items.map((item) => (
                 <TableRow key={item.itemId}>
@@ -716,6 +750,13 @@ function GoodsReturnDetail({
                   </TableCell>
                   <TableCell>{item.shelfId ?? "Chưa chọn"}</TableCell>
                   <TableCell>{item.scrapNoteId ?? "Không có"}</TableCell>
+                  <TableCell className="min-w-48">
+                    <EvidenceImageGallery
+                      emptyLabel="Không có ảnh"
+                      images={item.images}
+                      label={`${item.images?.length ?? 0} ảnh`}
+                    />
+                  </TableCell>
                 </TableRow>
               ))
             )}
@@ -811,13 +852,17 @@ function CreateGoodsReturnCard({
 
 function InspectLineEditor({
   disabled,
+  files,
   item,
   onChange,
+  onFilesChange,
   value,
 }: {
   disabled: boolean;
+  files: File[];
   item: GoodsReturnItem;
   onChange: (patch: Partial<InspectLineForm>) => void;
+  onFilesChange: (files: File[]) => void;
   value: InspectLineForm;
 }) {
   return (
@@ -865,6 +910,12 @@ function InspectLineEditor({
         required={false}
         value={value.lotId}
         onChange={(lotId) => onChange({ lotId })}
+      />
+      <EvidenceImagePicker
+        disabled={disabled}
+        files={files}
+        id={`goods-return-images-${item.itemId}`}
+        onChange={onFilesChange}
       />
     </div>
   );

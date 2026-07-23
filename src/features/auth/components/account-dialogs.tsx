@@ -1,10 +1,17 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { KeyRound, LoaderCircle, RefreshCw, UserRound } from "lucide-react";
+import { ChangeEvent, FormEvent, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  ImageUp,
+  KeyRound,
+  LoaderCircle,
+  RefreshCw,
+  UserRound,
+} from "lucide-react";
 import { toast } from "sonner";
 
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,8 +28,23 @@ import { getApiErrorMessage } from "@/lib/api-contract";
 import { normalizeRoles, ROLE_LABELS } from "@/lib/rbac";
 import type { WmsUserResponse } from "@/types/api";
 
-import { changePassword, getCurrentUser } from "../services/auth.service";
+import {
+  changePassword,
+  getCurrentUser,
+  uploadCurrentUserAvatar,
+} from "../services/auth.service";
 
+const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+const AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+function initials(name: string | undefined) {
+  return (name ?? "")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+}
 function formatError(error: unknown) {
   return getApiErrorMessage(error) ?? "Không kết nối được WMS.";
 }
@@ -80,12 +102,38 @@ export function AccountProfileDialog({
   onOpenChange: (open: boolean) => void;
   open: boolean;
 }) {
+  const queryClient = useQueryClient();
   const profileQuery = useQuery({
     enabled: open,
     queryFn: getCurrentUser,
     queryKey: ["auth", "me"],
   });
   const profile = profileQuery.data;
+  const uploadAvatarMutation = useMutation({
+    mutationFn: uploadCurrentUserAvatar,
+    onError: (error) => toast.error(formatError(error)),
+    onSuccess: (updatedProfile) => {
+      queryClient.setQueryData(["auth", "me"], updatedProfile);
+      toast.success("Đã cập nhật ảnh đại diện");
+    },
+  });
+
+  function handleAvatarChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) return;
+    if (!AVATAR_TYPES.has(file.type)) {
+      toast.error("Ảnh đại diện chỉ nhận JPEG, PNG hoặc WebP.");
+      return;
+    }
+    if (file.size > AVATAR_MAX_BYTES) {
+      toast.error("Ảnh đại diện không được vượt quá 5 MB.");
+      return;
+    }
+
+    uploadAvatarMutation.mutate(file);
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -113,6 +161,50 @@ export function AccountProfileDialog({
           </div>
         ) : profile ? (
           <div className="space-y-2">
+            <div className="mb-4 flex flex-wrap items-center gap-4 rounded-lg border border-border/70 bg-muted/20 p-4">
+              <Avatar className="size-20">
+                {profile.avatarUrl ? (
+                  <AvatarImage
+                    alt={profile.name || profile.username}
+                    src={profile.avatarUrl}
+                  />
+                ) : null}
+                <AvatarFallback className="text-lg font-semibold">
+                  {initials(profile.name || profile.username) || "WM"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-semibold">
+                  {profile.name || profile.username}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  JPEG, PNG hoặc WebP, tối đa 5 MB.
+                </div>
+                <Input
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sr-only"
+                  disabled={uploadAvatarMutation.isPending}
+                  id="account-avatar"
+                  onChange={handleAvatarChange}
+                  type="file"
+                />
+                <Button asChild className="mt-3" size="sm" variant="outline">
+                  <Label className="cursor-pointer" htmlFor="account-avatar">
+                    {uploadAvatarMutation.isPending ? (
+                      <LoaderCircle
+                        className="animate-spin"
+                        data-icon="inline-start"
+                      />
+                    ) : (
+                      <ImageUp data-icon="inline-start" />
+                    )}
+                    {uploadAvatarMutation.isPending
+                      ? "Đang tải ảnh"
+                      : "Đổi ảnh đại diện"}
+                  </Label>
+                </Button>
+              </div>
+            </div>
             <ProfileRow label="Mã nhân viên" value={profile.id} />
             <ProfileRow label="Tên đăng nhập" value={profile.username} />
             <ProfileRow label="Tên hiển thị" value={profile.name} />
