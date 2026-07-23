@@ -75,10 +75,7 @@ export function LoginPageClient() {
       toast.success("Đăng nhập WMS thành công");
 
       if (result.mustChangePassword) {
-        setPasswordChange({
-          oldPassword: parsed.data.password,
-          newPassword: "",
-        });
+        setPasswordChange(defaultPasswordChange);
         setNeedsPasswordChange(true);
         toast.message("Tài khoản cần đổi mật khẩu trước khi vào hệ thống.");
         return;
@@ -169,11 +166,16 @@ export function LoginPageClient() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form className="space-y-4" noValidate onSubmit={handleChangePassword}>
+            <form
+              autoComplete="off"
+              className="space-y-4"
+              noValidate
+              onSubmit={handleChangePassword}
+            >
               <div className="space-y-2">
                 <Label htmlFor="oldPassword">Mật khẩu hiện tại</Label>
                 <Input
-                  autoComplete="current-password"
+                  autoComplete="off"
                   id="oldPassword"
                   type="password"
                   value={passwordChange.oldPassword}

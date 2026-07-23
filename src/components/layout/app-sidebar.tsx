@@ -1,15 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import * as React from "react";
-import { Building2, LogOut } from "lucide-react";
+import { Building2 } from "lucide-react";
 
 import { WmsLogo } from "@/components/brand/wms-logo";
 import { SheetClose } from "@/components/ui/sheet";
 import { dashboardRoutes } from "@/constants/routes";
 import { useSessionUser } from "@/hooks/use-session-user";
-import { logout } from "@/features/auth/services/auth.service";
 import { getAllowedRoutes, getDefaultRoleFocus, ROLE_LABELS } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +49,6 @@ function NavLink({
 
 export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const user = useSessionUser();
   const primaryRole = getDefaultRoleFocus(user?.roles);
   const routes = getAllowedRoutes(
@@ -110,7 +108,7 @@ export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
         })}
       </nav>
 
-      <div className="mt-5 space-y-3">
+      <div className="mt-5">
         <div className="rounded-lg border border-sidebar-border bg-card p-3 shadow-[0_14px_32px_-28px_rgba(15,23,42,0.45)]">
           <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
             <Building2 className="size-3.5" />
@@ -125,17 +123,6 @@ export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
             </div>
           </div>
         </div>
-        <button
-          type="button"
-          className="group flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold text-sidebar-foreground/72 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          onClick={async () => {
-            await logout();
-            router.replace("/login");
-          }}
-        >
-          <LogOut className="size-4 text-sidebar-foreground/55 transition-colors group-hover:text-sidebar-accent-foreground" />
-          Đăng xuất
-        </button>
       </div>
     </div>
   );

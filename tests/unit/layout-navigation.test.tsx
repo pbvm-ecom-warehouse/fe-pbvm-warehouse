@@ -65,6 +65,9 @@ describe("dashboard navigation chrome", () => {
     expect(
       screen.getByRole("link", { name: /Nhân viên/i }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Đăng xuất/i }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Chưa gán kho")).not.toBeInTheDocument();
   });
 
