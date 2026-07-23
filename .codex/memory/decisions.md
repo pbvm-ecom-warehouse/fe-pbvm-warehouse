@@ -194,7 +194,18 @@
   - Verification passed: `pnpm lint`, `pnpm typecheck`, `pnpm test` (127/127), `pnpm test:e2e` (18/18), `pnpm build`, visual Playwright screenshots, and `git diff --check`.
 - 2026-07-23: Purchase tabs, detail dialogs, and internal barcode compact:
   - `/purchases` uses two segmented tabs: `Đơn mua` and `Phiếu nhập`. Purchase-order rows no longer auto-expand a detail card below the table.
-  - `Xem chi tiết` opens a scroll-contained PO dialog with supplier, warehouse, dates, notes, named item lines, and related GRNs. The GRN tab has an independent scrollable list and detail dialog.
+  - `Xem chi tiết` opens a scroll-contained PO dialog with supplier, warehouse, dates, notes, and named item lines. The GRN tab has an independent scrollable list and detail dialog.
   - Raw stock `itemId` stays payload-only. Purchase and GRN detail tables label the field `Tên mặt hàng` and resolve it through the stock-item detail cache.
   - Internal item barcodes render as accessible CODE128 SVG graphics through shared `Barcode` and `jsbarcode`; the human-readable value remains under the bars. EAN-13 is not forced.
   - Verification passed: `pnpm lint`, `pnpm typecheck`, `pnpm test` (127/127), `pnpm test:e2e` (18/18), `pnpm build`, visual Playwright review, and `git diff --check`.
+- 2026-07-23: Purchase/GRN tab ownership and role compact:
+  - `Đơn mua` owns PO listing, detail, filtering, and `Tạo đơn mua`. PO detail no longer embeds GRN creation or approval controls.
+  - `Phiếu nhập` owns the GRN list, `Tạo phiếu nhập`, `Xác nhận`, `Duyệt`, and GRN detail. GRN creation requires selecting a PO before editing actual received quantities and evidence images.
+  - FE permissions mirror the pulled BE controllers:
+    - PO list/detail/create: `MANAGER`, `ADMIN`.
+    - GRN create/image upload/confirm: `RECEIVER`, `ADMIN`; on the current `/purchases` route this exposes create/confirm to Admin.
+    - GRN approve: `MANAGER`, `ADMIN`.
+  - Admin therefore sees create, confirm, and approve operations in the GRN tab. Manager can create POs and approve confirmed GRNs, but cannot create or confirm GRNs.
+  - GRN row actions are state-aware: `Xác nhận` only for `DRAFT`, `Duyệt` only for `CONFIRMED`; completed actions disappear instead of remaining as disabled clutter.
+  - PO responses missing the runtime `items` field remain tolerated so a partial BE list response cannot crash the purchases page.
+  - Verification passed: `pnpm lint`, `pnpm typecheck`, `pnpm test` (`128/128`), full `pnpm test:e2e` (`18/18`), `pnpm build`, and `git diff --check`.

@@ -1,6 +1,12 @@
 "use client";
 
-import { ClipboardCheck, Eye, LoaderCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  ClipboardCheck,
+  Eye,
+  LoaderCircle,
+  Plus,
+} from "lucide-react";
 
 import { EvidenceImageGallery } from "@/components/evidence-images";
 import { Button } from "@/components/ui/button";
@@ -46,14 +52,30 @@ function formatDate(value?: string | null) {
 }
 
 export function GoodsReceiptNotesList({
+  approveBusyId,
+  canApprove,
+  canConfirm,
+  canCreate,
+  confirmBusyId,
   grns,
   loading,
+  onApprove,
+  onConfirm,
+  onCreate,
   onSelect,
   purchaseOrderById,
   warehouseById,
 }: {
+  approveBusyId?: string;
+  canApprove: boolean;
+  canConfirm: boolean;
+  canCreate: boolean;
+  confirmBusyId?: string;
   grns: GoodsReceiptNote[];
   loading: boolean;
+  onApprove: (grnId: string) => void;
+  onConfirm: (grnId: string) => void;
+  onCreate: () => void;
   onSelect: (grn: GoodsReceiptNote) => void;
   purchaseOrderById: Map<string, PurchaseOrder>;
   warehouseById: Map<string, WarehouseStructureWarehouse>;
@@ -61,11 +83,21 @@ export function GoodsReceiptNotesList({
   return (
     <Card>
       <CardHeader className="border-b bg-muted/20">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <ClipboardCheck className="size-4 text-primary" />
-          Phiếu nhập
-        </CardTitle>
-        <CardDescription>{grns.length} bản ghi</CardDescription>
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1.5">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ClipboardCheck className="size-4 text-primary" />
+              Phiếu nhập
+            </CardTitle>
+            <CardDescription>{grns.length} bản ghi</CardDescription>
+          </div>
+          {canCreate ? (
+            <Button onClick={onCreate} type="button">
+              <Plus data-icon="inline-start" />
+              Tạo phiếu nhập
+            </Button>
+          ) : null}
+        </div>
       </CardHeader>
       <CardContent className="pt-4">
         {loading ? (
@@ -82,7 +114,7 @@ export function GoodsReceiptNotesList({
                 <TableHead>Kho nhận</TableHead>
                 <TableHead>Trạng thái</TableHead>
                 <TableHead>Ngày tạo</TableHead>
-                <TableHead className="w-36 text-right">Thao tác</TableHead>
+                <TableHead className="w-72 text-right">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -116,7 +148,7 @@ export function GoodsReceiptNotesList({
                     </TableCell>
                     <TableCell>{formatDate(grn.createdAt)}</TableCell>
                     <TableCell>
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-2">
                         <Button
                           aria-label={`Xem chi tiết phiếu nhập ${grn.grnNumber}`}
                           onClick={() => onSelect(grn)}
@@ -127,6 +159,43 @@ export function GoodsReceiptNotesList({
                           <Eye data-icon="inline-start" />
                           Xem chi tiết
                         </Button>
+                        {canConfirm && grn.status === "DRAFT" ? (
+                          <Button
+                            disabled={confirmBusyId === grn.id}
+                            onClick={() => onConfirm(grn.id)}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                          >
+                            {confirmBusyId === grn.id ? (
+                              <LoaderCircle
+                                className="animate-spin"
+                                data-icon="inline-start"
+                              />
+                            ) : (
+                              <CheckCircle2 data-icon="inline-start" />
+                            )}
+                            Xác nhận
+                          </Button>
+                        ) : null}
+                        {canApprove && grn.status === "CONFIRMED" ? (
+                          <Button
+                            disabled={approveBusyId === grn.id}
+                            onClick={() => onApprove(grn.id)}
+                            size="sm"
+                            type="button"
+                          >
+                            {approveBusyId === grn.id ? (
+                              <LoaderCircle
+                                className="animate-spin"
+                                data-icon="inline-start"
+                              />
+                            ) : (
+                              <ClipboardCheck data-icon="inline-start" />
+                            )}
+                            Duyệt
+                          </Button>
+                        ) : null}
                       </div>
                     </TableCell>
                   </TableRow>

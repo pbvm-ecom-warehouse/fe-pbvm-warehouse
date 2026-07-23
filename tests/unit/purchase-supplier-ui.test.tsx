@@ -1,15 +1,25 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PurchaseOrdersClient } from "@/features/purchases/components/purchase-orders-client";
 import { SuppliersClient } from "@/features/suppliers/components/suppliers-client";
 
+const sessionRoleState = vi.hoisted(() => ({
+  roles: ["MANAGER"],
+}));
+
 vi.mock("@/hooks/use-session-user", () => ({
   useSessionUser: () => ({
     id: "manager-1",
     name: "Manager",
-    roles: ["MANAGER"],
+    roles: sessionRoleState.roles,
     tenantId: "demo",
     type: "user",
     warehouseId: "wh-1",
@@ -176,6 +186,25 @@ const purchaseOrder = {
   warehouseId: "wh-1",
 };
 
+const goodsReceiptNote = {
+  createdAt: "2026-07-23T00:00:00.000Z",
+  grnNumber: "GRN-001",
+  id: "grn-1",
+  images: [],
+  items: [
+    {
+      actualQty: 10,
+      itemId: "item-1",
+      sku: "SKU-001",
+      unit: "cái",
+    },
+  ],
+  purchaseOrderId: "po-1",
+  status: "CONFIRMED" as const,
+  updatedAt: "2026-07-23T00:00:00.000Z",
+  warehouseId: "wh-1",
+};
+
 function renderWithQueryClient(component: React.ReactNode) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -189,6 +218,7 @@ function renderWithQueryClient(component: React.ReactNode) {
 describe("purchase and supplier UX", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionRoleState.roles = ["MANAGER"];
     mockedListSuppliers.mockResolvedValue({
       data: [supplier],
       limit: 20,
@@ -310,31 +340,72 @@ describe("purchase and supplier UX", () => {
     );
   });
 
-  it("shows an explicit purchase detail action and visible GRN row labels", async () => {
-    renderWithQueryClient(<PurchaseOrdersClient />);
+  it("keeps PO detail read-only and gives managers only GRN approval", async () => {
+    mockedListGrns.mockResolvedValue({
+      data: [goodsReceiptNote],
+      limit: 50,
+      page: 1,
+      total: 1,
+    });
 
-    expect(
-      await screen.findByRole("tab", { name: "Đơn mua" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Phiếu nhập" })).toBeInTheDocument();
+    renderWithQueryClient(<PurchaseOrdersClient />);
 
     const detailButton = await screen.findByRole("button", {
       name: "Xem chi tiết đơn mua PO-001",
     });
-    expect(
-      screen.queryByRole("heading", { name: "Chi tiết đơn mua" }),
-    ).not.toBeInTheDocument();
     fireEvent.click(detailButton);
 
+    const detailDialog = await screen.findByRole("dialog", {
+      name: "Chi tiết đơn mua",
+    });
     expect(
-      await screen.findByRole("heading", { name: "Chi tiết đơn mua" }),
-    ).toBeInTheDocument();
-    await waitFor(() =>
-      expect(mockedGetWarehouseItem).toHaveBeenCalledWith("item-1"),
+      screen.queryByRole("button", { name: "Tạo phiếu nhập" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      within(detailDialog).getByRole("button", { name: "Close" }),
     );
-    expect(await screen.findByText("Ly nhựa 500 ml")).toBeInTheDocument();
+
+    const grnTab = screen.getByRole("tab", { name: "Phiếu nhập" });
+    fireEvent.mouseDown(grnTab, { button: 0, ctrlKey: false });
+    fireEvent.click(grnTab);
+    await waitFor(() =>
+      expect(grnTab).toHaveAttribute("aria-selected", "true"),
+    );
+    expect(await screen.findByRole("button", { name: "Duyệt" })).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Tạo phiếu nhập" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Xác nhận" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("lets admins create and confirm GRNs from the GRN tab", async () => {
+    sessionRoleState.roles = ["ADMIN"];
+    mockedListGrns.mockResolvedValue({
+      data: [{ ...goodsReceiptNote, status: "DRAFT" }],
+      limit: 50,
+      page: 1,
+      total: 1,
+    });
+
+    renderWithQueryClient(<PurchaseOrdersClient />);
+    const grnTab = await screen.findByRole("tab", { name: "Phiếu nhập" });
+    fireEvent.mouseDown(grnTab, { button: 0, ctrlKey: false });
+    fireEvent.click(grnTab);
+    await waitFor(() =>
+      expect(grnTab).toHaveAttribute("aria-selected", "true"),
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Xác nhận" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Duyệt" }),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Tạo phiếu nhập" }));
 
+    expect(screen.getByText("Đơn mua", { selector: "label" })).toBeVisible();
     expect(
       screen.getByText("Tên mặt hàng", { selector: "label" }),
     ).toBeVisible();
