@@ -11,7 +11,6 @@ import {
   Check,
   ChevronsUpDown,
   Eye,
-  CheckCircle2,
   ClipboardCheck,
   LoaderCircle,
   Plus,
@@ -23,10 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  EvidenceImageGallery,
-  EvidenceImagePicker,
-} from "@/components/evidence-images";
+import { EvidenceImagePicker } from "@/components/evidence-images";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -131,8 +127,6 @@ const purchaseKeys = {
   allGrns: ["goods-receipt-notes", "all"] as const,
   detail: (purchaseOrderId: string) =>
     ["purchase-orders", "detail", purchaseOrderId] as const,
-  grns: (purchaseOrderId: string) =>
-    ["goods-receipt-notes", "purchase-order", purchaseOrderId] as const,
   list: (params: { page: number; status: string; supplierId: string }) =>
     ["purchase-orders", "list", params] as const,
 
@@ -290,6 +284,9 @@ export function PurchaseOrdersClient() {
   const user = useSessionUser();
   const queryClient = useQueryClient();
   const canUsePurchaseOrderApi = hasAnyRole(user?.roles, ["MANAGER"]);
+  const canCreateGoodsReceiptNote = hasAnyRole(user?.roles, ["RECEIVER"]);
+  const canConfirmGoodsReceiptNote = hasAnyRole(user?.roles, ["RECEIVER"]);
+  const canApproveGoodsReceiptNote = hasAnyRole(user?.roles, ["MANAGER"]);
   const [statusFilter, setStatusFilter] = useState<PurchaseOrderStatus | "ALL">(
     "ALL",
   );
@@ -307,6 +304,7 @@ export function PurchaseOrdersClient() {
   ]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [grnDialogOpen, setGrnDialogOpen] = useState(false);
+  const [grnPurchaseOrderId, setGrnPurchaseOrderId] = useState("");
   const [grnItemForms, setGrnItemForms] = useState<GoodsReceiptItemForm[]>([]);
   const [grnImages, setGrnImages] = useState<File[]>([]);
 
@@ -364,6 +362,9 @@ export function PurchaseOrdersClient() {
     queryKey: purchaseKeys.detail(activePurchaseOrderId),
   });
   const detail = detailQuery.data ?? selectedPurchaseOrder;
+  const grnPurchaseOrder = purchaseOrders.find(
+    (purchaseOrder) => purchaseOrder.id === grnPurchaseOrderId,
+  );
   const allGrnsQuery = useQuery({
     enabled: canUsePurchaseOrderApi,
     queryFn: () => listGoodsReceiptNotes({ limit: 100, page: 1 }),
@@ -375,7 +376,9 @@ export function PurchaseOrdersClient() {
   );
   const warehouseItemIds = Array.from(
     new Set([
-      ...(detail?.items ?? []).map((item) => item.itemId),
+      ...purchaseOrders.flatMap((po) =>
+        (po.items ?? []).map((item) => item.itemId),
+      ),
       ...allGoodsReceiptNotes.flatMap((grn) =>
         grn.items.map((item) => item.itemId),
       ),
@@ -396,21 +399,6 @@ export function PurchaseOrdersClient() {
 
     return new Map(entries);
   }, [warehouseItemQueries]);
-  const grnsQuery = useQuery({
-    enabled: canUsePurchaseOrderApi && Boolean(activePurchaseOrderId),
-    queryFn: () =>
-      listGoodsReceiptNotes({
-        limit: 50,
-        page: 1,
-        purchaseOrderId: activePurchaseOrderId,
-      }),
-    queryKey: purchaseKeys.grns(activePurchaseOrderId),
-  });
-  const goodsReceiptNotes = useMemo(
-    () => grnsQuery.data?.data ?? [],
-    [grnsQuery.data?.data],
-  );
-
   const supplierById = useMemo(
     () => new Map(suppliers.map((supplier) => [supplier.id, supplier])),
     [suppliers],
@@ -444,7 +432,7 @@ export function PurchaseOrdersClient() {
     mutationFn: async () => {
       let goodsReceiptNote = await createGoodsReceiptNote({
         items: toGoodsReceiptItems(grnItemForms),
-        purchaseOrderId: activePurchaseOrderId,
+        purchaseOrderId: grnPurchaseOrderId,
       });
 
       for (const image of grnImages) {
@@ -459,6 +447,7 @@ export function PurchaseOrdersClient() {
     onError: (error) => toast.error(formatError(error)),
     onSuccess: () => {
       setGrnItemForms([]);
+      setGrnPurchaseOrderId("");
       setGrnImages([]);
       setGrnDialogOpen(false);
       void queryClient.invalidateQueries({ queryKey: ["goods-receipt-notes"] });
@@ -509,7 +498,7 @@ export function PurchaseOrdersClient() {
     event.preventDefault();
 
     const items = toGoodsReceiptItems(grnItemForms);
-    if (!activePurchaseOrderId || items.length === 0) {
+    if (!grnPurchaseOrderId || items.length === 0) {
       toast.error("Phiếu nhập cần ít nhất một dòng hàng hợp lệ.");
       return;
     }
@@ -518,9 +507,19 @@ export function PurchaseOrdersClient() {
   }
 
   function openGrnDialog() {
-    setGrnItemForms(buildGoodsReceiptForms(detail, warehouseItemById));
+    const purchaseOrder = purchaseOrders[0];
+    setGrnPurchaseOrderId(purchaseOrder?.id ?? "");
+    setGrnItemForms(buildGoodsReceiptForms(purchaseOrder, warehouseItemById));
     setGrnImages([]);
     setGrnDialogOpen(true);
+  }
+
+  function handleGrnPurchaseOrderChange(purchaseOrderId: string) {
+    const purchaseOrder = purchaseOrders.find(
+      (candidate) => candidate.id === purchaseOrderId,
+    );
+    setGrnPurchaseOrderId(purchaseOrderId);
+    setGrnItemForms(buildGoodsReceiptForms(purchaseOrder, warehouseItemById));
   }
 
   function updateItemForm(index: number, next: PurchaseOrderItemForm) {
@@ -568,148 +567,150 @@ export function PurchaseOrdersClient() {
               Làm mới
             </Button>
 
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button disabled={!canUsePurchaseOrderApi}>
-                  <Plus data-icon="inline-start" />
-                  Tạo đơn mua
-                </Button>
-              </DialogTrigger>
-              <DialogContent
-                size="5xl"
-                className="max-h-[90dvh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-0"
-              >
-                <DialogHeader className="border-b px-6 py-4 pr-12">
-                  <DialogTitle>Tạo đơn mua</DialogTitle>
-                  <DialogDescription>
-                    Thêm đơn đặt hàng mới vào hệ thống.
-                  </DialogDescription>
-                </DialogHeader>
-                <form
-                  className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden"
-                  onSubmit={handleCreate}
+            {activeTab === "purchase-orders" ? (
+              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button disabled={!canUsePurchaseOrderApi}>
+                    <Plus data-icon="inline-start" />
+                    Tạo đơn mua
+                  </Button>
+                </DialogTrigger>
+                <DialogContent
+                  size="5xl"
+                  className="max-h-[90dvh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-0"
                 >
-                  <div
-                    className="min-h-0 space-y-4 overflow-x-hidden overflow-y-auto px-6 py-4"
-                    data-testid="purchase-order-dialog-body"
+                  <DialogHeader className="border-b px-6 py-4 pr-12">
+                    <DialogTitle>Tạo đơn mua</DialogTitle>
+                    <DialogDescription>
+                      Thêm đơn đặt hàng mới vào hệ thống.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form
+                    className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden"
+                    onSubmit={handleCreate}
                   >
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <SelectField
-                        disabled={!canUsePurchaseOrderApi}
-                        label="Nhà cung cấp"
-                        value={createForm.supplierId}
-                        onChange={(supplierId) =>
-                          setCreateForm((current) => ({
-                            ...current,
-                            supplierId,
-                          }))
-                        }
-                      >
-                        {suppliers.map((supplier) => (
-                          <SelectItem key={supplier.id} value={supplier.id}>
-                            {supplier.code} · {supplier.name}
-                          </SelectItem>
-                        ))}
-                      </SelectField>
-                      <SelectField
-                        disabled={!canUsePurchaseOrderApi}
-                        label="Kho nhận"
-                        value={createForm.warehouseId}
-                        onChange={(warehouseId) =>
-                          setCreateForm((current) => ({
-                            ...current,
-                            warehouseId,
-                          }))
-                        }
-                      >
-                        {warehouses.map((warehouse) => (
-                          <SelectItem key={warehouse.id} value={warehouse.id}>
-                            {warehouse.name}
-                          </SelectItem>
-                        ))}
-                      </SelectField>
-                      <div className="space-y-2 md:col-span-2">
-                        <Label htmlFor="po-expected-date">Ngày dự kiến</Label>
-                        <Input
-                          id="po-expected-date"
-                          type="date"
-                          value={createForm.expectedDate}
+                    <div
+                      className="min-h-0 space-y-4 overflow-x-hidden overflow-y-auto px-6 py-4"
+                      data-testid="purchase-order-dialog-body"
+                    >
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <SelectField
+                          disabled={!canUsePurchaseOrderApi}
+                          label="Nhà cung cấp"
+                          value={createForm.supplierId}
+                          onChange={(supplierId) =>
+                            setCreateForm((current) => ({
+                              ...current,
+                              supplierId,
+                            }))
+                          }
+                        >
+                          {suppliers.map((supplier) => (
+                            <SelectItem key={supplier.id} value={supplier.id}>
+                              {supplier.code} · {supplier.name}
+                            </SelectItem>
+                          ))}
+                        </SelectField>
+                        <SelectField
+                          disabled={!canUsePurchaseOrderApi}
+                          label="Kho nhận"
+                          value={createForm.warehouseId}
+                          onChange={(warehouseId) =>
+                            setCreateForm((current) => ({
+                              ...current,
+                              warehouseId,
+                            }))
+                          }
+                        >
+                          {warehouses.map((warehouse) => (
+                            <SelectItem key={warehouse.id} value={warehouse.id}>
+                              {warehouse.name}
+                            </SelectItem>
+                          ))}
+                        </SelectField>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="po-expected-date">Ngày dự kiến</Label>
+                          <Input
+                            id="po-expected-date"
+                            type="date"
+                            value={createForm.expectedDate}
+                            onChange={(event) =>
+                              setCreateForm((current) => ({
+                                ...current,
+                                expectedDate: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="po-note">Ghi chú</Label>
+                        <Textarea
+                          id="po-note"
+                          value={createForm.note}
                           onChange={(event) =>
                             setCreateForm((current) => ({
                               ...current,
-                              expectedDate: event.target.value,
+                              note: event.target.value,
                             }))
                           }
                         />
                       </div>
-                    </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="po-note">Ghi chú</Label>
-                      <Textarea
-                        id="po-note"
-                        value={createForm.note}
-                        onChange={(event) =>
-                          setCreateForm((current) => ({
-                            ...current,
-                            note: event.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <Label>Hàng đặt</Label>
-                        <Button
-                          onClick={addItemRow}
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                        >
-                          <Plus data-icon="inline-start" />
-                          Thêm dòng
-                        </Button>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <Label>Hàng đặt</Label>
+                          <Button
+                            onClick={addItemRow}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                          >
+                            <Plus data-icon="inline-start" />
+                            Thêm dòng
+                          </Button>
+                        </div>
+                        {itemForms.map((item, index) => (
+                          <PurchaseOrderItemFields
+                            index={index}
+                            item={item}
+                            key={index}
+                            onChange={(next) => updateItemForm(index, next)}
+                            onRemove={() => removeItemRow(index)}
+                          />
+                        ))}
                       </div>
-                      {itemForms.map((item, index) => (
-                        <PurchaseOrderItemFields
-                          index={index}
-                          item={item}
-                          key={index}
-                          onChange={(next) => updateItemForm(index, next)}
-                          onRemove={() => removeItemRow(index)}
-                        />
-                      ))}
                     </div>
-                  </div>
 
-                  <DialogFooter className="m-0 rounded-none px-6 py-4">
-                    <Button
-                      disabled={
-                        !canUsePurchaseOrderApi ||
-                        !createForm.supplierId ||
-                        !createForm.warehouseId ||
-                        itemForms.some(
-                          (item) => !item.itemId || !item.sku || !item.unit,
-                        ) ||
-                        createMutation.isPending
-                      }
-                      type="submit"
-                    >
-                      {createMutation.isPending ? (
-                        <LoaderCircle
-                          className="animate-spin"
-                          data-icon="inline-start"
-                        />
-                      ) : (
-                        <Save data-icon="inline-start" />
-                      )}
-                      Tạo đơn mua
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
+                    <DialogFooter className="m-0 rounded-none px-6 py-4">
+                      <Button
+                        disabled={
+                          !canUsePurchaseOrderApi ||
+                          !createForm.supplierId ||
+                          !createForm.warehouseId ||
+                          itemForms.some(
+                            (item) => !item.itemId || !item.sku || !item.unit,
+                          ) ||
+                          createMutation.isPending
+                        }
+                        type="submit"
+                      >
+                        {createMutation.isPending ? (
+                          <LoaderCircle
+                            className="animate-spin"
+                            data-icon="inline-start"
+                          />
+                        ) : (
+                          <Save data-icon="inline-start" />
+                        )}
+                        Tạo đơn mua
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            ) : null}
           </>
         }
       />
@@ -852,8 +853,28 @@ export function PurchaseOrdersClient() {
         </TabsContent>
         <TabsContent value="goods-receipts">
           <GoodsReceiptNotesList
+            approveBusyId={
+              approveGrnMutation.isPending
+                ? approveGrnMutation.variables
+                : undefined
+            }
+            canApprove={canApproveGoodsReceiptNote}
+            canConfirm={canConfirmGoodsReceiptNote}
+            canCreate={canCreateGoodsReceiptNote}
+            confirmBusyId={
+              confirmGrnMutation.isPending
+                ? confirmGrnMutation.variables
+                : undefined
+            }
             grns={allGoodsReceiptNotes}
             loading={allGrnsQuery.isLoading}
+            onApprove={(goodsReceiptNoteId) =>
+              approveGrnMutation.mutate(goodsReceiptNoteId)
+            }
+            onConfirm={(goodsReceiptNoteId) =>
+              confirmGrnMutation.mutate(goodsReceiptNoteId)
+            }
+            onCreate={openGrnDialog}
             purchaseOrderById={new Map(purchaseOrders.map((po) => [po.id, po]))}
             warehouseById={warehouseById}
             onSelect={setSelectedGoodsReceiptNote}
@@ -879,57 +900,103 @@ export function PurchaseOrdersClient() {
           </DialogHeader>
           <div className="min-h-0 space-y-5 overflow-y-auto px-6 py-4">
             {detail ? (
-              <>
-                <PurchaseOrderDetail
-                  detail={detail}
-                  loading={detailQuery.isFetching}
-                  supplier={supplierById.get(detail.supplierId)}
-                  warehouse={warehouseById.get(detail.warehouseId)}
-                  warehouseItemById={warehouseItemById}
-                />
-                <GoodsReceiptNotesPanel
-                  approveBusyId={
-                    approveGrnMutation.isPending
-                      ? approveGrnMutation.variables
-                      : undefined
-                  }
-                  canManage={canUsePurchaseOrderApi}
-                  confirmBusyId={
-                    confirmGrnMutation.isPending
-                      ? confirmGrnMutation.variables
-                      : undefined
-                  }
-                  createBusy={createGrnMutation.isPending}
-                  dialogOpen={grnDialogOpen}
-                  grnItemForms={grnItemForms}
-                  grnImages={grnImages}
-                  grns={goodsReceiptNotes}
-                  loading={grnsQuery.isFetching}
-                  purchaseOrder={detail}
-                  onApprove={(goodsReceiptNoteId) =>
-                    approveGrnMutation.mutate(goodsReceiptNoteId)
-                  }
-                  onConfirm={(goodsReceiptNoteId) =>
-                    confirmGrnMutation.mutate(goodsReceiptNoteId)
-                  }
-                  onCreate={handleCreateGrn}
-                  onDialogOpenChange={(open) => {
-                    if (open) {
-                      openGrnDialog();
-                    } else {
-                      setGrnDialogOpen(false);
-                      setGrnImages([]);
-                    }
-                  }}
-                  onFormChange={setGrnItemForms}
-                  onImagesChange={setGrnImages}
-                />
-              </>
+              <PurchaseOrderDetail
+                detail={detail}
+                loading={detailQuery.isFetching}
+                supplier={supplierById.get(detail.supplierId)}
+                warehouse={warehouseById.get(detail.warehouseId)}
+                warehouseItemById={warehouseItemById}
+              />
             ) : null}
           </div>
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={grnDialogOpen}
+        onOpenChange={(open) => {
+          setGrnDialogOpen(open);
+          if (!open) {
+            setGrnImages([]);
+            setGrnItemForms([]);
+            setGrnPurchaseOrderId("");
+          }
+        }}
+      >
+        <DialogContent size="2xl" className="max-h-[90dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Tạo phiếu nhập</DialogTitle>
+            <DialogDescription>
+              Chọn đơn mua rồi nhập số lượng hàng thực nhận.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={handleCreateGrn}>
+            <SelectField
+              disabled={
+                !canCreateGoodsReceiptNote || createGrnMutation.isPending
+              }
+              label="Đơn mua"
+              value={grnPurchaseOrderId}
+              onChange={handleGrnPurchaseOrderChange}
+            >
+              {purchaseOrders.map((purchaseOrder) => (
+                <SelectItem key={purchaseOrder.id} value={purchaseOrder.id}>
+                  {purchaseOrder.poNumber}
+                </SelectItem>
+              ))}
+            </SelectField>
+            <div className="grid gap-3">
+              {grnItemForms.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                  Đơn mua chưa có dòng hàng để tạo phiếu nhập.
+                </div>
+              ) : null}
+              {grnItemForms.map((item, index) => (
+                <GoodsReceiptItemFields
+                  index={index}
+                  item={item}
+                  key={`${item.itemId}-${index}`}
+                  onChange={(next) =>
+                    setGrnItemForms((current) =>
+                      current.map((currentItem, itemIndex) =>
+                        itemIndex === index ? next : currentItem,
+                      ),
+                    )
+                  }
+                />
+              ))}
+            </div>
+            <EvidenceImagePicker
+              disabled={
+                !canCreateGoodsReceiptNote || createGrnMutation.isPending
+              }
+              files={grnImages}
+              id="goods-receipt-images"
+              label="Ảnh minh chứng nhận hàng"
+              onChange={setGrnImages}
+            />
+            <Button
+              disabled={
+                !canCreateGoodsReceiptNote ||
+                !grnPurchaseOrder ||
+                createGrnMutation.isPending ||
+                grnItemForms.length === 0
+              }
+              type="submit"
+            >
+              {createGrnMutation.isPending ? (
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
+              ) : (
+                <Save data-icon="inline-start" />
+              )}
+              Tạo phiếu nhập
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
       {selectedGoodsReceiptNote ? (
         <GoodsReceiptNoteDetailDialog
           grn={selectedGoodsReceiptNote}
@@ -1329,222 +1396,6 @@ function PurchaseOrderDetail({
                 </TableCell>
               </TableRow>
             ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
-  );
-}
-
-function GoodsReceiptNotesPanel({
-  approveBusyId,
-  canManage,
-  confirmBusyId,
-  createBusy,
-  dialogOpen,
-  grnItemForms,
-  grnImages,
-  grns,
-  loading,
-  onApprove,
-  onConfirm,
-  onCreate,
-  onDialogOpenChange,
-  onFormChange,
-  onImagesChange,
-  purchaseOrder,
-}: {
-  approveBusyId?: string;
-  canManage: boolean;
-  confirmBusyId?: string;
-  createBusy: boolean;
-  dialogOpen: boolean;
-  grnItemForms: GoodsReceiptItemForm[];
-  grnImages: File[];
-  grns: GoodsReceiptNote[];
-  loading: boolean;
-  onApprove: (goodsReceiptNoteId: string) => void;
-  onConfirm: (goodsReceiptNoteId: string) => void;
-  onCreate: (event: FormEvent<HTMLFormElement>) => void;
-  onDialogOpenChange: (open: boolean) => void;
-  onFormChange: (forms: GoodsReceiptItemForm[]) => void;
-  onImagesChange: (files: File[]) => void;
-  purchaseOrder: PurchaseOrder;
-}) {
-  function updateItemForm(index: number, next: GoodsReceiptItemForm) {
-    onFormChange(
-      grnItemForms.map((item, itemIndex) =>
-        itemIndex === index ? next : item,
-      ),
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader className="border-b bg-muted/20">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ClipboardCheck className="size-4 text-primary" />
-              Phiếu nhập
-            </CardTitle>
-            <CardDescription>
-              Tạo phiếu nhập từ đơn mua, xác nhận nhận hàng rồi duyệt phiếu.
-            </CardDescription>
-          </div>
-          <Dialog open={dialogOpen} onOpenChange={onDialogOpenChange}>
-            <DialogTrigger asChild>
-              <Button
-                disabled={
-                  !canManage || (purchaseOrder.items?.length ?? 0) === 0
-                }
-              >
-                <Plus data-icon="inline-start" />
-                Tạo phiếu nhập
-              </Button>
-            </DialogTrigger>
-            <DialogContent size="2xl" className="max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Tạo phiếu nhập</DialogTitle>
-                <DialogDescription>
-                  Dữ liệu lấy từ các dòng hàng của đơn mua đang chọn.
-                </DialogDescription>
-              </DialogHeader>
-              <form className="space-y-4" onSubmit={onCreate}>
-                <div className="grid gap-3">
-                  {grnItemForms.length === 0 ? (
-                    <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                      Đơn mua chưa có dòng hàng để tạo phiếu nhập.
-                    </div>
-                  ) : null}
-                  {grnItemForms.map((item, index) => (
-                    <GoodsReceiptItemFields
-                      index={index}
-                      item={item}
-                      key={`${item.itemId}-${index}`}
-                      onChange={(next) => updateItemForm(index, next)}
-                    />
-                  ))}
-                </div>
-                <EvidenceImagePicker
-                  disabled={!canManage || createBusy}
-                  files={grnImages}
-                  id="goods-receipt-images"
-                  label="Ảnh minh chứng nhận hàng"
-                  onChange={onImagesChange}
-                />{" "}
-                <Button
-                  disabled={
-                    !canManage || createBusy || grnItemForms.length === 0
-                  }
-                  type="submit"
-                >
-                  {createBusy ? (
-                    <LoaderCircle
-                      className="animate-spin"
-                      data-icon="inline-start"
-                    />
-                  ) : (
-                    <Save data-icon="inline-start" />
-                  )}
-                  Tạo phiếu nhập
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4 pt-4">
-        {loading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />
-            Đang tải phiếu nhập...
-          </div>
-        ) : null}
-        <Table scrollable>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Mã phiếu</TableHead>
-              <TableHead>Trạng thái</TableHead>
-              <TableHead>Số dòng</TableHead>
-              <TableHead>Ảnh</TableHead>
-              <TableHead>Cập nhật</TableHead>
-              <TableHead className="w-52"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {grns.length === 0 ? (
-              <EmptyRow
-                colSpan={6}
-                label="Chưa có phiếu nhập cho đơn mua này."
-              />
-            ) : (
-              grns.map((grn) => (
-                <TableRow key={grn.id}>
-                  <TableCell className="font-mono font-semibold">
-                    {grn.grnNumber}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge tone={statusTone(grn.status)}>
-                      {statusLabel(grn.status)}
-                    </StatusBadge>
-                  </TableCell>
-                  <TableCell>{grn.items.length}</TableCell>
-                  <TableCell>
-                    <EvidenceImageGallery
-                      images={grn.images}
-                      emptyLabel="Chưa có ảnh"
-                    />
-                  </TableCell>
-                  <TableCell>{formatDate(grn.updatedAt)}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button
-                        disabled={
-                          !canManage ||
-                          grn.status !== "DRAFT" ||
-                          confirmBusyId === grn.id
-                        }
-                        onClick={() => onConfirm(grn.id)}
-                        size="sm"
-                        type="button"
-                        variant="outline"
-                      >
-                        {confirmBusyId === grn.id ? (
-                          <LoaderCircle
-                            className="animate-spin"
-                            data-icon="inline-start"
-                          />
-                        ) : (
-                          <CheckCircle2 data-icon="inline-start" />
-                        )}
-                        Xác nhận
-                      </Button>
-                      <Button
-                        disabled={
-                          !canManage ||
-                          grn.status !== "CONFIRMED" ||
-                          approveBusyId === grn.id
-                        }
-                        onClick={() => onApprove(grn.id)}
-                        size="sm"
-                        type="button"
-                      >
-                        {approveBusyId === grn.id ? (
-                          <LoaderCircle
-                            className="animate-spin"
-                            data-icon="inline-start"
-                          />
-                        ) : (
-                          <ClipboardCheck data-icon="inline-start" />
-                        )}
-                        Duyệt
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
           </TableBody>
         </Table>
       </CardContent>
