@@ -56,7 +56,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -283,10 +282,13 @@ function EmptyRow({ colSpan, label }: { colSpan: number; label: string }) {
 export function PurchaseOrdersClient() {
   const user = useSessionUser();
   const queryClient = useQueryClient();
-  const canUsePurchaseOrderApi = hasAnyRole(user?.roles, ["MANAGER"]);
+  const canUsePurchaseOrderApi = hasAnyRole(user?.roles, ["ADMIN", "MANAGER"]);
   const canCreateGoodsReceiptNote = hasAnyRole(user?.roles, ["RECEIVER"]);
   const canConfirmGoodsReceiptNote = hasAnyRole(user?.roles, ["RECEIVER"]);
-  const canApproveGoodsReceiptNote = hasAnyRole(user?.roles, ["MANAGER"]);
+  const canApproveGoodsReceiptNote = hasAnyRole(user?.roles, [
+    "ADMIN",
+    "MANAGER",
+  ]);
   const [statusFilter, setStatusFilter] = useState<PurchaseOrderStatus | "ALL">(
     "ALL",
   );
@@ -545,173 +547,26 @@ export function PurchaseOrdersClient() {
       <PageHeader
         title="Nhập hàng"
         actions={
-          <>
-            <Button
-              disabled={!canUsePurchaseOrderApi}
-              onClick={() =>
-                void queryClient.invalidateQueries({
-                  queryKey: ["purchase-orders"],
-                })
-              }
-              type="button"
-              variant="outline"
-            >
-              {purchaseOrdersQuery.isFetching ? (
-                <LoaderCircle
-                  className="animate-spin"
-                  data-icon="inline-start"
-                />
-              ) : (
-                <RefreshCw data-icon="inline-start" />
-              )}
-              Làm mới
-            </Button>
-
-            {activeTab === "purchase-orders" ? (
-              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button disabled={!canUsePurchaseOrderApi}>
-                    <Plus data-icon="inline-start" />
-                    Tạo đơn mua
-                  </Button>
-                </DialogTrigger>
-                <DialogContent
-                  size="5xl"
-                  className="max-h-[90dvh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-0"
-                >
-                  <DialogHeader className="border-b px-6 py-4 pr-12">
-                    <DialogTitle>Tạo đơn mua</DialogTitle>
-                    <DialogDescription>
-                      Thêm đơn đặt hàng mới vào hệ thống.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <form
-                    className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden"
-                    onSubmit={handleCreate}
-                  >
-                    <div
-                      className="min-h-0 space-y-4 overflow-x-hidden overflow-y-auto px-6 py-4"
-                      data-testid="purchase-order-dialog-body"
-                    >
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <SelectField
-                          disabled={!canUsePurchaseOrderApi}
-                          label="Nhà cung cấp"
-                          value={createForm.supplierId}
-                          onChange={(supplierId) =>
-                            setCreateForm((current) => ({
-                              ...current,
-                              supplierId,
-                            }))
-                          }
-                        >
-                          {suppliers.map((supplier) => (
-                            <SelectItem key={supplier.id} value={supplier.id}>
-                              {supplier.code} · {supplier.name}
-                            </SelectItem>
-                          ))}
-                        </SelectField>
-                        <SelectField
-                          disabled={!canUsePurchaseOrderApi}
-                          label="Kho nhận"
-                          value={createForm.warehouseId}
-                          onChange={(warehouseId) =>
-                            setCreateForm((current) => ({
-                              ...current,
-                              warehouseId,
-                            }))
-                          }
-                        >
-                          {warehouses.map((warehouse) => (
-                            <SelectItem key={warehouse.id} value={warehouse.id}>
-                              {warehouse.name}
-                            </SelectItem>
-                          ))}
-                        </SelectField>
-                        <div className="space-y-2 md:col-span-2">
-                          <Label htmlFor="po-expected-date">Ngày dự kiến</Label>
-                          <Input
-                            id="po-expected-date"
-                            type="date"
-                            value={createForm.expectedDate}
-                            onChange={(event) =>
-                              setCreateForm((current) => ({
-                                ...current,
-                                expectedDate: event.target.value,
-                              }))
-                            }
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="po-note">Ghi chú</Label>
-                        <Textarea
-                          id="po-note"
-                          value={createForm.note}
-                          onChange={(event) =>
-                            setCreateForm((current) => ({
-                              ...current,
-                              note: event.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <Label>Hàng đặt</Label>
-                          <Button
-                            onClick={addItemRow}
-                            size="sm"
-                            type="button"
-                            variant="outline"
-                          >
-                            <Plus data-icon="inline-start" />
-                            Thêm dòng
-                          </Button>
-                        </div>
-                        {itemForms.map((item, index) => (
-                          <PurchaseOrderItemFields
-                            index={index}
-                            item={item}
-                            key={index}
-                            onChange={(next) => updateItemForm(index, next)}
-                            onRemove={() => removeItemRow(index)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-
-                    <DialogFooter className="m-0 rounded-none px-6 py-4">
-                      <Button
-                        disabled={
-                          !canUsePurchaseOrderApi ||
-                          !createForm.supplierId ||
-                          !createForm.warehouseId ||
-                          itemForms.some(
-                            (item) => !item.itemId || !item.sku || !item.unit,
-                          ) ||
-                          createMutation.isPending
-                        }
-                        type="submit"
-                      >
-                        {createMutation.isPending ? (
-                          <LoaderCircle
-                            className="animate-spin"
-                            data-icon="inline-start"
-                          />
-                        ) : (
-                          <Save data-icon="inline-start" />
-                        )}
-                        Tạo đơn mua
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
-            ) : null}
-          </>
+          <Button
+            disabled={!canUsePurchaseOrderApi}
+            onClick={() =>
+              void queryClient.invalidateQueries({
+                queryKey: ["purchase-orders"],
+              })
+            }
+            type="button"
+            variant="outline"
+          >
+            {purchaseOrdersQuery.isFetching ? (
+              <LoaderCircle
+                className="animate-spin"
+                data-icon="inline-start"
+              />
+            ) : (
+              <RefreshCw data-icon="inline-start" />
+            )}
+            Làm mới
+          </Button>
         }
       />
 
@@ -740,13 +595,26 @@ export function PurchaseOrdersClient() {
           <div className="grid gap-4">
             <Card>
               <CardHeader className="border-b bg-muted/20">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <ShoppingCart className="size-4 text-primary" />
-                  Đơn mua
-                </CardTitle>
-                <CardDescription>
-                  {total} bản ghi · trang {page}/{totalPages}
-                </CardDescription>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1.5">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <ShoppingCart className="size-4 text-primary" />
+                      Đơn mua
+                    </CardTitle>
+                    <CardDescription>
+                      {total} bản ghi · trang {page}/{totalPages}
+                    </CardDescription>
+                  </div>
+                  {canUsePurchaseOrderApi ? (
+                    <Button
+                      onClick={() => setDialogOpen(true)}
+                      type="button"
+                    >
+                      <Plus data-icon="inline-start" />
+                      Tạo đơn mua
+                    </Button>
+                  ) : null}
+                </div>
               </CardHeader>
               <CardContent className="space-y-4 pt-4">
                 <form
@@ -883,6 +751,143 @@ export function PurchaseOrdersClient() {
       </Tabs>
 
       {allGrnsQuery.error ? <ErrorBanner error={allGrnsQuery.error} /> : null}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent
+          size="5xl"
+          className="max-h-[90dvh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-0"
+        >
+          <DialogHeader className="border-b px-6 py-4 pr-12">
+            <DialogTitle>Tạo đơn mua</DialogTitle>
+            <DialogDescription>
+              Thêm đơn đặt hàng mới vào hệ thống.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden"
+            onSubmit={handleCreate}
+          >
+            <div
+              className="min-h-0 space-y-4 overflow-x-hidden overflow-y-auto px-6 py-4"
+              data-testid="purchase-order-dialog-body"
+            >
+              <div className="grid gap-3 md:grid-cols-2">
+                <SelectField
+                  disabled={!canUsePurchaseOrderApi}
+                  label="Nhà cung cấp"
+                  value={createForm.supplierId}
+                  onChange={(supplierId) =>
+                    setCreateForm((current) => ({
+                      ...current,
+                      supplierId,
+                    }))
+                  }
+                >
+                  {suppliers.map((supplier) => (
+                    <SelectItem key={supplier.id} value={supplier.id}>
+                      {supplier.code} · {supplier.name}
+                    </SelectItem>
+                  ))}
+                </SelectField>
+                <SelectField
+                  disabled={!canUsePurchaseOrderApi}
+                  label="Kho nhận"
+                  value={createForm.warehouseId}
+                  onChange={(warehouseId) =>
+                    setCreateForm((current) => ({
+                      ...current,
+                      warehouseId,
+                    }))
+                  }
+                >
+                  {warehouses.map((warehouse) => (
+                    <SelectItem key={warehouse.id} value={warehouse.id}>
+                      {warehouse.name}
+                    </SelectItem>
+                  ))}
+                </SelectField>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="po-expected-date">Ngày dự kiến</Label>
+                  <Input
+                    id="po-expected-date"
+                    type="date"
+                    value={createForm.expectedDate}
+                    onChange={(event) =>
+                      setCreateForm((current) => ({
+                        ...current,
+                        expectedDate: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="po-note">Ghi chú</Label>
+                <Textarea
+                  id="po-note"
+                  value={createForm.note}
+                  onChange={(event) =>
+                    setCreateForm((current) => ({
+                      ...current,
+                      note: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <Label>Hàng đặt</Label>
+                  <Button
+                    onClick={addItemRow}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    <Plus data-icon="inline-start" />
+                    Thêm dòng
+                  </Button>
+                </div>
+                {itemForms.map((item, index) => (
+                  <PurchaseOrderItemFields
+                    index={index}
+                    item={item}
+                    key={index}
+                    onChange={(next) => updateItemForm(index, next)}
+                    onRemove={() => removeItemRow(index)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <DialogFooter className="m-0 rounded-none px-6 py-4">
+              <Button
+                disabled={
+                  !canUsePurchaseOrderApi ||
+                  !createForm.supplierId ||
+                  !createForm.warehouseId ||
+                  itemForms.some(
+                    (item) => !item.itemId || !item.sku || !item.unit,
+                  ) ||
+                  createMutation.isPending
+                }
+                type="submit"
+              >
+                {createMutation.isPending ? (
+                  <LoaderCircle
+                    className="animate-spin"
+                    data-icon="inline-start"
+                  />
+                ) : (
+                  <Save data-icon="inline-start" />
+                )}
+                Tạo đơn mua
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={purchaseDetailOpen && Boolean(detail)}

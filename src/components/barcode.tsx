@@ -35,13 +35,13 @@ export function Barcode({
   return (
     <div
       className={cn(
-        "max-w-full overflow-x-auto rounded-md bg-white p-3",
+        "flex max-w-full justify-center overflow-x-auto rounded-md bg-white p-3",
         className,
       )}
     >
       <svg
         aria-label={`Mã vạch nội bộ ${value}`}
-        className="block h-auto max-w-none"
+        className="mx-auto block h-auto max-w-none"
         ref={barcodeRef}
         role="img"
       />
