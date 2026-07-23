@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Eye,
   Pencil,
   LoaderCircle,
   PackageSearch,
@@ -10,6 +11,7 @@ import {
   RefreshCw,
   Save,
   Search,
+  Settings2,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -24,7 +26,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,6 +44,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   EmptyState,
   PageHeader,
@@ -55,16 +57,15 @@ import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { useSessionUser } from "@/hooks/use-session-user";
 
+import { AttributeOptionsAdminDialog } from "./attribute-options-admin-dialog";
+import { CreateWarehouseItemPanel } from "./create-warehouse-item-panel";
 import {
-  createWarehouseItem,
   deleteWarehouseItem,
   listWarehouseItems,
   updateWarehouseItem,
   WAREHOUSE_ITEM_TYPES,
-  type CreateWarehouseItemInput,
   type UpdateWarehouseItemInput,
   type WarehouseItemAltUnit,
-  type WarehouseItemAttribute,
   type WarehouseItem,
   type WarehouseItemType,
 } from "../services/warehouse-items.service";
@@ -78,42 +79,16 @@ type AltUnitForm = {
   unit: string;
 };
 
-type AttributeForm = {
-  code: string;
-  name: string;
-  value: string;
-};
-
 type ItemForm = {
-  sku: string;
-  barcode: string;
   name: string;
-  type: WarehouseItemType;
   unit: string;
   altBarcodes: string;
   altUnits: AltUnitForm[];
-  attributes: AttributeForm[];
   isPerishable: boolean;
   nearExpiryDays: string;
   depth: string;
   width: string;
   height: string;
-};
-
-const defaultItemForm: ItemForm = {
-  altBarcodes: "",
-  altUnits: [],
-  attributes: [],
-  barcode: "",
-  depth: "",
-  height: "",
-  isPerishable: false,
-  name: "",
-  nearExpiryDays: "",
-  sku: "",
-  type: "MATERIAL",
-  unit: "cái",
-  width: "",
 };
 
 const productKeys = {
@@ -127,11 +102,6 @@ const productKeys = {
 
 function formatError(error: unknown) {
   return getApiErrorMessage(error) ?? "Không kết nối được WMS.";
-}
-
-function optionalText(value: string) {
-  const trimmed = value.trim();
-  return trimmed ? trimmed : undefined;
 }
 
 function splitList(value: string) {
@@ -179,26 +149,8 @@ function altUnitToForm(unit: WarehouseItemAltUnit): AltUnitForm | null {
   };
 }
 
-function attributeToForm(attribute: WarehouseItemAttribute): AttributeForm | null {
-  const name = stringValue(attribute.name).trim();
-  const value = stringValue(attribute.value).trim();
-  const code = stringValue(attribute.code).trim();
-
-  if (!name && !value && !code) {
-    return null;
-  }
-
-  return { code, name, value };
-}
-
 function normalizeAltUnits(units: WarehouseItemAltUnit[] | undefined) {
   return (units ?? []).map(altUnitToForm).filter(Boolean) as AltUnitForm[];
-}
-
-function normalizeAttributes(attributes: WarehouseItemAttribute[] | undefined) {
-  return (attributes ?? [])
-    .map(attributeToForm)
-    .filter(Boolean) as AttributeForm[];
 }
 
 function altUnitsToPayload(units: AltUnitForm[]): WarehouseItemAltUnit[] {
@@ -216,70 +168,31 @@ function altUnitsToPayload(units: AltUnitForm[]): WarehouseItemAltUnit[] {
   return payload;
 }
 
-function attributesToPayload(attributes: AttributeForm[]): WarehouseItemAttribute[] {
-  return attributes
-    .map((attribute) => ({
-      code: optionalText(attribute.code),
-      name: optionalText(attribute.name),
-      value: optionalText(attribute.value),
-    }))
-    .filter((attribute) =>
-      Boolean(attribute.code || attribute.name || attribute.value),
-    );
-}
-
 function itemToForm(item: WarehouseItem): ItemForm {
   return {
     altBarcodes: formatWarehouseItemListValue(item.altBarcodes),
     altUnits: normalizeAltUnits(item.altUnits),
-    attributes: normalizeAttributes(item.attributes),
-    barcode: item.barcode ?? "",
     depth: item.depth?.toString() ?? "",
     height: item.height?.toString() ?? "",
     isPerishable: item.isPerishable,
     name: item.name,
     nearExpiryDays: item.nearExpiryDays?.toString() ?? "",
-    sku: item.sku,
-    type: item.type,
     unit: item.unit,
     width: item.width?.toString() ?? "",
   };
 }
 
-function formToCreatePayload(form: ItemForm): CreateWarehouseItemInput {
+function formToUpdatePayload(form: ItemForm): UpdateWarehouseItemInput {
   return {
     altBarcodes: splitList(form.altBarcodes),
     altUnits: altUnitsToPayload(form.altUnits),
-    attributes: attributesToPayload(form.attributes),
-    barcode: optionalText(form.barcode),
     depth: optionalNumber(form.depth),
     height: optionalNumber(form.height),
     isPerishable: form.isPerishable,
     name: form.name.trim(),
     nearExpiryDays: optionalNumber(form.nearExpiryDays),
-    sku: form.sku.trim(),
-    type: form.type,
     unit: form.unit.trim(),
     width: optionalNumber(form.width),
-  };
-}
-
-function formToUpdatePayload(form: ItemForm): UpdateWarehouseItemInput {
-  const payload = formToCreatePayload(form);
-
-  return {
-    altBarcodes: payload.altBarcodes,
-    altUnits: payload.altUnits,
-    attributes: payload.attributes,
-    barcode: payload.barcode,
-    depth: payload.depth,
-    height: payload.height,
-    isPerishable: payload.isPerishable,
-    name: payload.name,
-    nearExpiryDays: payload.nearExpiryDays,
-    type: payload.type,
-    unit: payload.unit,
-    width: payload.width,
   };
 }
 
@@ -306,16 +219,18 @@ export function WarehouseItemsClient() {
   const user = useSessionUser();
   const queryClient = useQueryClient();
   const canManage = hasAnyRole(user?.roles, ["ADMIN", "MANAGER"]);
+  const canAdministerOptions = hasAnyRole(user?.roles, ["ADMIN"]);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<WarehouseItemType | "ALL">(
     "ALL",
   );
   const [activeFilter, setActiveFilter] = useState<boolean | "ALL">("ALL");
   const [page, setPage] = useState(1);
+  const [viewingItem, setViewingItem] = useState<WarehouseItem | null>(null);
   const [editingItem, setEditingItem] = useState<WarehouseItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<WarehouseItem | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [createForm, setCreateForm] = useState(defaultItemForm);
+
+  const [optionsDialogOpen, setOptionsDialogOpen] = useState(false);
 
   const itemsQuery = useQuery({
     queryFn: () =>
@@ -337,17 +252,6 @@ export function WarehouseItemsClient() {
   const items = useMemo(() => itemsQuery.data?.data ?? [], [itemsQuery.data]);
   const total = itemsQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-  const createMutation = useMutation({
-    mutationFn: () => createWarehouseItem(formToCreatePayload(createForm)),
-    onError: (error) => toast.error(formatError(error)),
-    onSuccess: () => {
-      setCreateForm(defaultItemForm);
-      setDialogOpen(false);
-      void queryClient.invalidateQueries({ queryKey: ["stock-items"] });
-      toast.success("Đã tạo mặt hàng");
-    },
-  });
 
   const updateMutation = useMutation({
     mutationFn: ({ form, itemId }: { form: ItemForm; itemId: string }) =>
@@ -375,11 +279,6 @@ export function WarehouseItemsClient() {
     setPage(1);
   }
 
-  function handleCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    createMutation.mutate();
-  }
-
   return (
     <div className="space-y-5">
       <PageHeader
@@ -388,188 +287,255 @@ export function WarehouseItemsClient() {
           <>
             <Button
               onClick={() =>
-                void queryClient.invalidateQueries({ queryKey: ["stock-items"] })
+                void queryClient.invalidateQueries({
+                  queryKey: ["stock-items"],
+                })
               }
               type="button"
               variant="outline"
             >
               {itemsQuery.isFetching ? (
-                <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
               ) : (
                 <RefreshCw data-icon="inline-start" />
               )}
               Làm mới
             </Button>
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button disabled={!canManage}>
-                  <Plus data-icon="inline-start" />
-                  Tạo mặt hàng
-                </Button>
-              </DialogTrigger>
-              <DialogContent size="2xl" className="max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Tạo mặt hàng kho</DialogTitle>
-                  <DialogDescription>
-                    Dùng để nhập hàng, cất hàng và xuất kho.
-                  </DialogDescription>
-                </DialogHeader>
-                <ItemFormFields
-                  busy={createMutation.isPending}
-                  canManage={canManage}
-                  form={createForm}
-                  submitLabel="Tạo mặt hàng"
-                  onChange={setCreateForm}
-                  onSubmit={handleCreate}
-                />
-              </DialogContent>
-            </Dialog>
           </>
         }
       />
 
-      {!canManage ? (
-        <PermissionNotice>
-          Bạn có thể xem danh sách mặt hàng. Quyền tạo và sửa dành cho
-          quản lý kho.
-        </PermissionNotice>
+      {canAdministerOptions ? (
+        <AttributeOptionsAdminDialog
+          open={optionsDialogOpen}
+          onOpenChange={setOptionsDialogOpen}
+        />
       ) : null}
 
-      {itemsQuery.error ? <ErrorBanner error={itemsQuery.error} /> : null}
+      <Tabs defaultValue="items">
+        <TabsList className="h-9 rounded-lg border bg-card p-1">
+          <TabsTrigger className="px-3" value="items">
+            <PackageSearch data-icon="inline-start" />
+            Mặt hàng
+          </TabsTrigger>
+          <TabsTrigger className="px-3" value="create-sku">
+            <Settings2 data-icon="inline-start" />
+            Tạo SKU
+          </TabsTrigger>
+        </TabsList>
 
-      <TablePanel
-        count={`${total} bản ghi · trang ${page}/${totalPages}`}
-        title={
-          <span className="flex items-center gap-2">
-            <PackageSearch className="size-4 text-primary" />
-            Mặt hàng kho
-          </span>
-        }
-      >
-        <form
-          className="grid gap-3 md:grid-cols-[1fr_180px_160px_auto]"
-          onSubmit={handleFilter}
-        >
-          <div className="space-y-2">
-            <Label htmlFor="product-search">Tìm kiếm</Label>
-            <Input
-              id="product-search"
-              placeholder="SKU, tên hoặc mã vạch"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </div>
-          <SelectFilter
-            label="Loại"
-            value={typeFilter}
-            onChange={(value) => setTypeFilter(value as WarehouseItemType | "ALL")}
-          >
-            <SelectItem value="ALL">Tất cả</SelectItem>
-            {WAREHOUSE_ITEM_TYPES.map((type) => (
-              <SelectItem key={type} value={type}>
-                {typeLabel(type)}
-              </SelectItem>
-            ))}
-          </SelectFilter>
-          <SelectFilter
-            label="Trạng thái"
-            value={String(activeFilter)}
-            onChange={(value) =>
-              setActiveFilter(value === "ALL" ? "ALL" : value === "true")
+        <TabsContent className="mt-4 space-y-4" value="items">
+          {!canManage ? (
+            <PermissionNotice>
+              Bạn có thể xem danh sách mặt hàng. Quyền tạo và sửa dành cho quản
+              lý kho.
+            </PermissionNotice>
+          ) : null}
+
+          {itemsQuery.error ? <ErrorBanner error={itemsQuery.error} /> : null}
+
+          <TablePanel
+            count={`${total} bản ghi · trang ${page}/${totalPages}`}
+            title={
+              <span className="flex items-center gap-2">
+                <PackageSearch className="size-4 text-primary" />
+                Mặt hàng kho
+              </span>
             }
           >
-            <SelectItem value="ALL">Tất cả</SelectItem>
-            <SelectItem value="true">Đang dùng</SelectItem>
-            <SelectItem value="false">Ngưng dùng</SelectItem>
-          </SelectFilter>
-          <Button className="self-end" type="submit">
-            <Search data-icon="inline-start" />
-            Lọc
-          </Button>
-        </form>
-
-          {itemsQuery.isLoading ? (
-            <TableSkeleton columns={6} />
-          ) : items.length === 0 ? (
-            <EmptyState title="Chưa có mặt hàng" />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Tên</TableHead>
-                  <TableHead>Loại</TableHead>
-                  <TableHead>Đơn vị</TableHead>
-                  <TableHead>Trạng thái</TableHead>
-                  <TableHead className="text-right">Thao tác</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((item) => (
-                  <TableRow key={item.id} className="focus-within:bg-primary/5">
-                    <TableCell className="font-mono font-semibold">
-                      {item.sku}
-                    </TableCell>
-                    <TableCell>{item.name}</TableCell>
-                    <TableCell>{typeLabel(item.type)}</TableCell>
-                    <TableCell>{item.unit}</TableCell>
-                    <TableCell>
-                      <StatusBadge tone={item.isActive ? "success" : "neutral"}>
-                        {item.isActive ? "Đang dùng" : "Ngưng dùng"}
-                      </StatusBadge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          disabled={!canManage}
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                          onClick={() => setEditingItem(item)}
-                        >
-                          <Pencil data-icon="inline-start" />
-                          Sửa
-                        </Button>
-                        <Button
-                          disabled={!canManage || !item.isActive}
-                          size="sm"
-                          type="button"
-                          variant="destructive"
-                          onClick={() => setDeletingItem(item)}
-                        >
-                          <Trash2 data-icon="inline-start" />
-                          Ngưng dùng
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+            <form
+              className="grid gap-3 md:grid-cols-[1fr_180px_160px_auto]"
+              onSubmit={handleFilter}
+            >
+              <div className="space-y-2">
+                <Label htmlFor="product-search">Tìm kiếm</Label>
+                <Input
+                  id="product-search"
+                  placeholder="SKU, tên hoặc mã vạch"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </div>
+              <SelectFilter
+                label="Loại"
+                value={typeFilter}
+                onChange={(value) =>
+                  setTypeFilter(value as WarehouseItemType | "ALL")
+                }
+              >
+                <SelectItem value="ALL">Tất cả</SelectItem>
+                {WAREHOUSE_ITEM_TYPES.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {typeLabel(type)}
+                  </SelectItem>
                 ))}
-              </TableBody>
-            </Table>
-          )}
+              </SelectFilter>
+              <SelectFilter
+                label="Trạng thái"
+                value={String(activeFilter)}
+                onChange={(value) =>
+                  setActiveFilter(value === "ALL" ? "ALL" : value === "true")
+                }
+              >
+                <SelectItem value="ALL">Tất cả</SelectItem>
+                <SelectItem value="true">Đang dùng</SelectItem>
+                <SelectItem value="false">Ngưng dùng</SelectItem>
+              </SelectFilter>
+              <Button className="self-end" type="submit">
+                <Search data-icon="inline-start" />
+                Lọc
+              </Button>
+            </form>
 
-        <div className="flex items-center justify-between gap-3">
-          <Button
-            disabled={page <= 1}
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-            type="button"
-            variant="outline"
-          >
-            Trang trước
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            {page}/{totalPages}
-          </span>
-          <Button
-            disabled={page >= totalPages}
-            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-            type="button"
-            variant="outline"
-          >
-            Trang sau
-          </Button>
-        </div>
-      </TablePanel>
+            {itemsQuery.isLoading ? (
+              <TableSkeleton columns={6} />
+            ) : items.length === 0 ? (
+              <EmptyState title="Chưa có mặt hàng" />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>SKU</TableHead>
+                    <TableHead>Tên</TableHead>
+                    <TableHead>Loại</TableHead>
+                    <TableHead>Đơn vị</TableHead>
+                    <TableHead>Trạng thái</TableHead>
+                    <TableHead className="text-right">Thao tác</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {items.map((item) => (
+                    <TableRow
+                      key={item.id}
+                      className="focus-within:bg-primary/5"
+                    >
+                      <TableCell className="font-mono font-semibold">
+                        {item.sku}
+                      </TableCell>
+                      <TableCell>{item.name}</TableCell>
+                      <TableCell>{typeLabel(item.type)}</TableCell>
+                      <TableCell>{item.unit}</TableCell>
+                      <TableCell>
+                        <StatusBadge
+                          tone={item.isActive ? "success" : "neutral"}
+                        >
+                          {item.isActive ? "Đang dùng" : "Ngưng dùng"}
+                        </StatusBadge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                            onClick={() => setViewingItem(item)}
+                          >
+                            <Eye data-icon="inline-start" />
+                            Xem chi tiết
+                          </Button>
+                          <Button
+                            disabled={!canManage}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                            onClick={() => setEditingItem(item)}
+                          >
+                            <Pencil data-icon="inline-start" />
+                            Sửa
+                          </Button>
+                          <Button
+                            disabled={!canManage || !item.isActive}
+                            size="sm"
+                            type="button"
+                            variant="destructive"
+                            onClick={() => setDeletingItem(item)}
+                          >
+                            <Trash2 data-icon="inline-start" />
+                            Ngưng dùng
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+
+            <div className="flex items-center justify-between gap-3">
+              <Button
+                disabled={page <= 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                type="button"
+                variant="outline"
+              >
+                Trang trước
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                {page}/{totalPages}
+              </span>
+              <Button
+                disabled={page >= totalPages}
+                onClick={() =>
+                  setPage((current) => Math.min(totalPages, current + 1))
+                }
+                type="button"
+                variant="outline"
+              >
+                Trang sau
+              </Button>
+            </div>
+          </TablePanel>
+        </TabsContent>
+
+        <TabsContent className="mt-4 space-y-4" value="create-sku">
+          {canAdministerOptions ? (
+            <div className="flex justify-end">
+              <Button
+                onClick={() => setOptionsDialogOpen(true)}
+                type="button"
+                variant="outline"
+              >
+                <Settings2 data-icon="inline-start" />
+                Giá trị SKU
+              </Button>
+            </div>
+          ) : null}
+          {!canManage ? (
+            <PermissionNotice>
+              Quyền tạo SKU dành cho quản lý kho.
+            </PermissionNotice>
+          ) : (
+            <CreateWarehouseItemPanel
+              canManage={canManage}
+              onCreated={() => {
+                void queryClient.invalidateQueries({
+                  queryKey: ["stock-items"],
+                });
+              }}
+            />
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {viewingItem ? (
+        <ItemDetailDialog
+          canManage={canManage}
+          item={viewingItem}
+          key={viewingItem.id}
+          onEdit={() => {
+            setViewingItem(null);
+            setEditingItem(viewingItem);
+          }}
+          onOpenChange={(open) => {
+            if (!open) {
+              setViewingItem(null);
+            }
+          }}
+        />
+      ) : null}
 
       {editingItem ? (
         <ItemEditDialog
@@ -636,7 +602,6 @@ function ItemFormFields({
   form,
   onChange,
   onSubmit,
-  skuReadOnly = false,
   submitLabel,
 }: {
   busy: boolean;
@@ -644,56 +609,21 @@ function ItemFormFields({
   form: ItemForm;
   onChange: (form: ItemForm) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  skuReadOnly?: boolean;
   submitLabel: string;
 }) {
   return (
     <form className="space-y-4" onSubmit={onSubmit}>
       <div className="grid gap-3 md:grid-cols-2">
         <TextField
-          id="item-sku"
-          label="SKU"
-          readOnly={skuReadOnly}
-          value={form.sku}
-          onChange={(sku) => onChange({ ...form, sku })}
-        />
-        <TextField
           id="item-name"
           label="Tên mặt hàng"
           value={form.name}
           onChange={(name) => onChange({ ...form, name })}
         />
-        <div className="space-y-2">
-          <Label>Loại</Label>
-          <Select
-            value={form.type}
-            onValueChange={(type) =>
-              onChange({ ...form, type: type as WarehouseItemType })
-            }
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {WAREHOUSE_ITEM_TYPES.map((type) => (
-                <SelectItem key={type} value={type}>
-                  {typeLabel(type)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
         <UnitSelectField
           label="Đơn vị"
           value={form.unit}
           onChange={(unit) => onChange({ ...form, unit })}
-        />
-        <TextField
-          id="item-barcode"
-          label="Mã vạch chính"
-          required={false}
-          value={form.barcode}
-          onChange={(barcode) => onChange({ ...form, barcode })}
         />
         <TextField
           id="item-alt-barcodes"
@@ -705,10 +635,6 @@ function ItemFormFields({
         <AltUnitsField
           value={form.altUnits}
           onChange={(altUnits) => onChange({ ...form, altUnits })}
-        />
-        <AttributesField
-          value={form.attributes}
-          onChange={(attributes) => onChange({ ...form, attributes })}
         />
       </div>
 
@@ -774,7 +700,6 @@ function ItemFormFields({
     </form>
   );
 }
-
 function TextField({
   id,
   label,
@@ -905,85 +830,116 @@ function AltUnitsField({
   );
 }
 
-function AttributesField({
-  onChange,
-  value,
+function ItemDetailDialog({
+  canManage,
+  item,
+  onEdit,
+  onOpenChange,
 }: {
-  onChange: (value: AttributeForm[]) => void;
-  value: AttributeForm[];
+  canManage: boolean;
+  item: WarehouseItem;
+  onEdit: () => void;
+  onOpenChange: (open: boolean) => void;
 }) {
-  function updateRow(index: number, next: AttributeForm) {
-    onChange(value.map((row, rowIndex) => (rowIndex === index ? next : row)));
-  }
+  const dimensions = [item.depth, item.width, item.height]
+    .map((value) => value ?? "-")
+    .join(" × ");
 
   return (
-    <div className="space-y-2 md:col-span-2">
-      <div className="flex items-center justify-between gap-3">
-        <Label>Thuộc tính</Label>
-        <Button
-          size="sm"
-          type="button"
-          variant="outline"
-          onClick={() => onChange([...value, { code: "", name: "", value: "" }])}
-        >
-          <Plus data-icon="inline-start" />
-          Thêm thuộc tính
-        </Button>
-      </div>
-      {value.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
-          Chưa có thuộc tính.
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {value.map((row, index) => (
-            <div
-              className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-2 md:grid-cols-[1fr_1fr_120px_auto]"
-              key={index}
-            >
-              <TextField
-                id={`item-attribute-name-${index}`}
-                label="Tên"
-                required={false}
-                value={row.name}
-                onChange={(name) => updateRow(index, { ...row, name })}
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent size="2xl" className="max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Chi tiết mặt hàng</DialogTitle>
+          <DialogDescription>{item.name}</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-5">
+          <section className="space-y-3" aria-labelledby="item-detail-title">
+            <h3 id="item-detail-title" className="text-sm font-semibold">
+              Mặt hàng
+            </h3>
+            <div className="grid gap-2 rounded-lg border bg-muted/20 p-3 text-sm sm:grid-cols-2">
+              <InfoRow label="Tên" value={item.name} />
+              <InfoRow label="Loại" value={typeLabel(item.type)} />
+              <InfoRow label="Đơn vị cơ sở" value={item.unit} />
+              <InfoRow
+                label="Mã vạch nội bộ"
+                value={item.barcode || "Chưa có"}
               />
-              <TextField
-                id={`item-attribute-value-${index}`}
-                label="Giá trị"
-                required={false}
-                value={row.value}
-                onChange={(attributeValue) =>
-                  updateRow(index, { ...row, value: attributeValue })
+              <InfoRow
+                label="Mức tồn tối thiểu"
+                value={item.minQuantity?.toString() ?? "Chưa đặt"}
+              />
+              <InfoRow label="Kích thước S × R × C" value={dimensions} />
+              <InfoRow
+                label="Hạn sử dụng"
+                value={
+                  item.isPerishable
+                    ? `Cảnh báo trước ${item.nearExpiryDays ?? 0} ngày`
+                    : "Không theo dõi"
                 }
               />
-              <TextField
-                id={`item-attribute-code-${index}`}
-                label="Mã"
-                required={false}
-                value={row.code}
-                onChange={(code) => updateRow(index, { ...row, code })}
-              />
-              <Button
-                className="self-end"
-                size="icon-sm"
-                type="button"
-                variant="destructive"
-                onClick={() =>
-                  onChange(value.filter((_, rowIndex) => rowIndex !== index))
-                }
-              >
-                <Trash2 />
-                <span className="sr-only">Xóa thuộc tính</span>
-              </Button>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted-foreground">Trạng thái</span>
+                <StatusBadge tone={item.isActive ? "success" : "neutral"}>
+                  {item.isActive ? "Đang dùng" : "Ngưng dùng"}
+                </StatusBadge>
+              </div>
             </div>
-          ))}
+          </section>
+
+          <section
+            className="space-y-3 border-t pt-4"
+            aria-labelledby="item-sku-title"
+          >
+            <h3 id="item-sku-title" className="text-sm font-semibold">
+              SKU được tạo
+            </h3>
+            <div className="rounded-lg border bg-muted/20 p-3">
+              <div className="break-all font-mono text-sm font-semibold">
+                {item.sku}
+              </div>
+              {item.attributes?.length ? (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {item.attributes.map((attribute, index) => (
+                    <div
+                      className="flex items-center justify-between gap-3 rounded-md bg-background px-3 py-2 text-sm"
+                      key={attribute.optionId ?? `${attribute.code}-${index}`}
+                    >
+                      <span className="text-muted-foreground">
+                        {attribute.name || attribute.key || "Thuộc tính"}
+                      </span>
+                      <span className="font-medium">
+                        {attribute.value || "-"}
+                        {attribute.code ? ` (${attribute.code})` : ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Chưa có thông tin thuộc tính SKU.
+                </p>
+              )}
+            </div>
+          </section>
         </div>
-      )}
-    </div>
+
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button type="button" variant="outline">
+              Đóng
+            </Button>
+          </DialogClose>
+          <Button disabled={!canManage} type="button" onClick={onEdit}>
+            <Pencil data-icon="inline-start" />
+            Sửa mặt hàng
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
-
 function ItemEditDialog({
   busy,
   canManage,
@@ -1005,41 +961,37 @@ function ItemEditDialog({
   }
 
   return (
-    <Dialog
-      open
-      onOpenChange={onOpenChange}
-    >
+    <Dialog open onOpenChange={onOpenChange}>
       <DialogContent size="2xl" className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{item.sku}</DialogTitle>
           <DialogDescription>{item.name}</DialogDescription>
         </DialogHeader>
-      <div className="space-y-5">
-        <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-3 text-sm">
-          <InfoRow label="Loại" value={typeLabel(item.type)} />
-          <InfoRow label="Đơn vị" value={item.unit} />
-          <InfoRow
-            label="Mã vạch chính"
-            value={item.barcode || "Chưa khai báo"}
-          />
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-muted-foreground">Trạng thái</span>
-            <StatusBadge tone={item.isActive ? "success" : "neutral"}>
-              {item.isActive ? "Đang dùng" : "Ngưng dùng"}
-            </StatusBadge>
+        <div className="space-y-5">
+          <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-3 text-sm">
+            <InfoRow label="Loại" value={typeLabel(item.type)} />
+            <InfoRow label="Đơn vị" value={item.unit} />
+            <InfoRow
+              label="Mã vạch chính"
+              value={item.barcode || "Chưa khai báo"}
+            />
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Trạng thái</span>
+              <StatusBadge tone={item.isActive ? "success" : "neutral"}>
+                {item.isActive ? "Đang dùng" : "Ngưng dùng"}
+              </StatusBadge>
+            </div>
           </div>
-        </div>
 
-        <ItemFormFields
-          busy={busy}
-          canManage={canManage}
-          form={form}
-          skuReadOnly
-          submitLabel="Lưu mặt hàng"
-          onChange={setForm}
-          onSubmit={handleSubmit}
-        />
-      </div>
+          <ItemFormFields
+            busy={busy}
+            canManage={canManage}
+            form={form}
+            submitLabel="Lưu mặt hàng"
+            onChange={setForm}
+            onSubmit={handleSubmit}
+          />
+        </div>
       </DialogContent>
     </Dialog>
   );

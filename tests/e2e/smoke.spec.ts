@@ -120,21 +120,30 @@ test("admin edits a product from row actions", async ({ page }) => {
   ).toBeVisible();
   await page
     .getByRole("row", { name: /CUP-500ML-RED/i })
-    .getByRole("button", { name: /^Sửa$/i })
+    .getByRole("button", { name: /^Xem chi tiết$/i })
     .click();
+  const detailDialog = page.getByRole("dialog", {
+    name: /Chi tiết mặt hàng/i,
+  });
+  await expect(detailDialog).toBeVisible();
+  await expect(detailDialog.getByText("SKU được tạo")).toBeVisible();
+  await expect(detailDialog.getByText("CUP-500ML-RED")).toBeVisible();
+  await expect(detailDialog.getByText(/EAN-13/i)).toHaveCount(0);
+  await detailDialog.getByRole("button", { name: /^Sửa mặt hàng$/i }).click();
   await expect(
     page.getByRole("dialog", { name: /CUP-500ML-RED/i }),
   ).toBeVisible();
   await expect(page.getByText(/unit:/i)).toHaveCount(0);
   await expect(page.getByText(/factor:/i)).toHaveCount(0);
   await expect(page.getByLabel("Hệ số")).toHaveValue("24");
-  await expect(page.getByLabel("Tên", { exact: true })).toHaveValue("Màu");
-  await expect(page.getByLabel("Giá trị")).toHaveValue("Đỏ");
   await page.getByLabel("Tên mặt hàng").fill("Ly nhựa 500ml đỏ");
   await page.getByRole("button", { name: /^Lưu mặt hàng$/i }).click();
   await expect(page.getByText(/Đã cập nhật mặt hàng/i)).toBeVisible();
   expect(patchBody).toMatchObject({ name: "Ly nhựa 500ml đỏ" });
-  expect(patchBody).not.toMatchObject({ sku: "CUP-500ML-RED" });
+  expect(patchBody).not.toHaveProperty("attributes");
+  expect(patchBody).not.toHaveProperty("barcode");
+  expect(patchBody).not.toHaveProperty("sku");
+  expect(patchBody).not.toHaveProperty("type");
 
   await page
     .getByRole("row", { name: /CUP-500ML-RED/i })
@@ -148,6 +157,169 @@ test("admin edits a product from row actions", async ({ page }) => {
   expect(deleteCalled).toBe(true);
 });
 
+test("manager creates a template-driven warehouse item", async ({ page }) => {
+  await page.setViewportSize({ height: 900, width: 1280 });
+  await seedWmsSession(page, ["MANAGER"], "Manager User");
+  const optionByKey = {
+    CAPACITY: {
+      code: "500",
+      id: "66a100000000000000000003",
+      key: "CAPACITY",
+      name: "500 ml",
+    },
+    COLOR: {
+      code: "CLR",
+      id: "66a100000000000000000004",
+      key: "COLOR",
+      name: "Trong suốt",
+    },
+    CUP_STYLE: {
+      code: "HRT",
+      id: "66a100000000000000000001",
+      key: "CUP_STYLE",
+      name: "Ly nắp tim",
+    },
+    MATERIAL: {
+      code: "PET",
+      id: "66a100000000000000000002",
+      key: "MATERIAL",
+      name: "Nhựa PET",
+    },
+  } as const;
+  let createBody: Record<string, unknown> | undefined;
+
+  await page.route(
+    "**/api/wms/stock/item-types/CUP_BLANK/sku-template**",
+    async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            fields: [
+              { key: "CUP_STYLE" },
+              { key: "MATERIAL" },
+              { key: "CAPACITY" },
+              { key: "COLOR" },
+            ],
+            itemType: "CUP_BLANK",
+            kind: "template",
+            prefix: "CUP",
+            templateId: "CUP_BLANK",
+          },
+          meta: { requestId: "template" },
+        }),
+      });
+    },
+  );
+  await page.route("**/api/wms/stock/attribute-options**", async (route) => {
+    const key = new URL(route.request().url()).searchParams.get(
+      "key",
+    ) as keyof typeof optionByKey;
+    const option = optionByKey[key];
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: [{ ...option, isActive: true, sortOrder: 1 }],
+        meta: { requestId: `options-${key}` },
+      }),
+    });
+  });
+  await page.route("**/api/wms/stock/items**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname.endsWith("/sku-preview")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: { sku: "CUP-HRT-PET-500-CLR" },
+          meta: { requestId: "preview" },
+        }),
+      });
+      return;
+    }
+    if (request.method() === "POST") {
+      createBody = request.postDataJSON();
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            ...createBody,
+            attributes: [],
+            barcode: "2000000000015",
+            createdAt: "2026-07-23T00:00:00.000Z",
+            id: "item-new",
+            isActive: true,
+            sku: "CUP-HRT-PET-500-CLR",
+            updatedAt: "2026-07-23T00:00:00.000Z",
+          },
+          meta: { requestId: "create" },
+        }),
+      });
+      return;
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ data: [], meta: { requestId: "list" } }),
+    });
+  });
+
+  await page.goto("/products");
+  await page.getByRole("tab", { name: /^Tạo SKU$/i }).click();
+  const skuPanel = page.getByRole("tabpanel", { name: /^Tạo SKU$/i });
+  await expect(skuPanel).toBeVisible();
+
+  const skuFieldBoxes = await Promise.all(
+    ["Kiểu ly", "Chất liệu", "Dung tích", "Màu sắc"].map((label) =>
+      skuPanel.getByRole("combobox", { name: label }).boundingBox(),
+    ),
+  );
+  const skuFieldTopPositions = skuFieldBoxes.map((box) => box?.y ?? -1);
+  expect(
+    Math.max(...skuFieldTopPositions) - Math.min(...skuFieldTopPositions),
+  ).toBeLessThan(4);
+
+  await page.setViewportSize({ height: 844, width: 390 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await skuPanel.getByLabel("Tên nội bộ").fill("Ly nắp tim PET 500ml");
+
+  for (const [label, optionName] of [
+    ["Kiểu ly", "Ly nắp tim (HRT)"],
+    ["Chất liệu", "Nhựa PET (PET)"],
+    ["Dung tích", "500 ml (500)"],
+    ["Màu sắc", "Trong suốt (CLR)"],
+  ]) {
+    await skuPanel.getByRole("combobox", { name: label }).click();
+    await page.getByRole("option", { name: optionName }).click();
+  }
+
+  await expect(skuPanel.getByText("CUP-HRT-PET-500-CLR")).toBeVisible();
+  await expect(skuPanel.getByText("Đã xác nhận cấu hình")).toBeVisible();
+  await skuPanel.getByRole("button", { name: /^Tạo mặt hàng$/i }).click();
+
+  await expect(
+    skuPanel.getByRole("heading", { name: /Đã tạo mặt hàng/i }),
+  ).toBeVisible();
+  await expect(skuPanel.getByText("2000000000015")).toBeVisible();
+  expect(createBody).toMatchObject({
+    attributeOptionIds: [
+      optionByKey.CUP_STYLE.id,
+      optionByKey.MATERIAL.id,
+      optionByKey.CAPACITY.id,
+      optionByKey.COLOR.id,
+    ],
+    name: "Ly nắp tim PET 500ml",
+    templateId: "CUP_BLANK",
+    type: "CUP_BLANK",
+    unit: "cái",
+  });
+  expect(createBody).not.toHaveProperty("sku");
+  expect(createBody).not.toHaveProperty("barcode");
+  expect(createBody).not.toHaveProperty("attributes");
+});
 test("receiver gets inbound navigation and forbidden settings", async ({
   page,
 }) => {
