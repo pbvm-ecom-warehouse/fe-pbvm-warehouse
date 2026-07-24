@@ -365,7 +365,7 @@ export function SuppliersClient() {
                     setStatusFilter(value as SupplierStatus | "ALL");
                   }}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger className="h-9 w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -378,7 +378,7 @@ export function SuppliersClient() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button className="self-end" type="submit">
+              <Button className="self-end" size="lg" type="submit">
                 <Search data-icon="inline-start" />
                 Lọc
               </Button>

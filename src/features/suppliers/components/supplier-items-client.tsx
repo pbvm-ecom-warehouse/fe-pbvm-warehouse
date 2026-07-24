@@ -1,8 +1,10 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowLeft,
   LoaderCircle,
   Pencil,
   Plus,
@@ -146,7 +148,7 @@ export function SupplierItemsClient() {
 
   const suppliersQuery = useQuery({
     enabled: canManage,
-    queryFn: () => listSuppliers({ limit: 200, page: 1, status: "ACTIVE" }),
+    queryFn: () => listSuppliers({ limit: 100, page: 1, status: "ACTIVE" }),
     queryKey: ["suppliers", "list", "combobox"],
   });
   const suppliers = useMemo(
@@ -234,7 +236,17 @@ export function SupplierItemsClient() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Gán mặt hàng NCC" />
+      <PageHeader
+        title="Gán mặt hàng NCC"
+        actions={
+          <Button asChild variant="outline">
+            <Link href="/suppliers">
+              <ArrowLeft data-icon="inline-start" />
+              Quay lại
+            </Link>
+          </Button>
+        }
+      />
 
       {!canManage ? (
         <PermissionNotice>
