@@ -59,8 +59,6 @@ export const ROUTE_ACCESS_BY_HREF = {
   "/dashboard": ALL_STAFF_ROLES,
   "/locations": ["MANAGER"],
   "/products": ["ADMIN", "MANAGER", "PRINTER"],
-  "/warehouse-navigation": ["ADMIN", "MANAGER", "RECEIVER", "PICKER"],
-  "/purchases": ["ADMIN", "MANAGER", "RECEIVER"],
   "/purchase-orders": ["ADMIN", "MANAGER"],
   "/goods-receipt-notes": ["ADMIN", "MANAGER", "RECEIVER"],
   "/goods-issues": ["ADMIN", "MANAGER", "PICKER"],

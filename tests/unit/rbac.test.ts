@@ -36,7 +36,6 @@ describe("WMS RBAC helpers", () => {
   });
 
   it("unions permissions for multi-role users", () => {
-    expect(hasRouteAccess("/purchases", ["RECEIVER", "PICKER"])).toBe(true);
     expect(hasRouteAccess("/goods-returns", ["RECEIVER", "PICKER"])).toBe(true);
     expect(hasRouteAccess("/goods-issues", ["RECEIVER", "PICKER"])).toBe(true);
     expect(hasRouteAccess("/transfers", ["RECEIVER", "PICKER"])).toBe(false);
@@ -57,16 +56,13 @@ describe("WMS RBAC helpers", () => {
     expect(receiverRoutes).toContain("/goods-receipt-notes");
     expect(receiverRoutes).not.toContain("/suppliers");
     expect(receiverRoutes).toContain("/goods-returns");
-    expect(receiverRoutes).not.toContain("/warehouse-navigation");
     expect(receiverRoutes).not.toContain("/transfers");
     expect(receiverRoutes).not.toContain("/settings");
     expect(receiverRoutes).not.toContain("/staff");
     expect(printerRoutes).not.toContain("/staff");
     expect(printerRoutes).not.toContain("/transfers");
     expect(printerRoutes).toContain("/print-jobs");
-    expect(printerRoutes).not.toContain("/purchases");
     expect(shipperRoutes).toContain("/shipping");
-    expect(shipperRoutes).not.toContain("/purchases");
     expect(shipperRoutes).not.toContain("/print-jobs");
   });
 
@@ -92,11 +88,11 @@ describe("WMS RBAC helpers", () => {
 
   it("aligns exposed supplier and purchase APIs with backend roles", () => {
     expect(hasRouteAccess("/suppliers", ["RECEIVER"])).toBe(false);
-    expect(hasRouteAccess("/purchases", ["RECEIVER"])).toBe(true);
+    expect(hasRouteAccess("/purchase-orders", ["RECEIVER"])).toBe(false);
     expect(hasRouteAccess("/goods-receipt-notes", ["RECEIVER"])).toBe(true);
     expect(hasRouteAccess("/goods-returns", ["RECEIVER"])).toBe(true);
     expect(hasRouteAccess("/suppliers", ["MANAGER"])).toBe(true);
-    expect(hasRouteAccess("/purchases", ["MANAGER"])).toBe(true);
+    expect(hasRouteAccess("/purchase-orders", ["MANAGER"])).toBe(true);
     expect(hasRouteAccess("/goods-receipt-notes", ["MANAGER"])).toBe(true);
     expect(hasRouteAccess("/goods-returns", ["MANAGER"])).toBe(true);
     expect(hasRouteAccess("/staff", ["ADMIN"])).toBe(true);
@@ -151,6 +147,3 @@ describe("WMS session normalization", () => {
     ).toBeNull();
   });
 });
-
-
-

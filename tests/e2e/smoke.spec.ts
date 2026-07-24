@@ -476,16 +476,14 @@ test("manager opens purchases when purchase order items are missing", async ({
     });
   });
 
-  await page.goto("/purchases");
+  await page.goto("/purchase-orders");
 
   await expect(
-    page.getByRole("heading", { name: /^Nhập hàng$/i }),
+    page.getByRole("heading", { name: /^Mua hàng$/i }),
   ).toBeVisible();
   await expect(
     page.getByRole("cell", { name: "PO-20260713-0002", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Đơn mua" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Phiếu nhập" })).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Chi tiết đơn mua" }),
   ).toHaveCount(0);
@@ -804,7 +802,7 @@ test("printer can use print jobs but not purchases", async ({ page }) => {
     shelfCode: "A1-S03",
   });
 
-  await page.goto("/purchases");
+  await page.goto("/purchase-orders");
   await expect(
     page.getByRole("heading", { name: /Không có quyền truy cập/i }),
   ).toBeVisible();
@@ -924,84 +922,6 @@ test("manager manages the single-warehouse location structure", async ({
   await expect(page.getByText("Kệ A1")).toBeVisible();
   await expect(page.getByText("A1-S01")).toBeVisible();
   expect(legacyWarehouseCalled).toBe(false);
-});
-
-test("receiver confirms put-away task through warehouse navigation", async ({
-  page,
-}) => {
-  await seedWmsSession(page, ["RECEIVER"], "Receiver User");
-  const putawayTask = {
-    grnId: "grn-1",
-    id: "task-1",
-    items: [
-      {
-        itemId: "item-1",
-        lotId: "lot-1",
-        lotNumber: "LOT-A",
-        quantity: 80,
-        remainingQty: 80,
-        sku: "CUP-BLANK-500",
-        unit: "cái",
-      },
-    ],
-    status: "PENDING",
-  };
-
-  await page.route("**/api/wms/putaway-tasks**", async (route) => {
-    const url = route.request().url();
-    const method = route.request().method();
-    if (method === "POST") {
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({
-          data: { ...putawayTask, status: "COMPLETED" },
-          meta: { requestId: "putaway-confirm" },
-        }),
-      });
-      return;
-    }
-    if (url.includes("/putaway-tasks/task-1")) {
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({
-          data: putawayTask,
-          meta: { requestId: "putaway-detail" },
-        }),
-      });
-      return;
-    }
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: [putawayTask],
-        meta: { requestId: "putaway-list" },
-      }),
-    });
-  });
-
-  await page.route("**/api/wms/putaway/suggestions**", async (route) => {
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: {
-          suggestions: [{ capacity: 132, shelfCode: "A1-S02" }],
-          warning: null,
-        },
-        meta: { requestId: "e2e-putaway" },
-      }),
-    });
-  });
-
-  await page.goto("/warehouse-navigation");
-  await expect(page.getByRole("heading", { name: "Cất hàng" })).toBeVisible();
-  await page.getByRole("row", { name: /CUP-BLANK-500/i }).click();
-  await expect(page.getByText("A1-S02").first()).toBeVisible();
-  await page.getByRole("button", { name: /A1-S02/i }).click();
-  await expect(page.getByLabel("Mã vị trí")).toHaveValue("A1-S02");
-  await expect(page.getByLabel("Mã vạch mặt hàng")).toHaveValue("");
-  await page.getByLabel("Mã vạch mặt hàng").fill("2000000000015");
-  await page.getByRole("button", { name: /^Xác nhận$/i }).click();
-  await expect(page.getByText(/Đã xác nhận dòng cất hàng/i)).toBeVisible();
 });
 
 test("picker sees picking location and confirms goods issue line", async ({
