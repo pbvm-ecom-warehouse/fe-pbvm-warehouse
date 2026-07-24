@@ -630,6 +630,34 @@ test("admin edits and removes supplier items from row actions", async ({
     });
   });
 
+  await page.route("**/api/wms/supplier/sup-1", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: supplier,
+        meta: { requestId: "supplier-detail" },
+      }),
+    });
+  });
+  await page.route("**/api/wms/stock/items/item-1", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: {
+          createdAt: "2026-07-01T00:00:00.000Z",
+          id: "item-1",
+          isActive: true,
+          isPerishable: false,
+          name: "Ly nhựa 500 ml",
+          sku: "SKU-001",
+          type: "CUP_BLANK",
+          unit: "cái",
+          updatedAt: "2026-07-01T00:00:00.000Z",
+        },
+        meta: { requestId: "warehouse-item-detail" },
+      }),
+    });
+  });
   await page.goto("/suppliers");
   await page
     .getByRole("row", { name: /NCC-002/i })

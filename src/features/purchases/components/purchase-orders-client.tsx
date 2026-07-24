@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { FormEvent, type ReactNode, useMemo, useState } from "react";
 import {
   useMutation,
   useQueries,
@@ -8,8 +8,6 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import {
-  Check,
-  ChevronsUpDown,
   Eye,
   ClipboardCheck,
   LoaderCircle,
@@ -25,14 +23,6 @@ import { toast } from "sonner";
 import { EvidenceImagePicker } from "@/components/evidence-images";
 
 import { Button } from "@/components/ui/button";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
 import {
   Card,
   CardContent,
@@ -67,11 +57,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+
 import {
   PageHeader,
   PermissionNotice,
@@ -91,9 +77,9 @@ import {
   listWarehouses,
   type WarehouseStructureWarehouse,
 } from "@/features/warehouse-structure/services/warehouse-structure.service";
+import { WarehouseItemCombobox } from "@/features/products/components/warehouse-item-combobox";
 import {
   getWarehouseItem,
-  listWarehouseItems,
   type WarehouseItem,
 } from "@/features/products/services/warehouse-items.service";
 
@@ -182,16 +168,6 @@ function parsePositiveNumber(value: string, fallback: number) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-function useDebouncedValue(value: string, delay: number) {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => setDebouncedValue(value), delay);
-    return () => window.clearTimeout(timeoutId);
-  }, [delay, value]);
-
-  return debouncedValue;
-}
 function formatDate(value?: string | null) {
   if (!value) {
     return "Chưa có";
@@ -558,10 +534,7 @@ export function PurchaseOrdersClient() {
             variant="outline"
           >
             {purchaseOrdersQuery.isFetching ? (
-              <LoaderCircle
-                className="animate-spin"
-                data-icon="inline-start"
-              />
+              <LoaderCircle className="animate-spin" data-icon="inline-start" />
             ) : (
               <RefreshCw data-icon="inline-start" />
             )}
@@ -606,10 +579,7 @@ export function PurchaseOrdersClient() {
                     </CardDescription>
                   </div>
                   {canUsePurchaseOrderApi ? (
-                    <Button
-                      onClick={() => setDialogOpen(true)}
-                      type="button"
-                    >
+                    <Button onClick={() => setDialogOpen(true)} type="button">
                       <Plus data-icon="inline-start" />
                       Tạo đơn mua
                     </Button>
@@ -1220,117 +1190,6 @@ function PurchaseOrderItemFields({
         </Button>
       </div>
     </div>
-  );
-}
-
-function WarehouseItemCombobox({
-  id,
-  label,
-  onSelect,
-  selectedItemId,
-  selectedSku,
-}: {
-  id: string;
-  label: string;
-  onSelect: (item: WarehouseItem) => void;
-  selectedItemId: string;
-  selectedSku: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const debouncedSearch = useDebouncedValue(search.trim(), 300);
-  const itemsQuery = useQuery({
-    enabled: open,
-    queryFn: () =>
-      listWarehouseItems({
-        isActive: true,
-        limit: 100,
-        page: 1,
-        search: debouncedSearch,
-      }),
-    queryKey: ["purchase-orders", "stock-items", debouncedSearch],
-  });
-  const items = itemsQuery.data?.data ?? [];
-  const selectedItem = items.find((item) => item.id === selectedItemId);
-
-  return (
-    <Popover
-      open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
-        if (!nextOpen) setSearch("");
-      }}
-    >
-      <PopoverTrigger asChild>
-        <Button
-          aria-label={label}
-          className="w-full justify-between bg-background font-normal"
-          id={id}
-          role="combobox"
-          type="button"
-          variant="outline"
-        >
-          <span className="min-w-0 truncate text-left">
-            {selectedItem
-              ? `${selectedItem.sku} - ${selectedItem.name}`
-              : selectedSku || "Chọn mặt hàng"}
-          </span>
-          <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-60" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        collisionPadding={12}
-        side="bottom"
-        className="w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)] p-0"
-      >
-        <Command shouldFilter={false}>
-          <CommandInput
-            placeholder="Tìm SKU hoặc tên mặt hàng"
-            value={search}
-            onValueChange={setSearch}
-          />
-          <CommandList className="max-h-64 overflow-y-auto">
-            {itemsQuery.isFetching ? (
-              <div className="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground">
-                <LoaderCircle className="size-4 animate-spin" />
-                Đang tìm mặt hàng...
-              </div>
-            ) : null}
-            <CommandEmpty>Không có mặt hàng phù hợp.</CommandEmpty>
-            <CommandGroup>
-              {items.map((item) => (
-                <CommandItem
-                  key={item.id}
-                  value={item.id}
-                  onSelect={() => {
-                    onSelect(item);
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      "size-4",
-                      selectedItemId === item.id ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                  <span className="min-w-0 flex-1 truncate">
-                    <span className="font-mono font-medium">{item.sku}</span>
-                    <span className="text-muted-foreground">
-                      {" "}
-                      - {item.name}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {item.unit}
-                  </span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
   );
 }
 

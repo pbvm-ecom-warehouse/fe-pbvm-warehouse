@@ -25,6 +25,22 @@ export type Supplier = {
   updatedAt: string;
 };
 
+const SUPPLIER_OPTIONAL_TEXT_FIELDS = [
+  "contactName",
+  "phone",
+  "email",
+  "address",
+  "taxCode",
+  "note",
+] as const satisfies ReadonlyArray<keyof Supplier>;
+
+type SupplierWire = Omit<
+  Supplier,
+  (typeof SUPPLIER_OPTIONAL_TEXT_FIELDS)[number]
+> &
+  Partial<
+    Record<(typeof SUPPLIER_OPTIONAL_TEXT_FIELDS)[number], string | null>
+  >;
 export type SupplierItem = {
   id: string;
   itemId: string;
@@ -93,6 +109,18 @@ function toOptionalString(value: string | undefined) {
   return trimmed ? trimmed : undefined;
 }
 
+function normalizeSupplier(supplier: SupplierWire): Supplier {
+  const normalized = { ...supplier } as Supplier;
+
+  for (const field of SUPPLIER_OPTIONAL_TEXT_FIELDS) {
+    const value = supplier[field];
+    normalized[field] =
+      typeof value === "string" && value.trim() ? value.trim() : undefined;
+  }
+
+  return normalized;
+}
+
 function toSupplierListResult(
   payload: SupplierListEnvelope | SupplierListPayload | Supplier[],
 ): SupplierListResult {
@@ -100,7 +128,7 @@ function toSupplierListResult(
 
   if (Array.isArray(data)) {
     return {
-      data,
+      data: data.map((supplier) => normalizeSupplier(supplier as SupplierWire)),
       limit: data.length,
       page: 1,
       total: data.length,
@@ -108,7 +136,9 @@ function toSupplierListResult(
   }
 
   return {
-    data: data.data,
+    data: data.data.map((supplier) =>
+      normalizeSupplier(supplier as SupplierWire),
+    ),
     limit: data.limit,
     page: data.page,
     total: data.total,
@@ -143,13 +173,21 @@ export async function listSuppliers(input: QuerySuppliersInput = {}) {
   return toSupplierListResult(response.data);
 }
 
+export async function getSupplier(supplierId: string) {
+  const response = await apiClient.get<
+    ApiEnvelope<SupplierWire> | SupplierWire
+  >(`/supplier/${encodeURIComponent(supplierId)}`);
+
+  return normalizeSupplier(unwrapApiData(response.data));
+}
+
 export async function createSupplier(input: CreateSupplierInput) {
   const response = await apiClient.post<ApiEnvelope<Supplier> | Supplier>(
     "/supplier",
     input,
   );
 
-  return unwrapApiData(response.data);
+  return normalizeSupplier(unwrapApiData(response.data) as SupplierWire);
 }
 
 export async function updateSupplier(
@@ -161,7 +199,7 @@ export async function updateSupplier(
     input,
   );
 
-  return unwrapApiData(response.data);
+  return normalizeSupplier(unwrapApiData(response.data) as SupplierWire);
 }
 
 export async function changeSupplierStatus(
@@ -173,7 +211,7 @@ export async function changeSupplierStatus(
     { status },
   );
 
-  return unwrapApiData(response.data);
+  return normalizeSupplier(unwrapApiData(response.data) as SupplierWire);
 }
 
 export async function deleteSupplier(supplierId: string) {
