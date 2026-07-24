@@ -209,3 +209,29 @@
   - GRN row actions are state-aware: `Xác nhận` only for `DRAFT`, `Duyệt` only for `CONFIRMED`; completed actions disappear instead of remaining as disabled clutter.
   - PO responses missing the runtime `items` field remain tolerated so a partial BE list response cannot crash the purchases page.
   - Verification passed: `pnpm lint`, `pnpm typecheck`, `pnpm test` (`128/128`), full `pnpm test:e2e` (`18/18`), `pnpm build`, and `git diff --check`.
+- 2026-07-24: Putaway UI refactoring and SKU/lot ObjectId resolution compact:
+  - Putaway page `/warehouse-navigation` restructured to match the user's expected workflow: phiếu nhập đã duyệt → dòng hàng → gợi ý vị trí cất.
+  - Removed `Mã phiếu` (putaway task ObjectId) column from `PutawayTaskTable`; the first column is now `Mã phiếu nhập` displaying the resolved GRN number (`GRN-20260723-0001`) instead of a raw MongoDB ObjectId.
+  - Removed `Kho` column from both `PutawayTaskTable` and `PutawayTaskDetail` because WMS v1 operates a single warehouse.
+  - The `Vị trí cất hàng` sidebar and `Xác nhận cất hàng` card are conditionally rendered: hidden when no item is selected, displayed when a detail item is clicked. The grid layout adapts from single-column to two-column dynamically via `cn()`.
+  - `PutawayTaskDetail` now shows a guidance line: *"Nhấp vào một dòng hàng để xem gợi ý vị trí cất"*. Selected item row has `border-l-4 border-l-primary` highlight.
+  - SKU and Lot Number resolution from ObjectId:
+    - Added `isMongoObjectId()` helper to detect 24-char hex strings.
+    - Added `resolveItemSku(item, grn, warehouseItemMap)` with fallback chain: `item.sku` → GRN item SKU → warehouse item SKU/name → formatted suffix `SKU-<last6>`.
+    - Added `resolveItemLot(item, grn)` with fallback chain: `item.lotNumber` → GRN item lotNumber → `item.lotId` (if not ObjectId) → `"Chưa khai"`.
+    - New queries: `grnsQuery` (maps `grnId` → `GoodsReceiptNote` object), `warehouseItemsQuery` (maps `itemId` → `{ name, sku }`).
+    - `effectiveSku` computed from `resolveItemSku()` and used for `suggestionsQuery` instead of raw `item.sku`.
+  - `PutawayTask` type updated with optional `grnNumber?: string` field in `putaway-task.service.ts`.
+  - Attribute options admin (`attribute-options-admin-dialog.tsx`) updated with `keysByType` to display correct template attribute keys per item type; category keys (`MATERIAL_CATEGORY`, `PACKAGING_CATEGORY`) show "Danh mục hệ thống" notice instead of the add-value form.
+  - Git workflow: two feature branches merged into `main` with `--no-ff`, never force-push:
+    - `feat/putaway-ui-refine-and-sku-attribute-keys` (commit `519bded`, merge `13e7361`).
+    - `fix/putaway-resolve-sku-and-lot-objectid` (commit `d638965`, merge `3fb81c1`).
+  - Verification passed: `pnpm typecheck` (0 errors), `pnpm test` (`128/128`).
+- 2026-07-24: Purchase supplier-item filtering, layout, auto-fill, and TypeError fixes compact:
+  - Fixed FE API integration: When selecting a supplier, the item list is dynamically loaded via `listSupplierItemsBySupplier(supplierId)` showing only supplier-associated active items.
+  - Form UI Layout: Moved "Expected Date" (`Ngày dự kiến`) up to be inline (same row) with "Supplier" (`Nhà cung cấp`).
+  - Line-item autofill: Selecting an item auto-populates SKU, Unit (from warehouse details), Unit Price (from supplier's quote), and Quantity (falls back to supplier's MOQ or 1).
+  - Column spans layout: Reduced "Mặt hàng" grid span from 4 to 3 and expanded "SKU" span from 2 to 3 to display long SKU codes fully without truncation.
+  - Fixed TypeError in `receivingPurchaseOrders` query where mapping crashed when `po.items` was undefined.
+  - Git workflow: Committed changes on `fix/issue-28-packaging-sku-template`, pushed, and merged into `main` with `--no-ff` without `-f`.
+  - Verification passed: unit tests (`10/10` tests passed) and updated E2E smoke tests.
