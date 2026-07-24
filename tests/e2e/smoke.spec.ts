@@ -400,31 +400,49 @@ test("manager opens purchases when purchase order items are missing", async ({
       }),
     });
   });
+  await page.route(
+    "**/api/wms/supplier/items/by-supplier/supplier-1",
+    async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: [
+            {
+              id: "supplier-item-1",
+              isActive: true,
+              itemId: "item-1",
+              minOrderQty: 12,
+              purchasePrice: 1500,
+              supplierId: "supplier-1",
+            },
+          ],
+        }),
+      });
+    },
+  );
   await page.route("**/api/wms/stock/items**", async (route) => {
+    const item = {
+      altBarcodes: [],
+      altUnits: [],
+      attributes: [],
+      barcode: "8938501234567",
+      createdAt: "2026-07-01T00:00:00.000Z",
+      id: "item-1",
+      isActive: true,
+      isPerishable: false,
+      name: "Ly nhựa 500ml",
+      sku: "CUP-500ML-RED",
+      type: "CUP_BLANK",
+      unit: "cái",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+    };
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify({
-        data: [
-          {
-            altBarcodes: [],
-            altUnits: [],
-            attributes: [],
-            barcode: "8938501234567",
-            createdAt: "2026-07-01T00:00:00.000Z",
-            id: "item-1",
-            isActive: true,
-            isPerishable: false,
-            name: "Ly nhựa 500ml",
-            sku: "CUP-500ML-RED",
-            type: "CUP_BLANK",
-            unit: "cái",
-            updatedAt: "2026-07-01T00:00:00.000Z",
-          },
-        ],
-        limit: 200,
-        page: 1,
-        total: 1,
-      }),
+      body: JSON.stringify(
+        route.request().url().endsWith("/item-1")
+          ? { data: item }
+          : { data: [item], limit: 200, page: 1, total: 1 },
+      ),
     });
   });
   await page.route("**/api/wms/purchase-orders**", async (route) => {
@@ -504,7 +522,9 @@ test("manager opens purchases when purchase order items are missing", async ({
       (element) => element.scrollWidth <= element.clientWidth,
     ),
   ).toBe(true);
-  const supplierSelect = dialog.getByRole("combobox").nth(0);
+  const supplierSelect = dialog.getByRole("combobox", {
+    name: "Nhà cung cấp",
+  });
   const supplierTriggerBox = await supplierSelect.boundingBox();
   await supplierSelect.click();
   const supplierOptionsBox = await page
@@ -516,16 +536,11 @@ test("manager opens purchases when purchase order items are missing", async ({
     supplierTriggerBox!.y + supplierTriggerBox!.height - 1,
   );
   await page
-    .getByText(/NCC-001/i)
-    .last()
-    .click();
-  await dialog.getByRole("combobox").nth(1).click();
-  await page
-    .getByText(/^Kho A$/i)
+    .getByText(/Công ty TNHH ABCD/i)
     .last()
     .click();
   await dialog.getByRole("combobox", { name: /Mặt hàng dòng 1/i }).click();
-  await page.getByText(/CUP-500ML-RED/i).click();
+  await page.getByText(/Ly nhựa 500ml/i).click();
   await dialog.getByLabel(/Số lượng dòng 1/i).fill("12");
   await dialog.getByLabel(/Đơn giá dòng 1/i).fill("1500");
   await dialog.getByRole("button", { name: /^Tạo đơn mua$/i }).click();

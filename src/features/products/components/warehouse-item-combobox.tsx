@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronsUpDown, LoaderCircle, RefreshCw } from "lucide-react";
 
@@ -39,17 +39,25 @@ function useDebouncedValue(value: string, delay: number) {
 export function WarehouseItemCombobox({
   disabled = false,
   id,
+  items: providedItems,
   label,
+  loadError,
+  loading = false,
   onSelect,
   placeholder = "Chọn mặt hàng",
+  presentation = "sku-name",
   selectedItemId,
   selectedSku = "",
 }: {
   disabled?: boolean;
   id: string;
+  items?: WarehouseItem[];
   label: string;
+  loadError?: unknown;
+  loading?: boolean;
   onSelect: (item: WarehouseItem) => void;
   placeholder?: string;
+  presentation?: "name-sku" | "sku-name";
   selectedItemId: string;
   selectedSku?: string;
 }) {
@@ -57,7 +65,7 @@ export function WarehouseItemCombobox({
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search.trim(), 300);
   const itemsQuery = useQuery({
-    enabled: open,
+    enabled: open && providedItems === undefined,
     queryFn: () =>
       listWarehouseItems({
         isActive: true,
@@ -72,9 +80,26 @@ export function WarehouseItemCombobox({
     queryFn: () => getWarehouseItem(selectedItemId),
     queryKey: ["stock-items", "detail", selectedItemId],
   });
-  const items = itemsQuery.data?.data ?? [];
+  const normalizedSearch = debouncedSearch.toLocaleLowerCase("vi");
+  const items = useMemo(() => {
+    const sourceItems = providedItems ?? itemsQuery.data?.data ?? [];
+
+    if (!providedItems || !normalizedSearch) {
+      return sourceItems;
+    }
+
+    return sourceItems.filter((item) =>
+      `${item.name} ${item.sku}`
+        .toLocaleLowerCase("vi")
+        .includes(normalizedSearch),
+    );
+  }, [itemsQuery.data?.data, normalizedSearch, providedItems]);
   const selectedItem =
-    items.find((item) => item.id === selectedItemId) ?? selectedItemQuery.data;
+    (providedItems ?? items).find((item) => item.id === selectedItemId) ??
+    selectedItemQuery.data;
+  const isFetching =
+    providedItems === undefined ? itemsQuery.isFetching : loading;
+  const error = providedItems === undefined ? itemsQuery.error : loadError;
 
   return (
     <Popover
@@ -97,7 +122,9 @@ export function WarehouseItemCombobox({
         >
           <span className="min-w-0 truncate text-left">
             {selectedItem
-              ? `${selectedItem.sku} - ${selectedItem.name}`
+              ? presentation === "name-sku"
+                ? selectedItem.name
+                : `${selectedItem.sku} - ${selectedItem.name}`
               : selectedSku || placeholder}
           </span>
           <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-60" />
@@ -116,7 +143,7 @@ export function WarehouseItemCombobox({
             onValueChange={setSearch}
           />
           <CommandList className="max-h-64 overflow-y-auto">
-            {itemsQuery.isFetching ? (
+            {isFetching ? (
               <div
                 className="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground"
                 role="status"
@@ -125,7 +152,7 @@ export function WarehouseItemCombobox({
                 Đang tìm mặt hàng...
               </div>
             ) : null}
-            {itemsQuery.error ? (
+            {error ? (
               <div className="space-y-2 px-3 py-4 text-sm text-destructive">
                 Không tải được danh sách mặt hàng.
                 <Button
@@ -140,7 +167,7 @@ export function WarehouseItemCombobox({
                 </Button>
               </div>
             ) : null}
-            {!itemsQuery.isFetching && !itemsQuery.error ? (
+            {!isFetching && !error ? (
               <CommandEmpty>Không có mặt hàng phù hợp.</CommandEmpty>
             ) : null}
             <CommandGroup>
@@ -161,11 +188,25 @@ export function WarehouseItemCombobox({
                     )}
                   />
                   <span className="min-w-0 flex-1 truncate">
-                    <span className="font-mono font-medium">{item.sku}</span>
-                    <span className="text-muted-foreground">
-                      {" "}
-                      - {item.name}
-                    </span>
+                    {presentation === "name-sku" ? (
+                      <>
+                        <span className="font-medium">{item.name}</span>
+                        <span className="font-mono text-muted-foreground">
+                          {" "}
+                          · {item.sku}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-mono font-medium">
+                          {item.sku}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {" "}
+                          - {item.name}
+                        </span>
+                      </>
+                    )}
                   </span>
                   <span className="shrink-0 text-xs text-muted-foreground">
                     {item.unit}
