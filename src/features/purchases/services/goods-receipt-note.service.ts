@@ -26,6 +26,8 @@ export type GoodsReceiptNote = {
   id: string;
   grnNumber: string;
   purchaseOrderId: string;
+  purchaseOrderNumber?: string;
+  supplierName?: string;
   status: GoodsReceiptNoteStatus;
   items: GoodsReceiptNoteItem[];
   images?: string[];
@@ -42,6 +44,8 @@ export type QueryGoodsReceiptNotesInput = {
 
 export type CreateGoodsReceiptNoteInput = {
   purchaseOrderId: string;
+  purchaseOrderNumber?: string;
+  supplierName?: string;
   items: GoodsReceiptNoteItem[];
 };
 

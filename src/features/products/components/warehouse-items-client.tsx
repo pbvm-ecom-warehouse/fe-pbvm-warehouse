@@ -306,7 +306,7 @@ export function WarehouseItemsClient() {
           </TabsTrigger>
           <TabsTrigger className="px-3" value="create-sku">
             <Settings2 data-icon="inline-start" />
-            Tạo SKU
+            Tạo thuộc tính SKU
           </TabsTrigger>
         </TabsList>
 

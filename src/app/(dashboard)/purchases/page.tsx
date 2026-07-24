@@ -1,5 +1,5 @@
-import { PurchaseOrdersClient } from "@/features/purchases/components/purchase-orders-client";
+import { redirect } from "next/navigation";
 
 export default function PurchasesPage() {
-  return <PurchaseOrdersClient />;
+  redirect("/goods-receipt-notes");
 }

@@ -1482,8 +1482,8 @@ test("admin selects an item type before managing SKU values", async ({
   });
 
   await page.goto("/products");
-  await page.getByRole("tab", { name: /^Tạo SKU$/i }).click();
-  const panel = page.getByRole("tabpanel", { name: /^Tạo SKU$/i });
+  await page.getByRole("tab", { name: /^Tạo thuộc tính SKU$/i }).click();
+  const panel = page.getByRole("tabpanel", { name: /^Tạo thuộc tính SKU$/i });
   await expect(
     panel.getByRole("heading", { name: /Giá trị thuộc tính SKU/i }),
   ).toBeVisible();

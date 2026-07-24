@@ -38,6 +38,7 @@ vi.mock(
       createPurchaseOrder: vi.fn(),
       getPurchaseOrder: vi.fn(),
       listPurchaseOrders: vi.fn(),
+      listReceivingPurchaseOrders: vi.fn(),
     };
   },
 );
@@ -56,6 +57,7 @@ vi.mock(
       confirmGoodsReceiptNote: vi.fn(),
       createGoodsReceiptNote: vi.fn(),
       listGoodsReceiptNotes: vi.fn(),
+      uploadGoodsReceiptNoteImage: vi.fn(),
     };
   },
 );
@@ -131,8 +133,13 @@ const warehouseItemService =
   await import("@/features/products/services/warehouse-items.service");
 
 const mockedListPurchaseOrders = vi.mocked(purchaseService.listPurchaseOrders);
+const mockedListReceivingPurchaseOrders = vi.mocked(
+  purchaseService.listReceivingPurchaseOrders,
+);
 const mockedGetPurchaseOrder = vi.mocked(purchaseService.getPurchaseOrder);
 const mockedListGrns = vi.mocked(grnService.listGoodsReceiptNotes);
+const mockedCreateGrn = vi.mocked(grnService.createGoodsReceiptNote);
+const mockedUploadGrnImage = vi.mocked(grnService.uploadGoodsReceiptNoteImage);
 const mockedListSuppliers = vi.mocked(supplierService.listSuppliers);
 const mockedGetSupplier = vi.mocked(supplierService.getSupplier);
 const mockedUpsertSupplierItem = vi.mocked(supplierService.upsertSupplierItem);
@@ -240,11 +247,46 @@ describe("purchase and supplier UX", () => {
       total: 1,
     });
     mockedGetPurchaseOrder.mockResolvedValue(purchaseOrder);
+    mockedListReceivingPurchaseOrders.mockResolvedValue({
+      data: [
+        {
+          id: "po-1",
+          poNumber: "PO-001",
+          supplierName: "Công ty Minh Long",
+          items: [
+            {
+              itemId: "item-1",
+              itemName: "Ly nhựa 500 ml",
+              sku: "SKU-001",
+              unit: "cái",
+              expectedQty: 10,
+              receivedQty: 0,
+              remainingQty: 10,
+            },
+          ],
+        },
+      ],
+      limit: 20,
+      page: 1,
+      total: 1,
+    });
     mockedListGrns.mockResolvedValue({
       data: [],
       limit: 50,
       page: 1,
       total: 0,
+    });
+    mockedCreateGrn.mockResolvedValue({
+      ...goodsReceiptNote,
+      id: "grn-created",
+      images: [],
+      status: "DRAFT",
+    });
+    mockedUploadGrnImage.mockResolvedValue({
+      ...goodsReceiptNote,
+      id: "grn-created",
+      images: ["https://cdn.example/grn.jpg"],
+      status: "DRAFT",
     });
     mockedGetWarehouseItem.mockResolvedValue({
       createdAt: "2026-07-01T00:00:00.000Z",
@@ -487,5 +529,117 @@ describe("purchase and supplier UX", () => {
       screen.getByText("Hạn sử dụng", { selector: "label" }),
     ).toBeVisible();
     expect(screen.getByText("Ghi chú", { selector: "label" })).toBeVisible();
+  });
+  it("resolves a missing PO supplier before falling back to supplier id", async () => {
+    mockedListSuppliers.mockResolvedValue({
+      data: [],
+      limit: 100,
+      page: 1,
+      total: 0,
+    });
+
+    renderWithQueryClient(<PurchaseOrdersClient />);
+
+    await waitFor(() =>
+      expect(mockedGetSupplier).toHaveBeenCalledWith("sup-1"),
+    );
+    expect(await screen.findByText(/Công ty Minh Long/)).toBeInTheDocument();
+    expect(screen.queryByText("sup-1")).not.toBeInTheDocument();
+  });
+
+  it("allows receivers to create and confirm GRNs without purchase-order creation or approval", async () => {
+    sessionRoleState.roles = ["RECEIVER"];
+    mockedListGrns.mockResolvedValue({
+      data: [{ ...goodsReceiptNote, status: "DRAFT" }],
+      limit: 50,
+      page: 1,
+      total: 1,
+    });
+
+    renderWithQueryClient(<PurchaseOrdersClient />);
+
+    expect(
+      await screen.findByRole("tab", { name: "Phiếu nhập" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Tạo đơn mua" }),
+    ).not.toBeInTheDocument();
+
+    const grnTab = screen.getByRole("tab", { name: "Phiếu nhập" });
+    fireEvent.mouseDown(grnTab, { button: 0, ctrlKey: false });
+    fireEvent.click(grnTab);
+    await waitFor(() =>
+      expect(grnTab).toHaveAttribute("aria-selected", "true"),
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Tạo phiếu nhập" }),
+    ).toBeVisible();
+    expect(
+      await screen.findByRole("button", { name: "Xác nhận" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Duyệt" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows PO and supplier context around GRN evidence and uploads images after creating the GRN", async () => {
+    sessionRoleState.roles = ["ADMIN"];
+
+    renderWithQueryClient(<PurchaseOrdersClient />);
+
+    const grnTab = await screen.findByRole("tab", { name: "Phiếu nhập" });
+    fireEvent.mouseDown(grnTab, { button: 0, ctrlKey: false });
+    fireEvent.click(grnTab);
+    await waitFor(() =>
+      expect(grnTab).toHaveAttribute("aria-selected", "true"),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Tạo phiếu nhập" }),
+    );
+
+    expect((await screen.findAllByText("Số đơn mua")).length).toBeGreaterThan(
+      0,
+    );
+    expect(screen.getAllByText("PO-001").length).toBeGreaterThan(0);
+    expect(screen.getByText("NCC")).toBeInTheDocument();
+    expect(screen.getAllByText(/Công ty Minh Long/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Ảnh minh chứng cho PO-001")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Ảnh sẽ được lưu vào phiếu nhập tạo từ PO-001 của .*Công ty Minh Long/,
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Mã lô phiếu nhập dòng 1"), {
+      target: { value: "LOT-1" },
+    });
+    fireEvent.change(screen.getByLabelText("Hạn sử dụng phiếu nhập dòng 1"), {
+      target: { value: "2026-12-31" },
+    });
+    const imageInput = screen.getByLabelText("Ảnh minh chứng cho PO-001");
+    fireEvent.change(imageInput, {
+      target: {
+        files: [new File(["image"], "receipt.webp", { type: "image/webp" })],
+      },
+    });
+    expect(await screen.findByText("receipt.webp")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Tạo phiếu nhập" }));
+
+    await waitFor(() =>
+      expect(mockedCreateGrn).toHaveBeenCalledWith(
+        expect.objectContaining({ purchaseOrderId: "po-1" }),
+      ),
+    );
+    await waitFor(() =>
+      expect(mockedUploadGrnImage).toHaveBeenCalledWith(
+        "grn-created",
+        expect.any(File),
+      ),
+    );
+    expect(mockedCreateGrn.mock.invocationCallOrder[0]).toBeLessThan(
+      mockedUploadGrnImage.mock.invocationCallOrder[0],
+    );
   });
 });

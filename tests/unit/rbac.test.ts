@@ -36,7 +36,7 @@ describe("WMS RBAC helpers", () => {
   });
 
   it("unions permissions for multi-role users", () => {
-    expect(hasRouteAccess("/purchases", ["RECEIVER", "PICKER"])).toBe(false);
+    expect(hasRouteAccess("/purchases", ["RECEIVER", "PICKER"])).toBe(true);
     expect(hasRouteAccess("/goods-returns", ["RECEIVER", "PICKER"])).toBe(true);
     expect(hasRouteAccess("/goods-issues", ["RECEIVER", "PICKER"])).toBe(true);
     expect(hasRouteAccess("/transfers", ["RECEIVER", "PICKER"])).toBe(false);
@@ -54,7 +54,7 @@ describe("WMS RBAC helpers", () => {
       (route) => route.href,
     );
 
-    expect(receiverRoutes).not.toContain("/purchases");
+    expect(receiverRoutes).toContain("/purchases");
     expect(receiverRoutes).not.toContain("/suppliers");
     expect(receiverRoutes).toContain("/goods-returns");
     expect(receiverRoutes).toContain("/warehouse-navigation");
@@ -92,7 +92,7 @@ describe("WMS RBAC helpers", () => {
 
   it("aligns exposed supplier and purchase APIs with backend roles", () => {
     expect(hasRouteAccess("/suppliers", ["RECEIVER"])).toBe(false);
-    expect(hasRouteAccess("/purchases", ["RECEIVER"])).toBe(false);
+    expect(hasRouteAccess("/purchases", ["RECEIVER"])).toBe(true);
     expect(hasRouteAccess("/goods-returns", ["RECEIVER"])).toBe(true);
     expect(hasRouteAccess("/suppliers", ["MANAGER"])).toBe(true);
     expect(hasRouteAccess("/purchases", ["MANAGER"])).toBe(true);

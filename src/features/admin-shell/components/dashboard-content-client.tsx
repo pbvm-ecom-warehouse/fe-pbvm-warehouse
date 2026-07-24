@@ -68,15 +68,16 @@ const rolePanelCopy: Record<WmsRole, { description: string; title: string }> = {
   },
   MANAGER: {
     title: "Bảng điều phối quản lý",
-    description: "Theo dõi mua hàng, nhập kho, cất hàng và xuất kho.",
+    description: "Theo dõi mua hàng, nhận hàng, cất hàng và xuất kho.",
   },
   SHIPPER: {
     title: "Khu vực giao hàng",
-    description: "Theo dõi vận đơn, bàn giao hàng và cập nhật trạng thái giao nhận.",
+    description:
+      "Theo dõi vận đơn, bàn giao hàng và cập nhật trạng thái giao nhận.",
   },
   RECEIVER: {
     title: "Khu vực nhận hàng",
-    description: "Tập trung phiếu nhập và task cất hàng cần xử lý.",
+    description: "Tập trung phiếu nhập và cất hàng theo từng dòng GRN.",
   },
   PICKER: {
     title: "Khu vực soạn hàng",
@@ -158,7 +159,9 @@ function RoleFocusSwitcher({
       {roles.map((role) => (
         <Button
           aria-pressed={activeRole === role}
-          className={activeRole === role ? "border-primary/40 bg-primary/10" : ""}
+          className={
+            activeRole === role ? "border-primary/40 bg-primary/10" : ""
+          }
           key={role}
           onClick={() => onRoleChange(role)}
           size="sm"
@@ -174,7 +177,11 @@ function RoleFocusSwitcher({
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-5" role="status" aria-label="Đang tải trang tổng quan">
+    <div
+      className="space-y-5"
+      role="status"
+      aria-label="Đang tải trang tổng quan"
+    >
       <Skeleton className="h-44 w-full rounded-xl" />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: 6 }).map((_, index) => (
@@ -210,8 +217,7 @@ export function DashboardContentClient() {
       : getDefaultRoleFocus(userRoles);
 
   const productsQuery = useQuery({
-    queryFn: () =>
-      listWarehouseItems({ isActive: "ALL", limit: 100, page: 1 }),
+    queryFn: () => listWarehouseItems({ isActive: "ALL", limit: 100, page: 1 }),
     queryKey: ["dashboard", "stock-items"],
   });
   const purchaseOrdersQuery = useQuery({
@@ -219,7 +225,8 @@ export function DashboardContentClient() {
     queryKey: ["dashboard", "purchase-orders"],
   });
   const grnsQuery = useQuery({
-    queryFn: () => listGoodsReceiptNotes({ limit: 100, page: 1, status: "ALL" }),
+    queryFn: () =>
+      listGoodsReceiptNotes({ limit: 100, page: 1, status: "ALL" }),
     queryKey: ["dashboard", "goods-receipt-notes"],
   });
   const putawayTasksQuery = useQuery({
@@ -262,7 +269,7 @@ export function DashboardContentClient() {
       },
       {
         detail: "Đơn mua dùng để tạo phiếu nhập.",
-        href: "/purchases",
+        href: "/purchase-orders",
         icon: ShoppingCart,
         label: "Đơn mua",
         tone: "amber",
@@ -270,7 +277,7 @@ export function DashboardContentClient() {
       },
       {
         detail: "Phiếu nhập, xác nhận và duyệt nhận hàng.",
-        href: "/purchases",
+        href: "/goods-receipt-notes",
         icon: ClipboardCheck,
         label: "Phiếu nhập",
         tone: "teal",
@@ -278,9 +285,9 @@ export function DashboardContentClient() {
       },
       {
         detail: "Phiếu cất hàng sau khi nhập kho.",
-        href: "/warehouse-navigation",
+        href: "/goods-receipt-notes",
         icon: MapPinned,
-        label: "Cất hàng",
+        label: "Nhận hàng / cất hàng",
         tone: "blue",
         value: formatNumber(countFrom(putawayTasksQuery.data)),
       },
@@ -330,17 +337,17 @@ export function DashboardContentClient() {
     {
       count: pendingGrns,
       description: "Phiếu nhập chưa duyệt xong.",
-      href: "/purchases",
+      href: "/goods-receipt-notes",
       icon: ClipboardList,
-      label: "Nhập hàng cần xử lý",
+      label: "Nhận hàng cần xử lý",
       tone: "amber" as const,
     },
     {
       count: pendingPutaway,
       description: "Phiếu cất hàng đang chờ quét vị trí.",
-      href: "/warehouse-navigation",
+      href: "/goods-receipt-notes",
       icon: MapPinned,
-      label: "Cất hàng đang chờ",
+      label: "Cất hàng trong phiếu nhập",
       tone: "blue" as const,
     },
     {
@@ -472,3 +479,4 @@ function WorkQueueCard({
     </Link>
   );
 }
+

@@ -107,7 +107,7 @@ export function LocationStructureClient() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Vị trí kho"
+        title="Kho tổng"
         actions={
           <Button onClick={refresh} type="button" variant="outline">
             {zonesQuery.isFetching ||

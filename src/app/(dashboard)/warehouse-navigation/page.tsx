@@ -1,5 +1,5 @@
-import { WarehouseNavigationClient } from "@/features/warehouse-navigation/components/warehouse-navigation-client";
+import { redirect } from "next/navigation";
 
 export default function WarehouseNavigationPage() {
-  return <WarehouseNavigationClient />;
+  redirect("/goods-receipt-notes");
 }

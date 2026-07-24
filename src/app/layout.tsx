@@ -7,7 +7,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "WMS - Quản lý kho",
   description:
-    "Bảng điều hành kho cho nhập hàng, cất hàng, xuất kho và in ly",
+    "Bảng điều hành kho cho mua hàng, nhận hàng, cất hàng, xuất kho và in ly",
 };
 
 export default function RootLayout({
@@ -23,3 +23,4 @@ export default function RootLayout({
     </html>
   );
 }
+

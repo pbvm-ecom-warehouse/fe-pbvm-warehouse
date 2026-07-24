@@ -20,10 +20,19 @@ export type PurchaseOrderItem = {
   unitPrice: number;
 };
 
+export type PurchaseOrderSupplierSummary = {
+  id?: string;
+  code?: string;
+  name?: string;
+};
+
 export type PurchaseOrder = {
   id: string;
   poNumber: string;
   supplierId: string;
+  supplier?: PurchaseOrderSupplierSummary | null;
+  supplierCode?: string | null;
+  supplierName?: string | null;
   status: PurchaseOrderStatus;
   orderDate: string;
   expectedDate?: string;
@@ -133,4 +142,44 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput) {
   >("/purchase-orders", input);
 
   return unwrapApiData(response.data);
+}
+
+export type ReceivingPurchaseOrderItem = {
+  itemId: string;
+  itemName: string;
+  sku: string;
+  unit: string;
+  expectedQty: number;
+  receivedQty: number;
+  remainingQty: number;
+};
+
+export type ReceivingPurchaseOrder = {
+  id: string;
+  poNumber: string;
+  supplierName: string;
+  expectedDate?: string;
+  items: ReceivingPurchaseOrderItem[];
+};
+
+export type ReceivingPurchaseOrderListResult = {
+  data: ReceivingPurchaseOrder[];
+  total: number;
+  page: number;
+  limit: number;
+};
+
+export async function listReceivingPurchaseOrders(
+  input: Pick<QueryPurchaseOrdersInput, "page" | "limit"> = {},
+): Promise<ReceivingPurchaseOrderListResult> {
+  const response = await apiClient.get<
+    | ApiEnvelope<ReceivingPurchaseOrderListResult>
+    | ReceivingPurchaseOrderListResult
+  >("/purchase-orders/receiving", {
+    params: { limit: input.limit, page: input.page },
+  });
+  const data = unwrapApiData(response.data);
+  return Array.isArray(data)
+    ? { data, total: data.length, page: 1, limit: data.length }
+    : data;
 }
