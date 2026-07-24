@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Barcode,
   ClipboardList,
@@ -47,6 +47,10 @@ import {
   StatusBadge,
   TableSkeleton,
 } from "@/features/admin-shell/components/operations-ui";
+import {
+  getWarehouseItem,
+  type WarehouseItem,
+} from "@/features/products/services/warehouse-items.service";
 import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
@@ -172,8 +176,28 @@ export function GoodsIssuesClient() {
     queryKey: goodsIssueKeys.detail(activeIssueId),
   });
   const detail = detailQuery.data ?? selectedIssue;
+
+  const warehouseItemQueries = useQueries({
+    queries: (detail?.items ?? []).map((item) => ({
+      enabled: canUseGoodsIssueApi && Boolean(item.itemId),
+      queryFn: () => getWarehouseItem(item.itemId),
+      queryKey: ["stock-items", "detail", item.itemId],
+    })),
+  });
+
+  const warehouseItemById = useMemo(() => {
+    const map = new Map<string, WarehouseItem>();
+    warehouseItemQueries.forEach((query) => {
+      if (query.data) map.set(query.data.id, query.data);
+    });
+    return map;
+  }, [warehouseItemQueries]);
+
   const selectedItem = selectedItemId
     ? detail?.items.find((item) => item.itemId === selectedItemId)
+    : undefined;
+  const selectedWarehouseItem = selectedItem
+    ? warehouseItemById.get(selectedItem.itemId)
     : undefined;
   const activeItemId = selectedItem?.itemId ?? "";
   const suggestionsQuery = useQuery({
@@ -373,6 +397,7 @@ export function GoodsIssuesClient() {
             <GoodsIssueDetail
               detail={detail}
               selectedItemId={activeItemId}
+              warehouseItemById={warehouseItemById}
               onSelectItem={selectItem}
             />
           ) : null}
@@ -386,7 +411,11 @@ export function GoodsIssuesClient() {
                 Vị trí lấy hàng
               </CardTitle>
               <CardDescription>
-                {selectedItem?.sku ?? "Chọn dòng hàng để xem vị trí"}
+                {selectedItem
+                  ? selectedWarehouseItem?.name
+                    ? `${selectedItem.sku} · ${selectedWarehouseItem.name}`
+                    : selectedItem.sku
+                  : "Nhấp vào một dòng hàng để xem gợi ý vị trí lấy hàng"}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -397,10 +426,10 @@ export function GoodsIssuesClient() {
                 <ErrorBanner error={suggestionsQuery.error} />
               ) : null}
               {!selectedItem ? (
-                <EmptyState title="Chọn dòng hàng để xem vị trí" />
+                <EmptyState title="Nhấp vào một dòng hàng để xem gợi ý vị trí lấy hàng" />
               ) : pickSuggestions.length === 0 &&
                 !suggestionsQuery.isLoading ? (
-                <EmptyState title="Chưa có gợi ý vị trí" />
+                <EmptyState title="Chưa có gợi ý vị trí lấy hàng" />
               ) : null}
               {pickSuggestions.map((suggestion) => (
                 <button
@@ -574,23 +603,36 @@ function GoodsIssueDetail({
   detail,
   onSelectItem,
   selectedItemId,
+  warehouseItemById,
 }: {
   detail: GoodsIssue;
   onSelectItem: (item: GoodsIssueItem) => void;
   selectedItemId: string;
+  warehouseItemById: Map<string, WarehouseItem>;
 }) {
   return (
     <Card>
       <CardHeader className="border-b bg-muted/20">
-        <CardTitle className="text-base">{detail.orderId}</CardTitle>
-        <CardDescription>{statusLabel(detail.status)}</CardDescription>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-base">
+              Mã đơn hàng: {detail.orderId}
+            </CardTitle>
+            <CardDescription className="mt-1">
+              Nhấp vào một dòng hàng để xem gợi ý vị trí lấy hàng
+            </CardDescription>
+          </div>
+          <StatusBadge tone={statusTone(detail.status)}>
+            {statusLabel(detail.status)}
+          </StatusBadge>
+        </div>
       </CardHeader>
       <CardContent className="pt-4">
         <Table scrollable>
           <TableHeader>
             <TableRow>
-              <TableHead>SKU</TableHead>
-              <TableHead>Số lượng</TableHead>
+              <TableHead>Mặt hàng / SKU</TableHead>
+              <TableHead>Số lượng cần xuất</TableHead>
               <TableHead>Còn lại</TableHead>
               <TableHead>Đơn vị</TableHead>
             </TableRow>
@@ -599,23 +641,46 @@ function GoodsIssueDetail({
             {detail.items.length === 0 ? (
               <EmptyRow colSpan={4} label="Phiếu xuất chưa có dòng hàng." />
             ) : (
-              detail.items.map((item) => (
-                <TableRow
-                  className={cn(
-                    "cursor-pointer",
-                    selectedItemId === item.itemId && "bg-primary/5",
-                  )}
-                  key={item.itemId}
-                  onClick={() => onSelectItem(item)}
-                >
-                  <TableCell className="font-mono font-semibold">
-                    {item.sku}
-                  </TableCell>
-                  <TableCell>{item.quantity}</TableCell>
-                  <TableCell>{item.remainingQty}</TableCell>
-                  <TableCell>{item.unit ?? "cái"}</TableCell>
-                </TableRow>
-              ))
+              detail.items.map((item) => {
+                const warehouseItem = warehouseItemById.get(item.itemId);
+                const isSelected = selectedItemId === item.itemId;
+
+                return (
+                  <TableRow
+                    className={cn(
+                      "cursor-pointer transition-colors hover:bg-accent/60",
+                      isSelected &&
+                        "border-l-4 border-l-primary bg-primary/10 font-medium",
+                    )}
+                    key={item.itemId}
+                    onClick={() => onSelectItem(item)}
+                  >
+                    <TableCell>
+                      <div className="font-mono font-semibold text-foreground">
+                        {item.sku}
+                      </div>
+                      {warehouseItem?.name ? (
+                        <div className="text-xs text-muted-foreground">
+                          {warehouseItem.name}
+                        </div>
+                      ) : null}
+                    </TableCell>
+                    <TableCell>{item.quantity}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          item.remainingQty > 0 ? "outline" : "secondary"
+                        }
+                      >
+                        {item.remainingQty}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {item.unit ?? warehouseItem?.unit ?? "cái"}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
