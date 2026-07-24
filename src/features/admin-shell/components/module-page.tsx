@@ -23,7 +23,7 @@ import {
 
 const moduleSummaries = {
   locations: {
-    title: "Vị trí kho",
+    title: "Kho",
     description: "Quản lý khu vực, dãy kệ và mã vị trí trong kho.",
     action: "Tạo khu vực",
     highlights: ["Khu vực", "Dãy kệ", "Vị trí"],
@@ -38,7 +38,7 @@ const moduleSummaries = {
   products: {
     title: "Sản phẩm",
     description: "Quản lý nguyên liệu, ly chưa in và ly đã in.",
-    action: "Tạo SKU",
+    action: "Tạo thuộc tính SKU",
     highlights: ["Nguyên liệu", "Ly chưa in", "Ly đã in"],
     tableTitle: "Danh sách sản phẩm",
     columns: ["SKU", "Tên sản phẩm", "Nhóm"],
@@ -49,7 +49,7 @@ const moduleSummaries = {
     },
   },
   purchases: {
-    title: "Nhập hàng",
+    title: "Mua hàng",
     description: "Quản lý đơn mua hàng và phiếu nhập kho.",
     action: "Tạo đơn mua",
     highlights: ["Đơn mua", "Phiếu nhập", "Nhà cung cấp"],
@@ -274,3 +274,4 @@ export function ModulePage({ moduleKey }: { moduleKey: ModuleKey }) {
     </div>
   );
 }
+

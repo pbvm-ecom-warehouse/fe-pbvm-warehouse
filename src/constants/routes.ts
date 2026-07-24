@@ -32,7 +32,7 @@ export const dashboardRoutes = [
   },
   {
     href: "/locations",
-    label: "Vị trí kho",
+    label: "Kho",
     icon: MapPinned,
     allowedRoles: getRouteAllowedRoles("/locations"),
   },
@@ -43,16 +43,16 @@ export const dashboardRoutes = [
     allowedRoles: getRouteAllowedRoles("/products"),
   },
   {
-    href: "/warehouse-navigation",
-    label: "Cất hàng",
-    icon: MapPinned,
-    allowedRoles: getRouteAllowedRoles("/warehouse-navigation"),
+    href: "/purchase-orders",
+    label: "Mua hàng",
+    icon: ShoppingCart,
+    allowedRoles: getRouteAllowedRoles("/purchase-orders"),
   },
   {
-    href: "/purchases",
-    label: "Nhập hàng",
-    icon: ShoppingCart,
-    allowedRoles: getRouteAllowedRoles("/purchases"),
+    href: "/goods-receipt-notes",
+    label: "Nhận hàng",
+    icon: ClipboardCheck,
+    allowedRoles: getRouteAllowedRoles("/goods-receipt-notes"),
   },
   {
     href: "/goods-issues",

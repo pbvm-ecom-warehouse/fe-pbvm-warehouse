@@ -70,6 +70,7 @@ import { cn } from "@/lib/utils";
 import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
 import { useSessionUser } from "@/hooks/use-session-user";
 import {
+  getSupplier,
   listSuppliers,
   type Supplier,
 } from "@/features/suppliers/services/supplier.service";
@@ -83,6 +84,7 @@ import {
   createPurchaseOrder,
   getPurchaseOrder,
   listPurchaseOrders,
+  listReceivingPurchaseOrders,
   PURCHASE_ORDER_STATUSES,
   type PurchaseOrder,
   type PurchaseOrderItem,
@@ -111,6 +113,8 @@ const purchaseKeys = {
   list: (params: { page: number; status: string; supplierId: string }) =>
     ["purchase-orders", "list", params] as const,
 
+  supplierDetail: (supplierId: string) =>
+    ["purchase-orders", "supplier-detail", supplierId] as const,
   suppliers: ["purchase-orders", "suppliers"] as const,
 };
 
@@ -173,6 +177,35 @@ function formatDate(value?: string | null) {
   }
 
   return new Intl.DateTimeFormat("vi-VN").format(date);
+}
+
+function joinSupplierParts(code?: string | null, name?: string | null) {
+  return [code, name]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value))
+    .join(" · ");
+}
+
+function getPurchaseOrderSupplierLabel(
+  purchaseOrder: PurchaseOrder,
+  supplierById: Map<string, Supplier>,
+) {
+  return (
+    purchaseOrder.supplier?.name ??
+    purchaseOrder.supplierName ??
+    supplierById.get(purchaseOrder.supplierId)?.name ??
+    "Chưa xác định"
+  );
+}
+
+function getPurchaseOrderSelectLabel(
+  purchaseOrder: PurchaseOrder,
+  supplierById: Map<string, Supplier>,
+) {
+  return [
+    purchaseOrder.poNumber,
+    getPurchaseOrderSupplierLabel(purchaseOrder, supplierById),
+  ].join(" · ");
 }
 
 function toPurchaseOrderItems(
@@ -249,12 +282,32 @@ function EmptyRow({ colSpan, label }: { colSpan: number; label: string }) {
   );
 }
 
-export function PurchaseOrdersClient() {
+export function PurchaseOrdersClient({
+  mode = "all",
+}: {
+  mode?: "all" | "purchase-orders" | "goods-receipts";
+}) {
   const user = useSessionUser();
   const queryClient = useQueryClient();
-  const canUsePurchaseOrderApi = hasAnyRole(user?.roles, ["ADMIN", "MANAGER"]);
-  const canCreateGoodsReceiptNote = hasAnyRole(user?.roles, ["RECEIVER"]);
-  const canConfirmGoodsReceiptNote = hasAnyRole(user?.roles, ["RECEIVER"]);
+  const canReadPurchaseOrders = hasAnyRole(user?.roles, [
+    "ADMIN",
+    "MANAGER",
+    "RECEIVER",
+  ]);
+  const canCreatePurchaseOrder = hasAnyRole(user?.roles, ["ADMIN", "MANAGER"]);
+  const canReadGoodsReceiptNotes = hasAnyRole(user?.roles, [
+    "ADMIN",
+    "MANAGER",
+    "RECEIVER",
+  ]);
+  const canCreateGoodsReceiptNote = hasAnyRole(user?.roles, [
+    "ADMIN",
+    "RECEIVER",
+  ]);
+  const canConfirmGoodsReceiptNote = hasAnyRole(user?.roles, [
+    "ADMIN",
+    "RECEIVER",
+  ]);
   const canApproveGoodsReceiptNote = hasAnyRole(user?.roles, [
     "ADMIN",
     "MANAGER",
@@ -268,7 +321,9 @@ export function PurchaseOrdersClient() {
   const [purchaseDetailOpen, setPurchaseDetailOpen] = useState(false);
   const [selectedGoodsReceiptNote, setSelectedGoodsReceiptNote] =
     useState<GoodsReceiptNote>();
-  const [activeTab, setActiveTab] = useState("purchase-orders");
+  const [activeTab, setActiveTab] = useState(
+    mode === "goods-receipts" ? "goods-receipts" : "purchase-orders",
+  );
 
   const [createForm, setCreateForm] = useState(defaultCreateForm);
   const [itemForms, setItemForms] = useState<PurchaseOrderItemForm[]>([
@@ -281,7 +336,7 @@ export function PurchaseOrdersClient() {
   const [grnImages, setGrnImages] = useState<File[]>([]);
 
   const purchaseOrdersQuery = useQuery({
-    enabled: canUsePurchaseOrderApi,
+    enabled: canReadPurchaseOrders,
     queryFn: () =>
       listPurchaseOrders({
         limit: PAGE_SIZE,
@@ -296,8 +351,13 @@ export function PurchaseOrdersClient() {
     }),
   });
 
+  const receivingPurchaseOrdersQuery = useQuery({
+    enabled: canReadGoodsReceiptNotes,
+    queryFn: () => listReceivingPurchaseOrders({ limit: 100, page: 1 }),
+    queryKey: ["purchase-orders", "receiving"],
+  });
   const suppliersQuery = useQuery({
-    enabled: canUsePurchaseOrderApi,
+    enabled: canCreatePurchaseOrder || canApproveGoodsReceiptNote,
     queryFn: () => listSuppliers({ limit: 100, page: 1, status: "ACTIVE" }),
     queryKey: purchaseKeys.suppliers,
   });
@@ -305,6 +365,19 @@ export function PurchaseOrdersClient() {
   const purchaseOrders = useMemo(
     () => purchaseOrdersQuery.data?.data ?? [],
     [purchaseOrdersQuery.data?.data],
+  );
+  const receivingPurchaseOrders = useMemo<PurchaseOrder[]>(
+    () =>
+      (receivingPurchaseOrdersQuery.data?.data ?? []).map((po) => ({
+        ...po,
+        supplierId: "",
+        status: "CONFIRMED" as const,
+        orderDate: "",
+        createdAt: "",
+        updatedAt: "",
+        items: po.items.map((item) => ({ ...item, unitPrice: 0 })),
+      })),
+    [receivingPurchaseOrdersQuery.data?.data],
   );
   const suppliers = useMemo(
     () => suppliersQuery.data?.data ?? [],
@@ -319,16 +392,16 @@ export function PurchaseOrdersClient() {
   const activePurchaseOrderId = selectedPurchaseOrder?.id ?? "";
 
   const detailQuery = useQuery({
-    enabled: canUsePurchaseOrderApi && Boolean(activePurchaseOrderId),
+    enabled: canReadPurchaseOrders && Boolean(activePurchaseOrderId),
     queryFn: () => getPurchaseOrder(activePurchaseOrderId),
     queryKey: purchaseKeys.detail(activePurchaseOrderId),
   });
   const detail = detailQuery.data ?? selectedPurchaseOrder;
-  const grnPurchaseOrder = purchaseOrders.find(
+  const grnPurchaseOrder = receivingPurchaseOrders.find(
     (purchaseOrder) => purchaseOrder.id === grnPurchaseOrderId,
   );
   const allGrnsQuery = useQuery({
-    enabled: canUsePurchaseOrderApi,
+    enabled: canReadGoodsReceiptNotes,
     queryFn: () => listGoodsReceiptNotes({ limit: 100, page: 1 }),
     queryKey: purchaseKeys.allGrns,
   });
@@ -348,7 +421,7 @@ export function PurchaseOrdersClient() {
   );
   const warehouseItemQueries = useQueries({
     queries: warehouseItemIds.map((itemId) => ({
-      enabled: canUsePurchaseOrderApi,
+      enabled: canReadPurchaseOrders || canReadGoodsReceiptNotes,
       queryFn: () => getWarehouseItem(itemId),
       queryKey: ["stock-items", "detail", itemId],
     })),
@@ -361,10 +434,38 @@ export function PurchaseOrdersClient() {
 
     return new Map(entries);
   }, [warehouseItemQueries]);
-  const supplierById = useMemo(
-    () => new Map(suppliers.map((supplier) => [supplier.id, supplier])),
-    [suppliers],
-  );
+  const supplierIdsMissingFromList = useMemo(() => {
+    const listedIds = new Set(suppliers.map((supplier) => supplier.id));
+    return Array.from(
+      new Set(
+        purchaseOrders
+          .map((purchaseOrder) => purchaseOrder.supplierId)
+          .filter((supplierId) => supplierId && !listedIds.has(supplierId)),
+      ),
+    );
+  }, [purchaseOrders, suppliers]);
+
+  const missingSupplierQueries = useQueries({
+    queries: supplierIdsMissingFromList.map((supplierId) => ({
+      enabled: canReadPurchaseOrders,
+      queryFn: () => getSupplier(supplierId),
+      queryKey: purchaseKeys.supplierDetail(supplierId),
+    })),
+  });
+
+  const supplierById = useMemo(() => {
+    const map = new Map(suppliers.map((supplier) => [supplier.id, supplier]));
+    missingSupplierQueries.forEach((query) => {
+      if (query.data) {
+        map.set(query.data.id, query.data);
+      }
+    });
+    return map;
+  }, [missingSupplierQueries, suppliers]);
+
+  const grnPurchaseOrderSupplierLabel = grnPurchaseOrder
+    ? getPurchaseOrderSupplierLabel(grnPurchaseOrder, supplierById)
+    : "";
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -472,7 +573,7 @@ export function PurchaseOrdersClient() {
   }
 
   function handleGrnPurchaseOrderChange(purchaseOrderId: string) {
-    const purchaseOrder = purchaseOrders.find(
+    const purchaseOrder = receivingPurchaseOrders.find(
       (candidate) => candidate.id === purchaseOrderId,
     );
     setGrnPurchaseOrderId(purchaseOrderId);
@@ -500,10 +601,10 @@ export function PurchaseOrdersClient() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Nhập hàng"
+        title={mode === "purchase-orders" ? "Mua hàng" : "Nhận hàng"}
         actions={
           <Button
-            disabled={!canUsePurchaseOrderApi}
+            disabled={!canReadPurchaseOrders && !canReadGoodsReceiptNotes}
             onClick={() =>
               void queryClient.invalidateQueries({
                 queryKey: ["purchase-orders"],
@@ -522,7 +623,7 @@ export function PurchaseOrdersClient() {
         }
       />
 
-      {!canUsePurchaseOrderApi ? (
+      {!canReadPurchaseOrders && !canReadGoodsReceiptNotes ? (
         <PermissionNotice>
           Bạn cần quyền phù hợp để tạo và chỉnh sửa đơn mua.
         </PermissionNotice>
@@ -533,16 +634,18 @@ export function PurchaseOrdersClient() {
       ) : null}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="h-9 rounded-lg border bg-card p-1">
-          <TabsTrigger value="purchase-orders">
-            <ShoppingCart data-icon="inline-start" />
-            Đơn mua
-          </TabsTrigger>
-          <TabsTrigger value="goods-receipts">
-            <ClipboardCheck data-icon="inline-start" />
-            Phiếu nhập
-          </TabsTrigger>
-        </TabsList>
+        {mode === "all" ? (
+          <TabsList className="h-9 rounded-lg border bg-card p-1">
+            <TabsTrigger value="purchase-orders">
+              <ShoppingCart data-icon="inline-start" />
+              Đơn mua
+            </TabsTrigger>
+            <TabsTrigger value="goods-receipts">
+              <ClipboardCheck data-icon="inline-start" />
+              Phiếu nhập
+            </TabsTrigger>
+          </TabsList>
+        ) : null}
         <TabsContent value="purchase-orders">
           <div className="grid gap-4">
             <Card>
@@ -557,7 +660,7 @@ export function PurchaseOrdersClient() {
                       {total} bản ghi · trang {page}/{totalPages}
                     </CardDescription>
                   </div>
-                  {canUsePurchaseOrderApi ? (
+                  {canCreatePurchaseOrder ? (
                     <Button onClick={() => setDialogOpen(true)} type="button">
                       <Plus data-icon="inline-start" />
                       Tạo đơn mua
@@ -608,7 +711,7 @@ export function PurchaseOrdersClient() {
                         <SelectItem value="ALL">Tất cả</SelectItem>
                         {suppliers.map((supplier) => (
                           <SelectItem key={supplier.id} value={supplier.id}>
-                            {supplier.code} · {supplier.name}
+                            {supplier.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -616,7 +719,7 @@ export function PurchaseOrdersClient() {
                   </div>
                   <Button
                     className="self-end"
-                    disabled={!canUsePurchaseOrderApi}
+                    disabled={!canReadPurchaseOrders}
                     type="submit"
                   >
                     <Search data-icon="inline-start" />
@@ -720,7 +823,7 @@ export function PurchaseOrdersClient() {
             >
               <div className="grid gap-3 md:grid-cols-2">
                 <SelectField
-                  disabled={!canUsePurchaseOrderApi}
+                  disabled={!canCreatePurchaseOrder}
                   label="Nhà cung cấp"
                   value={createForm.supplierId}
                   onChange={(supplierId) =>
@@ -732,7 +835,7 @@ export function PurchaseOrdersClient() {
                 >
                   {suppliers.map((supplier) => (
                     <SelectItem key={supplier.id} value={supplier.id}>
-                      {supplier.code} · {supplier.name}
+                      {supplier.name}
                     </SelectItem>
                   ))}
                 </SelectField>
@@ -794,7 +897,7 @@ export function PurchaseOrdersClient() {
             <DialogFooter className="m-0 rounded-none px-6 py-4">
               <Button
                 disabled={
-                  !canUsePurchaseOrderApi ||
+                  !canCreatePurchaseOrder ||
                   !createForm.supplierId ||
                   itemForms.some(
                     (item) => !item.itemId || !item.sku || !item.unit,
@@ -837,7 +940,10 @@ export function PurchaseOrdersClient() {
               <PurchaseOrderDetail
                 detail={detail}
                 loading={detailQuery.isFetching}
-                supplier={supplierById.get(detail.supplierId)}
+                supplierLabel={getPurchaseOrderSupplierLabel(
+                  detail,
+                  supplierById,
+                )}
                 warehouseItemById={warehouseItemById}
               />
             ) : null}
@@ -872,12 +978,26 @@ export function PurchaseOrdersClient() {
               value={grnPurchaseOrderId}
               onChange={handleGrnPurchaseOrderChange}
             >
-              {purchaseOrders.map((purchaseOrder) => (
+              {receivingPurchaseOrders.map((purchaseOrder) => (
                 <SelectItem key={purchaseOrder.id} value={purchaseOrder.id}>
-                  {purchaseOrder.poNumber}
+                  {getPurchaseOrderSelectLabel(purchaseOrder, supplierById)}
                 </SelectItem>
               ))}
             </SelectField>
+            {grnPurchaseOrder ? (
+              <div className="grid gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm sm:grid-cols-4">
+                <InfoBox label="Số đơn mua" value={grnPurchaseOrder.poNumber} />
+                <InfoBox label="NCC" value={grnPurchaseOrderSupplierLabel} />
+                <InfoBox
+                  label="Ngày dự kiến"
+                  value={formatDate(grnPurchaseOrder.expectedDate)}
+                />
+                <InfoBox
+                  label="Số dòng hàng"
+                  value={String(grnPurchaseOrder.items?.length ?? 0)}
+                />
+              </div>
+            ) : null}
             <div className="grid gap-3">
               {grnItemForms.length === 0 ? (
                 <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
@@ -899,15 +1019,28 @@ export function PurchaseOrdersClient() {
                 />
               ))}
             </div>
-            <EvidenceImagePicker
-              disabled={
-                !canCreateGoodsReceiptNote || createGrnMutation.isPending
-              }
-              files={grnImages}
-              id="goods-receipt-images"
-              label="Ảnh minh chứng nhận hàng"
-              onChange={setGrnImages}
-            />
+            <div className="space-y-2">
+              <EvidenceImagePicker
+                disabled={
+                  !canCreateGoodsReceiptNote || createGrnMutation.isPending
+                }
+                files={grnImages}
+                id="goods-receipt-images"
+                label={
+                  grnPurchaseOrder
+                    ? `Ảnh minh chứng cho ${grnPurchaseOrder.poNumber}`
+                    : "Ảnh minh chứng nhận hàng"
+                }
+                onChange={setGrnImages}
+              />
+              {grnPurchaseOrder ? (
+                <p className="text-xs text-muted-foreground">
+                  Ảnh sẽ được lưu vào phiếu nhập tạo từ{" "}
+                  {grnPurchaseOrder.poNumber} của{" "}
+                  {grnPurchaseOrderSupplierLabel}.
+                </p>
+              ) : null}
+            </div>
             <Button
               disabled={
                 !canCreateGoodsReceiptNote ||
@@ -942,6 +1075,18 @@ export function PurchaseOrdersClient() {
           purchaseOrder={purchaseOrders.find(
             (po) => po.id === selectedGoodsReceiptNote.purchaseOrderId,
           )}
+          supplierLabel={
+            purchaseOrders.find(
+              (po) => po.id === selectedGoodsReceiptNote.purchaseOrderId,
+            )
+              ? getPurchaseOrderSupplierLabel(
+                  purchaseOrders.find(
+                    (po) => po.id === selectedGoodsReceiptNote.purchaseOrderId,
+                  )!,
+                  supplierById,
+                )
+              : undefined
+          }
         />
       ) : null}
     </div>
@@ -1013,8 +1158,7 @@ function PurchaseOrderTable({
                 {purchaseOrder.poNumber}
               </TableCell>
               <TableCell>
-                {supplierById.get(purchaseOrder.supplierId)?.name ??
-                  purchaseOrder.supplierId}
+                {getPurchaseOrderSupplierLabel(purchaseOrder, supplierById)}
               </TableCell>
               <TableCell>
                 <StatusBadge tone={statusTone(purchaseOrder.status)}>
@@ -1146,12 +1290,12 @@ function PurchaseOrderItemFields({
 function PurchaseOrderDetail({
   detail,
   loading,
-  supplier,
+  supplierLabel,
   warehouseItemById,
 }: {
   detail: PurchaseOrder;
   loading: boolean;
-  supplier: Supplier | undefined;
+  supplierLabel: string;
   warehouseItemById: Map<string, WarehouseItem>;
 }) {
   const items = detail.items ?? [];
@@ -1164,7 +1308,7 @@ function PurchaseOrderDetail({
           {detail.poNumber}
           {loading ? <LoaderCircle className="size-4 animate-spin" /> : null}
         </CardTitle>
-        <CardDescription>{supplier?.name ?? detail.supplierId}</CardDescription>
+        <CardDescription>{supplierLabel}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
         <div className="grid gap-3 md:grid-cols-4">
@@ -1313,3 +1457,4 @@ function InfoBox({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+

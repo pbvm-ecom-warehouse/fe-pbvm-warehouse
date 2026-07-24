@@ -38,6 +38,7 @@ import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
 
 import type { GoodsReceiptNote } from "../services/goods-receipt-note.service";
 import type { PurchaseOrder } from "../services/purchase-order.service";
+import { GoodsReceiptPutawayPanel } from "./goods-receipt-putaway-panel";
 
 function formatDate(value?: string | null) {
   if (!value) {
@@ -206,11 +207,13 @@ export function GoodsReceiptNoteDetailDialog({
   itemById,
   onOpenChange,
   purchaseOrder,
+  supplierLabel,
 }: {
   grn: GoodsReceiptNote;
   itemById: Map<string, WarehouseItem>;
   onOpenChange: (open: boolean) => void;
   purchaseOrder?: PurchaseOrder;
+  supplierLabel?: string;
 }) {
   return (
     <Dialog open onOpenChange={onOpenChange}>
@@ -223,7 +226,15 @@ export function GoodsReceiptNoteDetailDialog({
         <div className="grid gap-3 text-sm sm:grid-cols-3">
           <Info
             label="Đơn mua"
-            value={purchaseOrder?.poNumber ?? grn.purchaseOrderId}
+            value={
+              grn.purchaseOrderNumber ??
+              purchaseOrder?.poNumber ??
+              grn.purchaseOrderId
+            }
+          />
+          <Info
+            label="NCC"
+            value={grn.supplierName ?? supplierLabel ?? "Chưa xác định"}
           />
           <Info label="Trạng thái" value={statusLabel(grn.status)} />
           <Info label="Ngày tạo" value={formatDate(grn.createdAt)} />
@@ -258,8 +269,12 @@ export function GoodsReceiptNoteDetailDialog({
           </TableBody>
         </Table>
 
+        <GoodsReceiptPutawayPanel grn={grn} />
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold">Ảnh minh chứng</h3>
+          <h3 className="text-sm font-semibold">
+            Ảnh minh chứng{" "}
+            {purchaseOrder ? `cho ${purchaseOrder.poNumber}` : "nhận hàng"}
+          </h3>
           <EvidenceImageGallery
             emptyLabel="Chưa có ảnh minh chứng"
             images={grn.images}
@@ -278,3 +293,4 @@ function Info({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
