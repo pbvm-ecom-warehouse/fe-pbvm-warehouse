@@ -66,6 +66,7 @@ export const ROUTE_ACCESS_BY_HREF = {
   "/goods-returns": ["ADMIN", "MANAGER", "RECEIVER"],
   "/adjustments": ["ADMIN", "MANAGER", "COUNTER", "RECEIVER"],
   "/suppliers": ["ADMIN", "MANAGER"],
+  "/suppliers/items": ["ADMIN", "MANAGER"],
   "/print-jobs": ["ADMIN", "MANAGER", "PRINTER"],
   "/cup-conversions": ["ADMIN", "MANAGER", "PRINTER"],
   "/reports": ["ADMIN", "MANAGER"],

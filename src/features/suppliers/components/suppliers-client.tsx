@@ -1,10 +1,12 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Eye,
   LoaderCircle,
+  Package,
   Pencil,
   Plus,
   RefreshCw,
@@ -279,6 +281,13 @@ export function SuppliersClient() {
                 <RefreshCw data-icon="inline-start" />
               )}
               Làm mới
+            </Button>
+
+            <Button asChild disabled={!canManage} variant="outline">
+              <Link href="/suppliers/items">
+                <Package data-icon="inline-start" />
+                Gán mặt hàng NCC
+              </Link>
             </Button>
 
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
