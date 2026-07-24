@@ -192,9 +192,9 @@ export function ShippingClient() {
     () => carriersQuery.data?.data ?? [],
     [carriersQuery.data],
   );
-  const selectedShipment =
-    shipments.find((shipment) => shipment.id === selectedShipmentId) ??
-    shipments[0];
+  const selectedShipment = shipments.find(
+    (shipment) => shipment.id === selectedShipmentId,
+  );
   const activeCarriers = useMemo(
     () => carriers.filter((carrier) => carrier.status === "ACTIVE"),
     [carriers],
@@ -357,20 +357,29 @@ export function ShippingClient() {
         </TabsList>
 
         <TabsContent className="mt-4" value="shipments">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
+          <div
+            className={cn(
+              "grid gap-4 transition-all",
+              selectedShipment
+                ? "xl:grid-cols-[minmax(0,1fr)_400px]"
+                : "grid-cols-1",
+            )}
+          >
             <ShipmentTable
               isLoading={shipmentsQuery.isLoading}
               onSelect={(shipment) => setSelectedShipmentId(shipment.id)}
               selectedId={selectedShipment?.id ?? ""}
               shipments={shipments}
             />
-            <ShipmentPanel
-              canAdvance={nextStatuses.length > 0}
-              canOperate={canOperateShipments}
-              onAssign={openAssignDialog}
-              onUpdateStatus={openStatusDialog}
-              shipment={selectedShipment}
-            />
+            {selectedShipment ? (
+              <ShipmentPanel
+                canAdvance={nextStatuses.length > 0}
+                canOperate={canOperateShipments}
+                onAssign={openAssignDialog}
+                onUpdateStatus={openStatusDialog}
+                shipment={selectedShipment}
+              />
+            ) : null}
           </div>
         </TabsContent>
 

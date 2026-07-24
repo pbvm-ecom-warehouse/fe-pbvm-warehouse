@@ -27,6 +27,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -151,6 +158,7 @@ export function GoodsReturnsClient() {
   const [orderFilter, setOrderFilter] = useState("");
   const [page, setPage] = useState(1);
   const [selectedReturnId, setSelectedReturnId] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState(defaultCreateForm);
   const [inspectLines, setInspectLines] = useState<
     Record<string, InspectLineForm>
@@ -179,8 +187,7 @@ export function GoodsReturnsClient() {
     () => returnsQuery.data?.data ?? [],
     [returnsQuery.data],
   );
-  const selectedReturn =
-    returns.find((item) => item.id === selectedReturnId) ?? returns[0];
+  const selectedReturn = returns.find((item) => item.id === selectedReturnId);
   const activeReturnId = selectedReturn?.id ?? "";
   const total = returnsQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -214,6 +221,7 @@ export function GoodsReturnsClient() {
     onError: (error) => toast.error(formatError(error)),
     onSuccess: (created) => {
       setCreateForm(defaultCreateForm);
+      setCreateOpen(false);
       setSelectedReturnId(created.id);
       void queryClient.invalidateQueries({ queryKey: ["goods-returns"] });
       toast.success("Đã tạo phiếu hoàn hàng");
@@ -320,23 +328,34 @@ export function GoodsReturnsClient() {
       <PageHeader
         title="Hàng hoàn"
         actions={
-          <Button
-            disabled={!canView}
-            onClick={() =>
-              void queryClient.invalidateQueries({
-                queryKey: ["goods-returns"],
-              })
-            }
-            type="button"
-            variant="outline"
-          >
-            {returnsQuery.isFetching || detailQuery.isFetching ? (
-              <LoaderCircle className="animate-spin" data-icon="inline-start" />
-            ) : (
-              <RefreshCw data-icon="inline-start" />
-            )}
-            Làm mới
-          </Button>
+          <div className="flex items-center gap-2">
+            {canMutate ? (
+              <Button onClick={() => setCreateOpen(true)} type="button">
+                <Plus data-icon="inline-start" />
+                Tạo phiếu hoàn
+              </Button>
+            ) : null}
+            <Button
+              disabled={!canView}
+              onClick={() =>
+                void queryClient.invalidateQueries({
+                  queryKey: ["goods-returns"],
+                })
+              }
+              type="button"
+              variant="outline"
+            >
+              {returnsQuery.isFetching || detailQuery.isFetching ? (
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
+              ) : (
+                <RefreshCw data-icon="inline-start" />
+              )}
+              Làm mới
+            </Button>
+          </div>
         }
       />
 
@@ -348,7 +367,14 @@ export function GoodsReturnsClient() {
 
       {returnsQuery.error ? <ErrorBanner error={returnsQuery.error} /> : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <div
+        className={cn(
+          "grid gap-4 transition-all",
+          selectedReturn
+            ? "xl:grid-cols-[minmax(0,1fr)_420px]"
+            : "grid-cols-1",
+        )}
+      >
         <div className="space-y-4">
           <TablePanel
             count={`${total} bản ghi`}
@@ -441,23 +467,8 @@ export function GoodsReturnsClient() {
           ) : null}
         </div>
 
-        <aside className="space-y-4">
-          {canMutate ? (
-            <CreateGoodsReturnCard
-              busy={createMutation.isPending}
-              form={createForm}
-              items={stockItems}
-              loadingItems={stockItemsQuery.isLoading}
-              onChange={setCreateForm}
-              onSubmit={handleCreate}
-            />
-          ) : (
-            <PermissionNotice>
-              Bạn chỉ có quyền xem phiếu hoàn hàng.
-            </PermissionNotice>
-          )}
-
-          {detail ? (
+        {selectedReturn && detail ? (
+          <aside className="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -562,9 +573,82 @@ export function GoodsReturnsClient() {
                 </div>
               </CardContent>
             </Card>
-          ) : null}
-        </aside>
+          </aside>
+        ) : null}
       </div>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent size="lg">
+          <DialogHeader>
+            <DialogTitle>Tạo phiếu hoàn hàng</DialogTitle>
+            <DialogDescription>
+              Ghi nhận hàng trả lại trực tiếp tại kho.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={handleCreate}>
+            <TextField
+              id="create-return-order"
+              label="Mã đơn hàng"
+              required={false}
+              value={createForm.orderId}
+              onChange={(orderId) =>
+                setCreateForm((form) => ({ ...form, orderId }))
+              }
+            />
+            <div className="space-y-2">
+              <Label htmlFor="create-return-item">Mặt hàng hoàn</Label>
+              <Select
+                value={createForm.itemId}
+                onValueChange={(itemId) =>
+                  setCreateForm((form) => ({ ...form, itemId }))
+                }
+              >
+                <SelectTrigger id="create-return-item">
+                  <SelectValue placeholder="Chọn mặt hàng" />
+                </SelectTrigger>
+                <SelectContent>
+                  {stockItems.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {itemLabel(item)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <TextField
+              id="create-return-quantity"
+              label="Số lượng"
+              type="number"
+              value={createForm.quantity}
+              onChange={(quantity) =>
+                setCreateForm((form) => ({ ...form, quantity }))
+              }
+            />
+            <div className="space-y-2">
+              <Label htmlFor="create-return-note">Ghi chú</Label>
+              <Textarea
+                id="create-return-note"
+                value={createForm.note}
+                onChange={(event) =>
+                  setCreateForm((form) => ({ ...form, note: event.target.value }))
+                }
+              />
+            </div>
+            <Button
+              className="w-full"
+              disabled={createMutation.isPending || stockItemsQuery.isLoading}
+              type="submit"
+            >
+              {createMutation.isPending ? (
+                <LoaderCircle className="animate-spin" data-icon="inline-start" />
+              ) : (
+                <Plus data-icon="inline-start" />
+              )}
+              Tạo phiếu hoàn
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
