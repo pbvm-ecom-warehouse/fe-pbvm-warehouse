@@ -55,8 +55,8 @@ export type SkuTemplate =
       templateId: string;
       itemType: CreatableWarehouseItemType;
       category?: string | null;
-      prefix: string;
-      fields: Array<{ key: AttributeKey }>;
+      prefix?: string;
+      fields: Array<{ key: AttributeKey; required?: boolean }>;
     };
 
 export type SkuPreview = { sku: string };
@@ -212,13 +212,43 @@ export async function createWarehouseItem(input: CreateWarehouseItemInput) {
 export async function getSkuTemplate(
   type: CreatableWarehouseItemType,
   categoryOptionId?: string,
-) {
-  const response = await apiClient.get<ApiEnvelope<SkuTemplate> | SkuTemplate>(
-    `/stock/item-types/${encodeURIComponent(type)}/sku-template`,
-    { params: { categoryOptionId: optionalText(categoryOptionId) } },
-  );
+): Promise<SkuTemplate> {
+  const categoryId = optionalText(categoryOptionId);
+  const endpoint = `/stock/item-types/${encodeURIComponent(type)}/sku-template`;
+  const response = categoryId
+    ? await apiClient.get<ApiEnvelope<SkuTemplate> | SkuTemplate>(endpoint, {
+        params: { categoryOptionId: categoryId },
+      })
+    : await apiClient.get<ApiEnvelope<SkuTemplate> | SkuTemplate>(endpoint);
 
-  return unwrapApiData(response.data);
+  const template = unwrapApiData(response.data);
+  if (template.kind === "template") {
+    const rawTemplate = template as {
+      category?: string | null;
+      fields: Array<{ categoryKey?: AttributeKey; key?: AttributeKey; required?: boolean }>;
+      itemType: CreatableWarehouseItemType;
+      kind: "template";
+      prefix?: string;
+      templateId: string;
+    };
+    return {
+      ...rawTemplate,
+      fields: rawTemplate.fields.map((field) => ({
+        key: field.categoryKey ?? field.key!,
+        required: field.required ?? true,
+      })),
+    };
+  }
+
+  const seenOptionIds = new Set<string>();
+  return {
+    ...template,
+    options: template.options.filter((option) => {
+      if (seenOptionIds.has(option.id)) return false;
+      seenOptionIds.add(option.id);
+      return true;
+    }),
+  };
 }
 
 export async function previewWarehouseItemSku(

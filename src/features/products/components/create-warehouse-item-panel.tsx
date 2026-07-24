@@ -3,7 +3,9 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import {
+  Check,
   CheckCircle2,
+  ChevronsUpDown,
   Copy,
   LoaderCircle,
   PackagePlus,
@@ -18,6 +20,19 @@ import { Button } from "@/components/ui/button";
 import { EvidenceImagePicker } from "@/components/evidence-images";
 import { Barcode } from "@/components/barcode";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -185,9 +200,20 @@ export function CreateWarehouseItemPanel({
       : childTemplateQuery.data?.kind === "template"
         ? childTemplateQuery.data
         : undefined;
-  const fieldKeys = useMemo(
-    () => resolvedTemplate?.fields.map((field) => field.key) ?? [],
+  const templateFields = useMemo(
+    () => resolvedTemplate?.fields ?? [],
     [resolvedTemplate],
+  );
+  const fieldKeys = useMemo(
+    () => templateFields.map((field) => field.key),
+    [templateFields],
+  );
+  const requiredFieldKeys = useMemo(
+    () =>
+      templateFields
+        .filter((field) => field.required !== false)
+        .map((field) => field.key),
+    [templateFields],
   );
 
   const optionQueries = useQueries({
@@ -206,28 +232,40 @@ export function CreateWarehouseItemPanel({
     return result;
   }, [fieldKeys, optionQueries]);
 
-  const selectedOptionIds = useMemo(
-    () => fieldKeys.map((key) => form.selections[key] ?? ""),
+  const selectedFieldOptionIds = useMemo(
+    () =>
+      fieldKeys.flatMap((key) => {
+        const optionId = form.selections[key];
+        return optionId ? [optionId] : [];
+      }),
     [fieldKeys, form.selections],
+  );
+  const selectedOptionIds = useMemo(
+    () => [
+      ...(needsCategory && form.categoryOptionId
+        ? [form.categoryOptionId]
+        : []),
+      ...selectedFieldOptionIds,
+    ],
+    [form.categoryOptionId, needsCategory, selectedFieldOptionIds],
   );
   const selectionComplete =
     Boolean(resolvedTemplate) &&
-    fieldKeys.length > 0 &&
-    selectedOptionIds.every(Boolean);
+    requiredFieldKeys.length > 0 &&
+    requiredFieldKeys.every((key) => Boolean(form.selections[key]));
   const selectedIdsKey = selectedOptionIds.join("|");
   const debouncedIdsKey = useDebounce(selectedIdsKey, 400);
 
   const localSku = useMemo(() => {
-    if (!resolvedTemplate || !selectionComplete) return "";
-    const codes = fieldKeys.map(
-      (key) =>
-        optionsByKey
-          .get(key)
-          ?.find((option) => option.id === form.selections[key])?.code,
-    );
-    return codes.every(Boolean)
-      ? [resolvedTemplate.prefix, ...codes].join("-")
-      : "";
+    if (!resolvedTemplate?.prefix || !selectionComplete) return "";
+    const codes = fieldKeys.flatMap((key) => {
+      const optionId = form.selections[key];
+      const code = optionsByKey
+        .get(key)
+        ?.find((option) => option.id === optionId)?.code;
+      return code ? [code] : [];
+    });
+    return codes.length ? [resolvedTemplate.prefix, ...codes].join("-") : "";
   }, [
     fieldKeys,
     form.selections,
@@ -289,7 +327,7 @@ export function CreateWarehouseItemPanel({
   const templateBusy =
     rootTemplateQuery.isLoading || childTemplateQuery.isLoading;
   const currentPreviewReady =
-    previewQuery.data?.sku === localSku &&
+    Boolean(previewQuery.data?.sku) &&
     debouncedIdsKey === selectedIdsKey &&
     !previewQuery.isFetching;
   const canSubmit =
@@ -440,26 +478,25 @@ export function CreateWarehouseItemPanel({
 
           {resolvedTemplate ? (
             <div className="grid gap-3 md:grid-cols-4">
-              {fieldKeys.map((key) => (
-                <SelectField
-                  key={key}
+              {templateFields.map((field) => (
+                <AttributeOptionCombobox
+                  key={field.key}
                   disabled={optionsLoading}
-                  label={ATTRIBUTE_LABELS[key]}
+                  label={ATTRIBUTE_LABELS[field.key]}
+                  options={optionsByKey.get(field.key) ?? []}
                   placeholder={optionsLoading ? "Đang tải..." : "Chọn giá trị"}
-                  value={form.selections[key] ?? ""}
+                  required={field.required !== false}
+                  value={form.selections[field.key] ?? ""}
                   onChange={(optionId) =>
                     setForm((current) => ({
                       ...current,
-                      selections: { ...current.selections, [key]: optionId },
+                      selections: {
+                        ...current.selections,
+                        [field.key]: optionId,
+                      },
                     }))
                   }
-                >
-                  {(optionsByKey.get(key) ?? []).map((option) => (
-                    <SelectItem key={option.id} value={option.id}>
-                      {option.name} ({option.code})
-                    </SelectItem>
-                  ))}
-                </SelectField>
+                />
               ))}
             </div>
           ) : null}
@@ -470,7 +507,7 @@ export function CreateWarehouseItemPanel({
             </div>
             <div className="mt-1 flex min-h-7 flex-wrap items-center justify-between gap-2">
               <span className="break-all font-mono text-sm font-semibold">
-                {localSku || "Chọn đủ thuộc tính để xem SKU"}
+                {previewQuery.data?.sku || localSku || "Chọn đủ thuộc tính để xem SKU"}
               </span>
               {previewQuery.isFetching ||
               (selectionComplete && debouncedIdsKey !== selectedIdsKey) ? (
@@ -689,6 +726,77 @@ function ResultRow({
   );
 }
 
+function AttributeOptionCombobox({
+  disabled,
+  label,
+  onChange,
+  options,
+  placeholder = "Chọn giá trị",
+  required = false,
+  value,
+}: {
+  disabled?: boolean;
+  label: string;
+  onChange: (value: string) => void;
+  options: AttributeOption[];
+  placeholder?: string;
+  required?: boolean;
+  value: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedOption = options.find((option) => option.id === value);
+
+  return (
+    <div className="space-y-2">
+      <Label>
+        {label}
+        {required ? <span aria-hidden="true"> *</span> : null}
+      </Label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            aria-label={label}
+            className="w-full justify-between font-normal"
+            disabled={disabled}
+            role="combobox"
+            type="button"
+            variant="outline"
+          >
+            <span className={selectedOption ? "truncate" : "text-muted-foreground"}>
+              {selectedOption
+                ? `${selectedOption.name} (${selectedOption.code})`
+                : placeholder}
+            </span>
+            <ChevronsUpDown className="ml-2 shrink-0 text-muted-foreground" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-1">
+          <Command>
+            <CommandInput autoFocus placeholder="Tìm tên hoặc mã SKU" />
+            <CommandList>
+              <CommandEmpty>Không tìm thấy giá trị phù hợp.</CommandEmpty>
+              <CommandGroup>
+                {options.map((option) => (
+                  <CommandItem
+                    key={option.id}
+                    value={`${option.name} ${option.code}`}
+                    onSelect={() => {
+                      onChange(option.id);
+                      setOpen(false);
+                    }}
+                  >
+                    <span>{option.name} ({option.code})</span>
+                    {value === option.id ? <Check className="ml-auto" /> : null}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
 function SelectField({
   children,
   disabled,

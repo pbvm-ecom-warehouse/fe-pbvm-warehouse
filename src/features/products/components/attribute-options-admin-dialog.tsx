@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LoaderCircle, Plus, Save, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,7 +32,6 @@ import {
   type AttributeOptionStatus,
 } from "../lib/attribute-option-filter";
 import {
-  CREATABLE_WAREHOUSE_ITEM_TYPES,
   createAttributeOption,
   getSkuTemplate,
   listAttributeOptions,
@@ -51,22 +50,8 @@ const ITEM_TYPE_ATTRIBUTE_KEYS: Record<
 > = {
   CUP_BLANK: ["CUP_STYLE", "MATERIAL", "CAPACITY", "COLOR"],
   MATERIAL: ["MATERIAL_CATEGORY", "MATERIAL_TYPE", "FLAVOR", "SPEC"],
-  PACKAGING: [
-    "PACKAGING_CATEGORY",
-    "PACKAGING_STYLE",
-    "COMPATIBILITY",
-    "DIAMETER",
-    "LENGTH",
-    "SIZE",
-    "MATERIAL",
-    "COLOR",
-  ],
+  PACKAGING: ["PACKAGING_CATEGORY", "SIZE", "COLOR"],
 };
-
-const CATEGORY_KEYS: Set<AttributeKey> = new Set([
-  "MATERIAL_CATEGORY",
-  "PACKAGING_CATEGORY",
-]);
 
 function formatError(error: unknown) {
   return getApiErrorMessage(error) ?? "Không kết nối được WMS.";
@@ -83,104 +68,42 @@ export function AttributeOptionsAdminPanel() {
   const [status, setStatus] = useState<AttributeOptionStatus>("ALL");
   const [drafts, setDrafts] = useState<Record<string, OptionDraft>>({});
 
-  const rootQueries = useQueries({
-    queries: CREATABLE_WAREHOUSE_ITEM_TYPES.map((type) => ({
-      queryFn: () => getSkuTemplate(type),
-      queryKey: ["stock-sku-template", type, "root"],
-    })),
+  const templateQuery = useQuery({
+    queryFn: () => getSkuTemplate(selectedType),
+    queryKey: ["stock-sku-template", "attribute-admin", selectedType],
+    staleTime: 60_000,
   });
 
-  const categoryLookups = useMemo(
-    () =>
-      rootQueries.flatMap((query, index) => {
-        const root = query.data;
-        if (root?.kind !== "category-options") return [];
-        return root.options.map((option) => ({
-          categoryOptionId: option.id,
-          type: CREATABLE_WAREHOUSE_ITEM_TYPES[index],
-        }));
-      }),
-    [rootQueries],
-  );
+  const availableKeys = useMemo(() => {
+    if (templateQuery.data?.kind === "template") {
+      return Array.from(
+        new Set(templateQuery.data.fields.map((field) => field.key)),
+      );
+    }
 
-  const childQueries = useQueries({
-    queries: categoryLookups.map((lookup) => ({
-      queryFn: () => getSkuTemplate(lookup.type, lookup.categoryOptionId),
-      queryKey: [
-        "stock-sku-template",
-        lookup.type,
-        "category",
-        lookup.categoryOptionId,
-      ],
-    })),
-  });
-
-  const keysByType = useMemo(() => {
-    const result = new Map<CreatableWarehouseItemType, Set<AttributeKey>>();
-    CREATABLE_WAREHOUSE_ITEM_TYPES.forEach((type) => {
-      result.set(type, new Set<AttributeKey>(ITEM_TYPE_ATTRIBUTE_KEYS[type]));
-    });
-    rootQueries.forEach((query, index) => {
-      const type = CREATABLE_WAREHOUSE_ITEM_TYPES[index];
-      const keys = result.get(type)!;
-      if (query.data?.kind === "category-options") {
-        keys.add(query.data.categoryKey);
-      } else if (query.data?.kind === "template") {
-        query.data.fields.forEach((field) => keys.add(field.key));
-      }
-    });
-    childQueries.forEach((query, index) => {
-      const lookup = categoryLookups[index];
-      if (query.data?.kind === "template") {
-        const keys = result.get(lookup.type)!;
-        query.data.fields.forEach((field) => keys.add(field.key));
-      }
-    });
-
-    return result;
-  }, [categoryLookups, childQueries, rootQueries]);
-
-  const availableKeys = useMemo(
-    () =>
-      Array.from(keysByType.get(selectedType) ?? []).sort((left, right) =>
-        ATTRIBUTE_LABELS[left].localeCompare(ATTRIBUTE_LABELS[right], "vi"),
-      ),
-    [keysByType, selectedType],
-  );
-  const allAvailableKeys = useMemo(() => {
-    const keys = new Set<AttributeKey>();
-    keysByType.forEach((typeKeys) => {
-      typeKeys.forEach((key) => keys.add(key));
-    });
-    return Array.from(keys).sort((left, right) =>
+    return [...ITEM_TYPE_ATTRIBUTE_KEYS[selectedType]].sort((left, right) =>
       ATTRIBUTE_LABELS[left].localeCompare(ATTRIBUTE_LABELS[right], "vi"),
     );
-  }, [keysByType]);
+  }, [selectedType, templateQuery.data]);
 
   const effectiveSelectedKey =
     selectedKey && availableKeys.includes(selectedKey)
       ? selectedKey
       : availableKeys[0] || "";
-  const optionQueries = useQueries({
-    queries: allAvailableKeys.map((key) => ({
-      queryFn: () => listAttributeOptions(key, true),
-      queryKey: ["stock-attribute-options", key, true],
-    })),
+  const optionQuery = useQuery({
+    enabled: Boolean(effectiveSelectedKey),
+    queryFn: () =>
+      listAttributeOptions(effectiveSelectedKey as AttributeKey, true),
+    queryKey: ["stock-attribute-options", effectiveSelectedKey, true],
   });
-  const allOptions = useMemo(
-    () => optionQueries.flatMap((query) => query.data ?? []),
-    [optionQueries],
-  );
   const filteredOptions = useMemo(
-    () => filterAttributeOptions(allOptions, search, status),
-    [allOptions, search, status],
+    () => filterAttributeOptions(optionQuery.data ?? [], search, status),
+    [optionQuery.data, search, status],
   );
 
-  const metadataLoading =
-    rootQueries.some((query) => query.isLoading) ||
-    childQueries.some((query) => query.isLoading);
-  const optionsLoading = optionQueries.some((query) => query.isLoading);
-  const optionsError = optionQueries.find((query) => query.error)?.error;
+  const metadataLoading = templateQuery.isLoading && !templateQuery.data;
+  const optionsLoading = optionQuery.isLoading;
+  const optionsError = optionQuery.error;
 
   const suggestMutation = useMutation({
     mutationFn: () =>
@@ -324,83 +247,73 @@ export function AttributeOptionsAdminPanel() {
           >
             {itemTypeField}
             {attributeGroupField}
-            {CATEGORY_KEYS.has(effectiveSelectedKey as AttributeKey) ? (
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-900 md:col-span-3 xl:col-span-3">
-                <div>
-                  <span className="font-semibold">Danh mục hệ thống:</span> Danh
-                  mục (Category) được quản lý theo cấu hình registry template
-                  của BE. Không thể thêm danh mục mới từ giao diện.
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="attribute-option-name">Tên giá trị</Label>
+                <Input
+                  id="attribute-option-name"
+                  value={name}
+                  onBlur={() => {
+                    if (
+                      name.trim() &&
+                      !code.trim() &&
+                      !suggestMutation.isPending
+                    ) {
+                      suggestMutation.mutate();
+                    }
+                  }}
+                  onChange={(event) => {
+                    setName(event.target.value);
+                    setCode("");
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="attribute-option-code">Mã SKU</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="attribute-option-code"
+                    className="font-mono uppercase"
+                    maxLength={6}
+                    value={code}
+                    onChange={(event) =>
+                      setCode(event.target.value.toUpperCase())
+                    }
+                  />
+                  <Button
+                    aria-label="Gợi ý mã SKU"
+                    disabled={!name.trim() || suggestMutation.isPending}
+                    size="icon"
+                    type="button"
+                    variant="outline"
+                    onClick={() => suggestMutation.mutate()}
+                  >
+                    {suggestMutation.isPending ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : (
+                      <Sparkles />
+                    )}
+                  </Button>
                 </div>
               </div>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="attribute-option-name">Tên giá trị</Label>
-                  <Input
-                    id="attribute-option-name"
-                    value={name}
-                    onBlur={() => {
-                      if (
-                        name.trim() &&
-                        !code.trim() &&
-                        !suggestMutation.isPending
-                      ) {
-                        suggestMutation.mutate();
-                      }
-                    }}
-                    onChange={(event) => {
-                      setName(event.target.value);
-                      setCode("");
-                    }}
+              <Button
+                className="self-end"
+                disabled={
+                  !name.trim() || !code.trim() || createMutation.isPending
+                }
+                type="submit"
+              >
+                {createMutation.isPending ? (
+                  <LoaderCircle
+                    className="animate-spin"
+                    data-icon="inline-start"
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="attribute-option-code">Mã SKU</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="attribute-option-code"
-                      className="font-mono uppercase"
-                      maxLength={6}
-                      value={code}
-                      onChange={(event) =>
-                        setCode(event.target.value.toUpperCase())
-                      }
-                    />
-                    <Button
-                      aria-label="Gợi ý mã SKU"
-                      disabled={!name.trim() || suggestMutation.isPending}
-                      size="icon"
-                      type="button"
-                      variant="outline"
-                      onClick={() => suggestMutation.mutate()}
-                    >
-                      {suggestMutation.isPending ? (
-                        <LoaderCircle className="animate-spin" />
-                      ) : (
-                        <Sparkles />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-                <Button
-                  className="self-end"
-                  disabled={
-                    !name.trim() || !code.trim() || createMutation.isPending
-                  }
-                  type="submit"
-                >
-                  {createMutation.isPending ? (
-                    <LoaderCircle
-                      className="animate-spin"
-                      data-icon="inline-start"
-                    />
-                  ) : (
-                    <Plus data-icon="inline-start" />
-                  )}
-                  Thêm giá trị
-                </Button>
-              </>
-            )}
+                ) : (
+                  <Plus data-icon="inline-start" />
+                )}
+                Thêm giá trị
+              </Button>
+            </>
           </form>
 
           <div className="grid gap-3 md:grid-cols-[minmax(280px,1fr)_220px]">

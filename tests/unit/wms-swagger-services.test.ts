@@ -373,7 +373,7 @@ describe("Swagger-backed WMS services", () => {
       sortOrder: 1,
     };
     const template = {
-      fields: [{ key: "CUP_STYLE" as const }],
+      fields: [{ key: "CUP_STYLE" as const, required: true }],
       itemType: "CUP_BLANK" as const,
       kind: "template" as const,
       prefix: "CUP",
@@ -415,7 +415,6 @@ describe("Swagger-backed WMS services", () => {
     expect(mockedGet).toHaveBeenNthCalledWith(
       1,
       "/stock/item-types/CUP_BLANK/sku-template",
-      { params: { categoryOptionId: undefined } },
     );
     expect(mockedGet).toHaveBeenNthCalledWith(2, "/stock/attribute-options", {
       params: { includeInactive: true, key: "CUP_STYLE" },
