@@ -117,7 +117,6 @@ const grn = {
   purchaseOrderId: "po-1",
   status: "DRAFT" as const,
   updatedAt: "2026-07-02T00:00:00.000Z",
-  warehouseId: "wh-1",
 };
 
 const putawayTask = {
@@ -132,7 +131,6 @@ const putawayTask = {
     },
   ],
   status: "PENDING" as const,
-  warehouseId: "wh-1",
 };
 
 const goodsIssue = {
@@ -147,7 +145,6 @@ const goodsIssue = {
   ],
   orderId: "order-1",
   status: "PENDING" as const,
-  warehouseId: "wh-1",
 };
 
 const goodsReturn = {
@@ -169,7 +166,6 @@ const goodsReturn = {
   orderId: "order-1",
   status: "DRAFT" as const,
   updatedAt: "2026-07-07T00:00:00.000Z",
-  warehouseId: null,
 };
 
 const printJob = {
@@ -189,7 +185,6 @@ const printJob = {
   orderId: "order-1",
   status: "PENDING" as const,
   updatedAt: "2026-07-04T00:00:00.000Z",
-  warehouseId: "wh-1",
 };
 
 const stockCount = {
@@ -208,7 +203,6 @@ const stockCount = {
   ],
   status: "DRAFT" as const,
   updatedAt: "2026-07-05T00:00:00.000Z",
-  warehouseId: "wh-1",
   zoneId: null,
 };
 
@@ -228,7 +222,6 @@ const scrapNote = {
   ],
   status: "DRAFT" as const,
   updatedAt: "2026-07-06T00:00:00.000Z",
-  warehouseId: "wh-1",
 };
 
 const carrier = {
@@ -247,7 +240,6 @@ const shipment = {
   carrierId: "carrier-1",
   codAmount: 320000,
   createdAt: "2026-07-21T00:00:00.000Z",
-  fulfillWarehouseId: "warehouse-1",
   goodsIssueId: "issue-1",
   id: "shipment-1",
   orderId: "order-1",
@@ -330,12 +322,13 @@ describe("Swagger-backed WMS services", () => {
     });
     await createWarehouseItem({
       attributeOptionIds: ["66a100000000000000000001"],
+      images: [new File(["image"], "item.png", { type: "image/png" })],
       name: "Ly trắng 500ml",
       templateId: "CUP_BLANK",
       type: "CUP_BLANK",
       unit: "cái",
     });
-    await updateWarehouseItem("item-1", { isActive: false });
+    await updateWarehouseItem("item-1", { name: "Ly trắng 500ml mới" });
     await deleteWarehouseItem("item-1");
 
     expect(mockedGet).toHaveBeenCalledWith("/stock/items", {
@@ -347,15 +340,25 @@ describe("Swagger-backed WMS services", () => {
         type: "CUP_BLANK",
       },
     });
-    expect(mockedPost).toHaveBeenCalledWith("/stock/items", {
-      attributeOptionIds: ["66a100000000000000000001"],
-      name: "Ly trắng 500ml",
-      templateId: "CUP_BLANK",
-      type: "CUP_BLANK",
-      unit: "cái",
-    });
+    const createBody = mockedPost.mock.calls.find(
+      ([url]) => url === "/stock/items",
+    )?.[1] as FormData;
+    expect(createBody).toBeInstanceOf(FormData);
+    expect(createBody.get("type")).toBe("CUP_BLANK");
+    expect(createBody.get("templateId")).toBe("CUP_BLANK");
+    expect(JSON.parse(String(createBody.get("attributeOptionIds")))).toEqual([
+      "66a100000000000000000001",
+    ]);
+    expect(createBody.get("name")).toBe("Ly trắng 500ml");
+    expect(createBody.get("unit")).toBe("cái");
+    expect(createBody.getAll("images")).toHaveLength(1);
+    expect(mockedPost).toHaveBeenCalledWith(
+      "/stock/items",
+      expect.any(FormData),
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
     expect(mockedPatch).toHaveBeenCalledWith("/stock/items/item-1", {
-      isActive: false,
+      name: "Ly trắng 500ml mới",
     });
     expect(mockedDelete).toHaveBeenCalledWith("/stock/items/item-1");
   });
@@ -370,7 +373,7 @@ describe("Swagger-backed WMS services", () => {
       sortOrder: 1,
     };
     const template = {
-      fields: [{ key: "CUP_STYLE" as const }],
+      fields: [{ key: "CUP_STYLE" as const, required: true }],
       itemType: "CUP_BLANK" as const,
       kind: "template" as const,
       prefix: "CUP",
@@ -412,7 +415,6 @@ describe("Swagger-backed WMS services", () => {
     expect(mockedGet).toHaveBeenNthCalledWith(
       1,
       "/stock/item-types/CUP_BLANK/sku-template",
-      { params: { categoryOptionId: undefined } },
     );
     expect(mockedGet).toHaveBeenNthCalledWith(2, "/stock/attribute-options", {
       params: { includeInactive: true, key: "CUP_STYLE" },
@@ -482,7 +484,6 @@ describe("Swagger-backed WMS services", () => {
       limit: 20,
       page: 1,
       status: "PENDING",
-      warehouseId: "wh-1",
     });
     await confirmPutawayLine("task-1", {
       itemBarcode: "CUP-BLANK-500",
@@ -495,7 +496,6 @@ describe("Swagger-backed WMS services", () => {
         limit: 20,
         page: 1,
         status: "PENDING",
-        warehouseId: "wh-1",
       },
     });
     expect(mockedPost).toHaveBeenCalledWith(
@@ -519,7 +519,6 @@ describe("Swagger-backed WMS services", () => {
       limit: 20,
       page: 1,
       status: "PENDING",
-      warehouseId: "wh-1",
     });
     await listGoodsIssuePickSuggestions({
       goodsIssueId: "gi-1",
@@ -536,7 +535,6 @@ describe("Swagger-backed WMS services", () => {
         limit: 20,
         page: 1,
         status: "PENDING",
-        warehouseId: "wh-1",
       },
     });
     expect(mockedGet).toHaveBeenCalledWith(
@@ -558,7 +556,6 @@ describe("Swagger-backed WMS services", () => {
       orderId: "order-1",
       page: 1,
       status: "DRAFT",
-      warehouseId: "wh-1",
     });
     await createGoodsReturn({
       items: [{ itemId: "item-1", quantity: 2 }],
@@ -573,7 +570,6 @@ describe("Swagger-backed WMS services", () => {
           shelfId: "shelf-1",
         },
       ],
-      warehouseId: "wh-1",
     });
     await confirmGoodsReturn("return-1");
     await cancelGoodsReturn("return-1");
@@ -584,7 +580,6 @@ describe("Swagger-backed WMS services", () => {
         orderId: "order-1",
         page: 1,
         status: "DRAFT",
-        warehouseId: "wh-1",
       },
     });
     expect(mockedPost).toHaveBeenCalledWith("/goods-returns", {
@@ -595,7 +590,7 @@ describe("Swagger-backed WMS services", () => {
     const inspectBody = mockedPost.mock.calls.find(
       ([url]) => url === "/goods-returns/return-1/inspect",
     )?.[1] as FormData;
-    expect(inspectBody.get("warehouseId")).toBe("wh-1");
+    expect(inspectBody.get("warehouseId")).toBeNull();
     expect(JSON.parse(String(inspectBody.get("items")))).toEqual([
       {
         condition: "GOOD",
@@ -671,11 +666,9 @@ describe("Swagger-backed WMS services", () => {
       limit: 20,
       page: 1,
       status: "DRAFT",
-      warehouseId: "wh-1",
     });
     await createStockCount({
       note: "Kiểm định kỳ",
-      warehouseId: "wh-1",
       zoneId: "zone-1",
     });
     await countStockCountItem({
@@ -694,12 +687,10 @@ describe("Swagger-backed WMS services", () => {
         limit: 20,
         page: 1,
         status: "DRAFT",
-        warehouseId: "wh-1",
       },
     });
     expect(mockedPost).toHaveBeenCalledWith("/stock-counts", {
       note: "Kiểm định kỳ",
-      warehouseId: "wh-1",
       zoneId: "zone-1",
     });
     const countBody = mockedPost.mock.calls.find(
@@ -728,7 +719,6 @@ describe("Swagger-backed WMS services", () => {
       limit: 20,
       page: 1,
       status: "DRAFT",
-      warehouseId: "wh-1",
     });
     await createScrapNote({
       items: [
@@ -740,7 +730,6 @@ describe("Swagger-backed WMS services", () => {
         },
       ],
       note: "Hàng vỡ",
-      warehouseId: "wh-1",
     });
     await approveScrapNote("scrap-1");
     await rejectScrapNote("scrap-1", {
@@ -752,13 +741,12 @@ describe("Swagger-backed WMS services", () => {
         limit: 20,
         page: 1,
         status: "DRAFT",
-        warehouseId: "wh-1",
       },
     });
     const scrapBody = mockedPost.mock.calls.find(
       ([url]) => url === "/scrap-notes",
     )?.[1] as FormData;
-    expect(scrapBody.get("warehouseId")).toBe("wh-1");
+    expect(scrapBody.get("warehouseId")).toBeNull();
     expect(scrapBody.get("note")).toBe("Hàng vỡ");
     expect(JSON.parse(String(scrapBody.get("items")))).toEqual([
       {
@@ -818,6 +806,7 @@ describe("Swagger-backed WMS services", () => {
       trackingNumber: "GHN-0002",
     });
     await updateShipmentStatus("shipment-1", {
+      images: [new File(["pod"], "pod.png", { type: "image/png" })],
       note: "Đã bàn giao cho hãng vận chuyển",
       status: "PICKED_UP",
     });
@@ -849,9 +838,16 @@ describe("Swagger-backed WMS services", () => {
       carrierId: "carrier-1",
       trackingNumber: "GHN-0002",
     });
-    expect(mockedPatch).toHaveBeenCalledWith("/shipments/shipment-1/status", {
-      note: "Đã bàn giao cho hãng vận chuyển",
-      status: "PICKED_UP",
-    });
+    const statusBody = mockedPatch.mock.calls.find(
+      ([url]) => url === "/shipments/shipment-1/status",
+    )?.[1] as FormData;
+    expect(statusBody.get("status")).toBe("PICKED_UP");
+    expect(statusBody.get("note")).toBe("Đã bàn giao cho hãng vận chuyển");
+    expect(statusBody.getAll("images")).toHaveLength(1);
+    expect(mockedPatch).toHaveBeenCalledWith(
+      "/shipments/shipment-1/status",
+      expect.any(FormData),
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
   });
 });

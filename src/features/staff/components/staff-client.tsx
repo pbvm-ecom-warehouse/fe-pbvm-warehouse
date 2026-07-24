@@ -99,6 +99,7 @@ const staffKeys = {
 const defaultCreateForm = {
   email: "",
   name: "",
+  phone: "",
   password: "",
   role: "RECEIVER" as WmsRole,
   username: "",
@@ -107,9 +108,8 @@ const defaultFilters = {
   role: "ALL" as StaffRoleFilter,
   search: "",
   status: "ALL" as StaffStatusFilter,
-  warehouseId: "",
 };
-const defaultProfile = { email: "", name: "", warehouseId: "" };
+const defaultProfile = { email: "", name: "", phone: "" };
 
 function optionalText(value: string) {
   const trimmed = value.trim();
@@ -128,6 +128,7 @@ function buildCreatePayload(
     email: optionalText(form.email),
     name: optionalText(form.name),
     password: form.password,
+    phone: optionalText(form.phone),
     role,
     username: form.username.trim(),
   };
@@ -244,14 +245,11 @@ export function StaffClient() {
   const [filters, setFilters] = useState(defaultFilters);
   const query = useMemo<ListWmsUsersQuery>(
     () => ({
-      limit: PAGE_SIZE,
-      page,
       role: filters.role === "ALL" ? undefined : filters.role,
       search: optionalText(filters.search),
       status: filters.status === "ALL" ? undefined : filters.status,
-      warehouseId: optionalText(filters.warehouseId),
     }),
-    [filters, page],
+    [filters],
   );
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const staffQuery = useQuery({
@@ -264,8 +262,12 @@ export function StaffClient() {
     queryFn: () => getWmsUser(selectedStaffId as string),
     queryKey: staffKeys.detail(selectedStaffId ?? ""),
   });
-  const staffRows = staffQuery.data?.data ?? [];
-  const total = staffQuery.data?.total ?? 0;
+  const allStaffRows = staffQuery.data?.data ?? [];
+  const total = allStaffRows.length;
+  const staffRows = allStaffRows.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE,
+  );
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -304,7 +306,7 @@ export function StaffClient() {
     setEditProfile({
       email: staff.email ?? "",
       name: staff.name ?? "",
-      warehouseId: staff.warehouseId ?? "",
+      phone: staff.phone ?? "",
     });
     setEditRole(role ?? "RECEIVER");
     setTemporaryPassword("TempP@ssw0rd123!");
@@ -401,7 +403,7 @@ export function StaffClient() {
       profile: {
         email: optionalText(editProfile.email),
         name: optionalText(editProfile.name),
-        warehouseId: optionalText(editProfile.warehouseId),
+        phone: optionalText(editProfile.phone),
       },
       role: editRole,
       staff: editingStaff,
@@ -484,6 +486,16 @@ export function StaffClient() {
                       setCreateForm((current) => ({ ...current, name }))
                     }
                   />
+                  <TextField
+                    id="staff-phone"
+                    label="Số điện thoại"
+                    required={false}
+                    type="tel"
+                    value={createForm.phone}
+                    onChange={(phone) =>
+                      setCreateForm((current) => ({ ...current, phone }))
+                    }
+                  />
                 </div>
                 <div className="space-y-2">
                   <RoleSelect
@@ -533,7 +545,7 @@ export function StaffClient() {
         }
       >
         <form
-          className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_170px_170px_190px_auto]"
+          className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_170px_170px_auto]"
           onSubmit={handleFilter}
         >
           <div className="space-y-2">
@@ -595,15 +607,6 @@ export function StaffClient() {
               </SelectContent>
             </Select>
           </div>
-          <TextField
-            id="staff-warehouse-filter"
-            label="Mã kho"
-            required={false}
-            value={filterDraft.warehouseId}
-            onChange={(warehouseId) =>
-              setFilterDraft((current) => ({ ...current, warehouseId }))
-            }
-          />
           <Button className="self-end" type="submit">
             <Search data-icon="inline-start" />
             Lọc
@@ -838,8 +841,8 @@ export function StaffClient() {
               )}
             />
             <DetailRow
-              label="Kho phụ trách"
-              value={staffDetailQuery.data.warehouseId || "Chưa gán kho"}
+              label="Số điện thoại"
+              value={staffDetailQuery.data.phone || "Chưa khai báo"}
             />
             <DetailRow
               label="Trạng thái"
@@ -901,12 +904,13 @@ export function StaffClient() {
                     }
                   />
                   <TextField
-                    id="edit-staff-warehouse"
-                    label="Kho phụ trách"
+                    id="edit-staff-phone"
+                    label="Số điện thoại"
                     required={false}
-                    value={editProfile.warehouseId}
-                    onChange={(warehouseId) =>
-                      setEditProfile((current) => ({ ...current, warehouseId }))
+                    type="tel"
+                    value={editProfile.phone}
+                    onChange={(phone) =>
+                      setEditProfile((current) => ({ ...current, phone }))
                     }
                   />
                 </div>

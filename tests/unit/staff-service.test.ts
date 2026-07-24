@@ -35,7 +35,6 @@ const userResponse = {
   role: "RECEIVER",
   status: "ACTIVE" as const,
   mustChangePassword: true,
-  warehouseId: "central",
   createdAt: "2026-06-27T00:00:00.000Z",
   updatedAt: "2026-06-27T00:00:00.000Z",
 };
@@ -55,7 +54,6 @@ describe("staff service", () => {
       role: "RECEIVER",
       search: "receiver",
       status: "ACTIVE" as const,
-      warehouseId: "central",
     };
     mockedGet.mockResolvedValueOnce({
       data: {
@@ -85,7 +83,7 @@ describe("staff service", () => {
     const updateInput = {
       name: "Receiver Updated",
       email: "updated@example.com",
-      warehouseId: "branch-1",
+      phone: "0901000000",
     };
     mockedGet.mockResolvedValueOnce({
       data: { data: userResponse, meta: { requestId: "get-1" } },

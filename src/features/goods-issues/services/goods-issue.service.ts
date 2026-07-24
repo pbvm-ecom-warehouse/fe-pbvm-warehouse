@@ -17,7 +17,6 @@ export type GoodsIssueItem = {
 export type GoodsIssue = {
   id: string;
   orderId: string;
-  warehouseId: string;
   status: GoodsIssueStatus;
   items: GoodsIssueItem[];
   createdAt?: string;
@@ -26,7 +25,6 @@ export type GoodsIssue = {
 
 export type QueryGoodsIssuesInput = {
   status?: GoodsIssueStatus | "ALL";
-  warehouseId?: string;
   page?: number;
   limit?: number;
 };
@@ -47,11 +45,6 @@ export type ConfirmGoodsIssueLineInput = {
   lotId?: string;
 };
 
-function optionalText(value: string | undefined) {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
-}
-
 export function normalizeGoodsIssueListResponse(
   payload: ApiListLike<GoodsIssue>,
 ) {
@@ -67,7 +60,6 @@ export async function listGoodsIssues(input: QueryGoodsIssuesInput = {}) {
         page: input.page,
         status:
           input.status && input.status !== "ALL" ? input.status : undefined,
-        warehouseId: optionalText(input.warehouseId),
       },
     },
   );

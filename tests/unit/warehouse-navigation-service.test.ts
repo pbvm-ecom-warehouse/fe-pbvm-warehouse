@@ -35,14 +35,12 @@ describe("warehouse navigation services", () => {
     const result = await listPutawaySuggestionResult({
       sku: "CUP-BLANK-500",
       quantity: 80,
-      warehouseId: "central",
     });
 
     expect(mockedGet).toHaveBeenCalledWith("/putaway/suggestions", {
       params: {
         qty: 80,
         sku: "CUP-BLANK-500",
-        warehouseId: "central",
       },
     });
     expect(result).toEqual({
@@ -64,7 +62,6 @@ describe("warehouse navigation services", () => {
       listPutawaySuggestionResult({
         sku: "SKU-001",
         quantity: 999,
-        warehouseId: "central",
       }),
     ).resolves.toMatchObject({
       suggestions: [],
@@ -79,7 +76,6 @@ describe("warehouse navigation services", () => {
       listPutawaySuggestionResult({
         sku: "CUP-BLANK-500",
         quantity: 80,
-        warehouseId: "central",
       }),
     ).rejects.toBeInstanceOf(MissingBackendEndpointError);
   });

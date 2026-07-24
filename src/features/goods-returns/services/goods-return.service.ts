@@ -30,7 +30,6 @@ export type GoodsReturnItem = {
 export type GoodsReturn = {
   id: string;
   orderId?: string;
-  warehouseId: string | null;
   status: GoodsReturnStatus;
   note?: string;
   createdBy: string | null;
@@ -41,7 +40,6 @@ export type GoodsReturn = {
 
 export type QueryGoodsReturnsInput = {
   status?: GoodsReturnStatus | "ALL";
-  warehouseId?: string;
   orderId?: string;
   page?: number;
   limit?: number;
@@ -66,7 +64,6 @@ export type InspectGoodsReturnItemInput = {
 };
 
 export type InspectGoodsReturnInput = {
-  warehouseId: string;
   items: InspectGoodsReturnItemInput[];
   itemImages?: File[][];
 };
@@ -92,7 +89,6 @@ export async function listGoodsReturns(input: QueryGoodsReturnsInput = {}) {
         page: input.page,
         status:
           input.status && input.status !== "ALL" ? input.status : undefined,
-        warehouseId: optionalText(input.warehouseId),
       },
     },
   );
@@ -122,7 +118,6 @@ export async function inspectGoodsReturn(
   input: InspectGoodsReturnInput,
 ) {
   const formData = new FormData();
-  formData.append("warehouseId", input.warehouseId);
   formData.append("items", JSON.stringify(input.items));
   appendIndexedEvidenceImages(formData, input.itemImages);
 

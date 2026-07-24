@@ -1,3 +1,4 @@
+import { appendEvidenceImages } from "@/components/evidence-images/evidence-image-utils";
 import { apiClient } from "@/lib/api-client";
 import { normalizeApiList, type ApiListLike } from "@/lib/api-list";
 import { type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
@@ -33,13 +34,13 @@ export type ShipmentStatusHistoryEntry = {
   at: string;
   by?: string;
   note?: string;
+  images?: string[];
 };
 
 export type Shipment = {
   id: string;
   orderId: string;
   goodsIssueId: string;
-  fulfillWarehouseId: string;
   carrierId?: string;
   trackingNumber?: string;
   shipmentStatus: ShipmentStatus;
@@ -93,6 +94,7 @@ export type UpdateShipmentStatusInput = {
   status: ShipmentStatus;
   note?: string;
   failReason?: string;
+  images?: File[];
 };
 
 function optionalText(value: string | undefined) {
@@ -149,9 +151,16 @@ export async function updateShipmentStatus(
   shipmentId: string,
   input: UpdateShipmentStatusInput,
 ) {
+  const formData = new FormData();
+  formData.append("status", input.status);
+  if (input.note) formData.append("note", input.note);
+  if (input.failReason) formData.append("failReason", input.failReason);
+  appendEvidenceImages(formData, input.images);
+
   const response = await apiClient.patch<ApiEnvelope<Shipment> | Shipment>(
     `/shipments/${encodeURIComponent(shipmentId)}/status`,
-    input,
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } },
   );
 
   return unwrapApiData(response.data);

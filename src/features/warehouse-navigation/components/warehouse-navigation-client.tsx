@@ -2,12 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
-import {
-  useMutation,
-  useQueries,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   Barcode,
@@ -19,7 +14,6 @@ import {
   RefreshCw,
   Save,
   Search,
-  Warehouse,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -50,34 +44,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  EmptyState,
   PageHeader,
   PermissionNotice,
   StatusBadge,
   TableSkeleton,
 } from "@/features/admin-shell/components/operations-ui";
 import {
-  getWarehouseLayout,
-  listShelfContents,
-} from "@/features/warehouse-layout/services/warehouse-layout.service";
-import {
   listGoodsReceiptNotes,
   type GoodsReceiptNote,
 } from "@/features/purchases/services/goods-receipt-note.service";
 import { listWarehouseItems } from "@/features/products/services/warehouse-items.service";
-import {
-  WarehouseArchitectureScene,
-  type WarehouseSceneMode,
-} from "@/features/warehouse-navigation/components/warehouse-architecture-scene";
-import {
-  getApiErrorMessage,
-  isMissingBackendEndpoint,
-} from "@/lib/api-contract";
+import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
 import { useSessionUser } from "@/hooks/use-session-user";
-import type { ShelfContentItem } from "@/types/api";
 
 import {
   listPutawaySuggestionResult,
@@ -93,12 +74,6 @@ import {
   type PutawayTaskItem,
   type PutawayTaskStatus,
 } from "../services/putaway-task.service";
-import {
-  buildLayoutPutawaySuggestions,
-  groupShelvesByRack,
-  layoutToWarehouseShelves,
-  selectSuggestedShelf,
-} from "../utils/putaway-navigation";
 
 const PAGE_SIZE = 20;
 
@@ -110,21 +85,11 @@ const putawayKeys = {
     itemId,
     quantity,
     sku,
-    warehouseId,
   }: {
     itemId: string;
     quantity: number;
     sku: string;
-    warehouseId: string;
-  }) =>
-    [
-      "putaway-tasks",
-      "suggestions",
-      warehouseId,
-      itemId,
-      sku,
-      quantity,
-    ] as const,
+  }) => ["putaway-tasks", "suggestions", itemId, sku, quantity] as const,
 };
 
 const defaultConfirmForm = {
@@ -182,10 +147,7 @@ function resolveItemSku(
     : item.sku || item.itemId;
 }
 
-function resolveItemLot(
-  item: PutawayTaskItem,
-  grn?: GoodsReceiptNote,
-): string {
+function resolveItemLot(item: PutawayTaskItem, grn?: GoodsReceiptNote): string {
   if (item.lotNumber && !isMongoObjectId(item.lotNumber)) {
     return item.lotNumber;
   }
@@ -241,26 +203,6 @@ function ErrorBanner({ error }: { error: unknown }) {
   );
 }
 
-function ShelfCodeFallback({
-  shelfCode,
-  text,
-}: {
-  shelfCode: string;
-  text: string;
-}) {
-  return (
-    <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 p-3">
-      <div className="text-xs font-medium text-muted-foreground">
-        Mã vị trí cần đến
-      </div>
-      <div className="mt-1 font-mono text-lg font-semibold text-primary">
-        {shelfCode}
-      </div>
-      <p className="mt-1 text-xs text-muted-foreground">{text}</p>
-    </div>
-  );
-}
-
 export function WarehouseNavigationClient() {
   const user = useSessionUser();
   const queryClient = useQueryClient();
@@ -277,8 +219,6 @@ export function WarehouseNavigationClient() {
   const [selectedTaskId, setSelectedTaskId] = useState("");
   const [selectedItemId, setSelectedItemId] = useState("");
   const [confirmForm, setConfirmForm] = useState(defaultConfirmForm);
-  const [sceneMode, setSceneMode] = useState<WarehouseSceneMode>("map");
-  const [selectedRackCode, setSelectedRackCode] = useState<string | null>(null);
   const [selectedShelfCode, setSelectedShelfCode] = useState<string | null>(
     null,
   );
@@ -352,7 +292,6 @@ export function WarehouseNavigationClient() {
     ? detail?.items.find((item) => item.itemId === selectedItemId)
     : undefined;
   const activeItemId = selectedItem?.itemId ?? "";
-  const activeWarehouseId = detail?.warehouseId ?? "";
   const suggestionQty = selectedItem
     ? Math.max(1, selectedItem.remainingQty ?? selectedItem.quantity)
     : 1;
@@ -362,30 +301,17 @@ export function WarehouseNavigationClient() {
     ? resolveItemSku(selectedItem, activeGrn, warehouseItemMap)
     : "";
 
-  const layoutQuery = useQuery({
-    enabled: canUsePutawayApi && Boolean(activeWarehouseId),
-    queryFn: () => getWarehouseLayout(activeWarehouseId, "published"),
-    queryKey: ["warehouse-layout", activeWarehouseId, "published"],
-    retry: false,
-  });
-
   const suggestionsQuery = useQuery({
-    enabled:
-      canUsePutawayApi &&
-      Boolean(activeWarehouseId) &&
-      Boolean(activeItemId) &&
-      Boolean(effectiveSku),
+    enabled: canUsePutawayApi && Boolean(activeItemId) && Boolean(effectiveSku),
     queryFn: () =>
       listPutawaySuggestionResult({
         quantity: suggestionQty,
         sku: effectiveSku,
-        warehouseId: activeWarehouseId,
       }),
     queryKey: putawayKeys.suggestions({
       itemId: activeItemId,
       quantity: suggestionQty,
       sku: effectiveSku,
-      warehouseId: activeWarehouseId,
     }),
     retry: false,
   });
@@ -393,108 +319,6 @@ export function WarehouseNavigationClient() {
   const apiSuggestions = useMemo(
     () => suggestionsQuery.data?.suggestions ?? [],
     [suggestionsQuery.data?.suggestions],
-  );
-  const layout = layoutQuery.data ?? null;
-  const layoutShelves = useMemo(
-    () => (layout ? layoutToWarehouseShelves(layout) : []),
-    [layout],
-  );
-  const visualSuggestions = useMemo(
-    () =>
-      layout
-        ? buildLayoutPutawaySuggestions({
-            layout,
-            suggestions: apiSuggestions,
-          })
-        : [],
-    [apiSuggestions, layout],
-  );
-  const selectedVisualSuggestion = useMemo(
-    () =>
-      visualSuggestions.find(
-        (suggestion) => suggestion.shelf.code === selectedShelfCode,
-      ) ?? selectSuggestedShelf(visualSuggestions),
-    [selectedShelfCode, visualSuggestions],
-  );
-  const activeSelectedShelfCode =
-    selectedShelfCode ?? selectedVisualSuggestion?.shelf.code ?? null;
-  const activeSelectedRackCode =
-    selectedRackCode ?? selectedVisualSuggestion?.shelf.rackCode ?? null;
-  const suggestedShelfCodes = useMemo(
-    () => new Set(apiSuggestions.map((suggestion) => suggestion.shelfCode)),
-    [apiSuggestions],
-  );
-  const rackGroup = useMemo(
-    () =>
-      activeSelectedRackCode
-        ? (groupShelvesByRack(layoutShelves).find(
-            (group) => group.rackCode === activeSelectedRackCode,
-          ) ?? null)
-        : null,
-    [activeSelectedRackCode, layoutShelves],
-  );
-  const layoutSource = layout
-    ? "api"
-    : layoutQuery.error && isMissingBackendEndpoint(layoutQuery.error)
-      ? "unsupported"
-      : "missing";
-  const contentQueries = useQueries({
-    queries:
-      sceneMode === "rack" && rackGroup && activeWarehouseId
-        ? rackGroup.shelves.map((shelf) => ({
-            enabled: true,
-            queryFn: () =>
-              listShelfContents({
-                shelfCode: shelf.code,
-                warehouseId: activeWarehouseId,
-              }),
-            queryKey: [
-              "warehouse-shelf-contents",
-              activeWarehouseId,
-              shelf.code,
-            ],
-            retry: false,
-          }))
-        : [],
-  });
-  const contentsByShelf = useMemo(() => {
-    const contents: Record<string, ShelfContentItem[] | undefined> = {};
-
-    rackGroup?.shelves.forEach((shelf, index) => {
-      const data = contentQueries[index]?.data;
-      contents[shelf.code] = Array.isArray(data) ? data : [];
-    });
-
-    return contents;
-  }, [contentQueries, rackGroup]);
-  const loadingShelfCodes = useMemo(
-    () =>
-      new Set(
-        rackGroup?.shelves
-          .filter((_, index) => contentQueries[index]?.isLoading)
-          .map((shelf) => shelf.code) ?? [],
-      ),
-    [contentQueries, rackGroup],
-  );
-  const erroredShelfCodes = useMemo(
-    () =>
-      new Set(
-        rackGroup?.shelves
-          .filter((_, index) => contentQueries[index]?.isError)
-          .map((shelf) => shelf.code) ?? [],
-      ),
-    [contentQueries, rackGroup],
-  );
-  const unsupportedShelfCodes = useMemo(
-    () =>
-      new Set(
-        rackGroup?.shelves
-          .filter((_, index) =>
-            isMissingBackendEndpoint(contentQueries[index]?.error),
-          )
-          .map((shelf) => shelf.code) ?? [],
-      ),
-    [contentQueries, rackGroup],
   );
 
   const confirmMutation = useMutation({
@@ -533,8 +357,6 @@ export function WarehouseNavigationClient() {
     setSelectedTaskId(task.id);
     setSelectedItemId("");
     setConfirmForm(defaultConfirmForm);
-    setSceneMode("map");
-    setSelectedRackCode(null);
     setSelectedShelfCode(null);
   }
 
@@ -548,19 +370,11 @@ export function WarehouseNavigationClient() {
       quantity: String(Math.max(1, qty)),
       shelfCode: "",
     });
-    setSceneMode("map");
-    setSelectedRackCode(null);
     setSelectedShelfCode(null);
   }
 
   function selectSuggestion(suggestion: PutawayShelfSuggestion) {
-    const visualSuggestion = visualSuggestions.find(
-      (item) => item.shelf.code === suggestion.shelfCode,
-    );
-
     setSelectedShelfCode(suggestion.shelfCode);
-    setSelectedRackCode(visualSuggestion?.shelf.rackCode ?? null);
-    setSceneMode(visualSuggestion ? "rack" : "map");
     setConfirmForm((current) => ({
       ...current,
       quantity: String(
@@ -570,34 +384,7 @@ export function WarehouseNavigationClient() {
     }));
   }
 
-  function openRack(rackCode: string, shelfCode: string) {
-    setSelectedRackCode(rackCode);
-    setSelectedShelfCode(shelfCode);
-    setConfirmForm((current) => ({ ...current, shelfCode }));
-    setSceneMode("rack");
-  }
-
-  function selectShelfOnRack(shelfCode: string) {
-    setSelectedShelfCode(shelfCode);
-    setConfirmForm((current) => ({ ...current, shelfCode }));
-  }
-
-  function retryShelfContents(shelfCode: string) {
-    void queryClient.invalidateQueries({
-      queryKey: ["warehouse-shelf-contents", activeWarehouseId, shelfCode],
-    });
-  }
-
   const warning = warningLabel(suggestionsQuery.data?.warning);
-  const fallbackShelfCode =
-    selectedShelfCode ?? apiSuggestions[0]?.shelfCode ?? "";
-  const shouldShowShelfFallback =
-    Boolean(fallbackShelfCode) &&
-    (!layout ||
-      !visualSuggestions.some(
-        (suggestion) => suggestion.shelf.code === fallbackShelfCode,
-      ));
-
   return (
     <div className="space-y-5">
       <PageHeader
@@ -626,8 +413,8 @@ export function WarehouseNavigationClient() {
             </Button>
             {canManageStructure ? (
               <Button asChild variant="outline">
-                <Link href="/warehouses">
-                  <Warehouse data-icon="inline-start" />
+                <Link href="/locations">
+                  <MapPinned data-icon="inline-start" />
                   Quản lý vị trí
                   <ArrowRight data-icon="inline-end" />
                 </Link>
@@ -746,28 +533,6 @@ export function WarehouseNavigationClient() {
               onSelectItem={selectItem}
             />
           ) : null}
-
-          {selectedItem && activeWarehouseId ? (
-            <WarehouseArchitectureScene
-              contentsByShelf={contentsByShelf}
-              erroredShelfCodes={erroredShelfCodes}
-              layout={layout}
-              layoutSource={layoutSource}
-              loadingShelfCodes={loadingShelfCodes}
-              onBackToMap={() => setSceneMode("map")}
-              onOpenRack={openRack}
-              onRetryShelf={retryShelfContents}
-              onSelectShelf={selectShelfOnRack}
-              rackGroup={rackGroup}
-              route={selectedVisualSuggestion?.route ?? null}
-              sceneMode={sceneMode}
-              selectedRackCode={activeSelectedRackCode}
-              selectedShelfCode={activeSelectedShelfCode}
-              suggestions={visualSuggestions}
-              suggestedShelfCodes={suggestedShelfCodes}
-              unsupportedShelfCodes={unsupportedShelfCodes}
-            />
-          ) : null}
         </div>
 
         {selectedItem ? (
@@ -778,9 +543,7 @@ export function WarehouseNavigationClient() {
                   <MapPinned className="size-4 text-primary" />
                   Vị trí cất hàng
                 </CardTitle>
-                <CardDescription>
-                  {effectiveSku}
-                </CardDescription>
+                <CardDescription>{effectiveSku}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {suggestionsQuery.isLoading ? (
@@ -799,12 +562,6 @@ export function WarehouseNavigationClient() {
                   <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
                     Chưa có vị trí phù hợp cho mặt hàng và số lượng này.
                   </div>
-                ) : null}
-                {shouldShowShelfFallback ? (
-                  <ShelfCodeFallback
-                    shelfCode={fallbackShelfCode}
-                    text="Kho chưa có sơ đồ cho vị trí này. Nhân viên dùng mã vị trí để tìm kệ và quét xác nhận."
-                  />
                 ) : null}
                 <div className="grid gap-2">
                   {apiSuggestions.map((suggestion) => (
@@ -1001,7 +758,11 @@ function PutawayTaskDetail({
           Dòng cần cất hàng
         </CardTitle>
         <CardDescription>
-          Phiếu nhập <span className="font-mono font-semibold text-foreground">{grnDisplay}</span> · Nhấp vào một dòng hàng để xem gợi ý vị trí cất
+          Phiếu nhập{" "}
+          <span className="font-mono font-semibold text-foreground">
+            {grnDisplay}
+          </span>{" "}
+          · Nhấp vào một dòng hàng để xem gợi ý vị trí cất
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-4">
@@ -1022,7 +783,8 @@ function PutawayTaskDetail({
                 <TableRow
                   className={cn(
                     "cursor-pointer hover:bg-accent/60 transition-colors",
-                    selectedItemId === item.itemId && "bg-primary/10 border-l-4 border-l-primary font-medium",
+                    selectedItemId === item.itemId &&
+                      "bg-primary/10 border-l-4 border-l-primary font-medium",
                   )}
                   key={`${item.itemId}-${item.lotId ?? "none"}`}
                   onClick={() => onSelectItem(item)}
@@ -1032,9 +794,7 @@ function PutawayTaskDetail({
                   </TableCell>
                   <TableCell>{item.quantity}</TableCell>
                   <TableCell>{item.remainingQty ?? item.quantity}</TableCell>
-                  <TableCell>
-                    {resolveItemLot(item, grn)}
-                  </TableCell>
+                  <TableCell>{resolveItemLot(item, grn)}</TableCell>
                 </TableRow>
               ))
             )}

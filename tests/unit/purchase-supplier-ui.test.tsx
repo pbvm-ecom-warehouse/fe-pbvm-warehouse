@@ -22,7 +22,6 @@ vi.mock("@/hooks/use-session-user", () => ({
     roles: sessionRoleState.roles,
     tenantId: "demo",
     type: "user",
-    warehouseId: "wh-1",
   }),
 }));
 
@@ -95,7 +94,6 @@ vi.mock(
 
     return {
       ...actual,
-      listWarehouses: vi.fn(),
     };
   },
 );
@@ -129,8 +127,6 @@ const grnService =
   await import("@/features/purchases/services/goods-receipt-note.service");
 const supplierService =
   await import("@/features/suppliers/services/supplier.service");
-const warehouseService =
-  await import("@/features/warehouse-structure/services/warehouse-structure.service");
 const warehouseItemService =
   await import("@/features/products/services/warehouse-items.service");
 
@@ -145,7 +141,6 @@ const mockedListSupplierItems = vi.mocked(
 );
 const mockedGetWarehouseItem = vi.mocked(warehouseItemService.getWarehouseItem);
 const mockedGetSupplierItem = vi.mocked(supplierService.getSupplierItem);
-const mockedListWarehouses = vi.mocked(warehouseService.listWarehouses);
 const mockedListWarehouseItems = vi.mocked(
   warehouseItemService.listWarehouseItems,
 );
@@ -186,7 +181,6 @@ const purchaseOrder = {
   status: "DRAFT" as const,
   supplierId: "sup-1",
   updatedAt: "2026-07-23T00:00:00.000Z",
-  warehouseId: "wh-1",
 };
 
 const goodsReceiptNote = {
@@ -205,7 +199,6 @@ const goodsReceiptNote = {
   purchaseOrderId: "po-1",
   status: "CONFIRMED" as const,
   updatedAt: "2026-07-23T00:00:00.000Z",
-  warehouseId: "wh-1",
 };
 
 function renderWithQueryClient(component: React.ReactNode) {
@@ -253,16 +246,6 @@ describe("purchase and supplier UX", () => {
       page: 1,
       total: 0,
     });
-    mockedListWarehouses.mockResolvedValue([
-      {
-        address: "Kho chính",
-        createdAt: "2026-07-01T00:00:00.000Z",
-        id: "wh-1",
-        isActive: true,
-        name: "Kho trung tâm",
-        updatedAt: "2026-07-01T00:00:00.000Z",
-      },
-    ]);
     mockedGetWarehouseItem.mockResolvedValue({
       createdAt: "2026-07-01T00:00:00.000Z",
       id: "item-1",

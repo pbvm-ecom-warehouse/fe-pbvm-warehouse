@@ -7,7 +7,6 @@ describe("print job schema", () => {
     orderId: "order-2026-06-17-01",
     inputItemId: "cup-blank",
     outputItemId: "cup-printed",
-    warehouseId: "warehouse-1",
     quantity: 1000,
     availableQty: 1200,
     designId: "design_tea_house",

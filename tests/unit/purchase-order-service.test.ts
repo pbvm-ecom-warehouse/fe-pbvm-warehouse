@@ -35,7 +35,6 @@ const purchaseOrder = {
   status: "DRAFT" as const,
   supplierId: "sup-1",
   updatedAt: "2026-07-03T00:00:00.000Z",
-  warehouseId: "wh-1",
 };
 
 describe("purchase order API service", () => {
@@ -107,7 +106,6 @@ describe("purchase order API service", () => {
       items: purchaseOrder.items,
       note: "Đặt hàng test",
       supplierId: "sup-1",
-      warehouseId: "wh-1",
     });
 
     expect(mockedPost).toHaveBeenCalledWith("/purchase-orders", {
@@ -115,7 +113,6 @@ describe("purchase order API service", () => {
       items: purchaseOrder.items,
       note: "Đặt hàng test",
       supplierId: "sup-1",
-      warehouseId: "wh-1",
     });
   });
 });

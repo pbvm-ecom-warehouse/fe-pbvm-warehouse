@@ -77,7 +77,6 @@ describe("wms login schema", () => {
           status: "ACTIVE",
           mustChangePassword: false,
           avatarUrl: "https://cdn.example.com/user-1.webp",
-          warehouseId: "central",
           createdAt: "2026-06-27T00:00:00.000Z",
           updatedAt: "2026-06-27T00:00:00.000Z",
         },
@@ -100,7 +99,6 @@ describe("wms login schema", () => {
       roles: ["RECEIVER"],
       tenantId: "demo-tenant",
       type: "user",
-      warehouseId: "central",
       avatarUrl: "https://cdn.example.com/user-1.webp",
     });
   });
@@ -112,7 +110,6 @@ describe("wms login schema", () => {
       roles: ["RECEIVER"],
       tenantId: "demo-tenant",
       type: "user",
-      warehouseId: "central",
     });
     mockedPost.mockResolvedValueOnce({
       data: {
@@ -123,7 +120,6 @@ describe("wms login schema", () => {
           role: "RECEIVER",
           status: "ACTIVE",
           mustChangePassword: false,
-          warehouseId: "central",
           avatarUrl: "https://cdn.example.com/avatar.webp",
         },
         meta: { requestId: "avatar-1" },

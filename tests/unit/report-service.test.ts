@@ -16,16 +16,6 @@ vi.mock("@/lib/api-client", () => ({
 
 const mockedGet = vi.mocked(apiClient.get);
 
-const pagination = {
-  hasNext: true,
-  hasPrev: true,
-  limit: 20,
-  page: 2,
-  totalItems: 53,
-  totalPages: 3,
-  type: "offset",
-};
-
 const stockRow = {
   available: 80,
   expired: 5,
@@ -33,8 +23,6 @@ const stockRow = {
   onHand: 100,
   reserved: 15,
   sku: "SKU-01",
-  warehouseId: "wh-1",
-  warehouseName: "Kho trung tâm",
 };
 
 const lotRow = {
@@ -45,8 +33,6 @@ const lotRow = {
   quantity: 12,
   sku: "SKU-LOT-01",
   status: "ACTIVE" as const,
-  warehouseId: "wh-1",
-  warehouseName: "Kho trung tâm",
 };
 
 describe("WMS report API service", () => {
@@ -54,36 +40,16 @@ describe("WMS report API service", () => {
     mockedGet.mockReset();
   });
 
-  it("requests stock with a trimmed exact SKU and maps offset pagination", async () => {
-    mockedGet.mockResolvedValueOnce({
-      data: {
-        data: [stockRow],
-        meta: {
-          pagination,
-          requestId: "req-stock-1",
-          timestamp: "2026-07-18T08:00:00.000Z",
-        },
-      },
-    });
+  it("requests stock with only the live Swagger SKU query", async () => {
+    mockedGet.mockResolvedValueOnce({ data: [stockRow] });
 
-    await expect(
-      getStockReport({
-        limit: 20,
-        page: 2,
-        sku: "  SKU-01  ",
-        warehouseId: "wh-1",
-      }),
-    ).resolves.toEqual({
-      data: [stockRow],
-      pagination,
-    });
+    await expect(getStockReport({ sku: "  SKU-01  " })).resolves.toEqual([
+      stockRow,
+    ]);
 
     expect(mockedGet).toHaveBeenCalledWith("/reports/stock", {
       params: {
-        limit: 20,
-        page: 2,
         sku: "SKU-01",
-        warehouseId: "wh-1",
       },
     });
   });
@@ -91,16 +57,10 @@ describe("WMS report API service", () => {
   it("accepts a raw lot array as a defensive Swagger fallback", async () => {
     mockedGet.mockResolvedValueOnce({ data: [lotRow] });
 
-    await expect(getLotReport({ limit: 20, page: 1 })).resolves.toEqual({
-      data: [lotRow],
-      pagination: {
-        hasNext: false,
-        hasPrev: false,
-        limit: 20,
-        page: 1,
-        totalItems: 1,
-        totalPages: 1,
-      },
+    await expect(getLotReport({})).resolves.toEqual([lotRow]);
+
+    expect(mockedGet).toHaveBeenCalledWith("/reports/stock/lots", {
+      params: { sku: undefined, status: undefined },
     });
   });
 
@@ -116,9 +76,7 @@ describe("WMS report API service", () => {
 
     mockedGet.mockResolvedValueOnce({
       data: {
-        data: [
-          { movementCount: 4, totalQuantity: 20, type: "RETURN_IN" },
-        ],
+        data: [{ movementCount: 4, totalQuantity: 20, type: "RETURN_IN" }],
         meta: {
           requestId: "req-performance-1",
           timestamp: "2026-07-18T08:00:00.000Z",
@@ -136,7 +94,6 @@ describe("WMS report API service", () => {
       params: {
         ...range,
         sku: "SKU-01",
-        warehouseId: undefined,
       },
     });
   });

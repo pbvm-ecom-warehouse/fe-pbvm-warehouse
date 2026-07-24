@@ -22,13 +22,13 @@ import {
 } from "@/lib/rbac";
 
 const moduleSummaries = {
-  warehouses: {
-    title: "Kho",
-    description: "Quản lý kho trung tâm, khu vực, dãy kệ và mã vị trí.",
-    action: "Tạo kho",
-    highlights: ["Kho trung tâm", "Khu vực / dãy / vị trí", "Địa chỉ"],
-    tableTitle: "Danh sách kho",
-    columns: ["Tên kho", "Loại kho", "Trạng thái"],
+  locations: {
+    title: "Vị trí kho",
+    description: "Quản lý khu vực, dãy kệ và mã vị trí trong kho.",
+    action: "Tạo khu vực",
+    highlights: ["Khu vực", "Dãy kệ", "Vị trí"],
+    tableTitle: "Cấu trúc vị trí",
+    columns: ["Khu vực", "Dãy kệ", "Vị trí"],
     roleNotes: {
       ADMIN:
         "Quản trị viên quản lý cấu trúc kho và phạm vi làm việc của nhân viên.",

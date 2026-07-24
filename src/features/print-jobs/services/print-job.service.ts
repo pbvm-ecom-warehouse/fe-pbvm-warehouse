@@ -32,7 +32,6 @@ export type PrintJobItem = {
 export type PrintJob = {
   id: string;
   orderId: string;
-  warehouseId: string;
   status: PrintJobStatus;
   confirmedBy?: string | null;
   items: PrintJobItem[];

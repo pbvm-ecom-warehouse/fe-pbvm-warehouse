@@ -1,3 +1,4 @@
+import { appendEvidenceImages } from "@/components/evidence-images/evidence-image-utils";
 import { apiClient } from "@/lib/api-client";
 import { normalizeApiList, type ApiListLike } from "@/lib/api-list";
 import { type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
@@ -54,8 +55,8 @@ export type SkuTemplate =
       templateId: string;
       itemType: CreatableWarehouseItemType;
       category?: string | null;
-      prefix: string;
-      fields: Array<{ key: AttributeKey }>;
+      prefix?: string;
+      fields: Array<{ key: AttributeKey; required?: boolean }>;
     };
 
 export type SkuPreview = { sku: string };
@@ -95,6 +96,7 @@ export type WarehouseItem = {
   height?: number | null;
   isActive: boolean;
   createdAt: string;
+  images?: string[];
   updatedAt: string;
 };
 
@@ -119,12 +121,12 @@ export type CreateWarehouseItemInput = {
   depth?: number;
   width?: number;
   height?: number;
+  images?: File[];
 };
 
 export type UpdateWarehouseItemInput = Partial<{
   name: string;
   unit: string;
-  altBarcodes: string[];
   altUnits: WarehouseItemAltUnit[];
   isPerishable: boolean;
   nearExpiryDays: number;
@@ -132,7 +134,6 @@ export type UpdateWarehouseItemInput = Partial<{
   depth: number;
   width: number;
   height: number;
-  isActive: boolean;
 }>;
 
 export type CreateAttributeOptionInput = Pick<
@@ -173,9 +174,37 @@ export async function listWarehouseItems(input: QueryWarehouseItemsInput = {}) {
 }
 
 export async function createWarehouseItem(input: CreateWarehouseItemInput) {
+  const formData = new FormData();
+  formData.append("type", input.type);
+  formData.append("templateId", input.templateId);
+  formData.append(
+    "attributeOptionIds",
+    JSON.stringify(input.attributeOptionIds),
+  );
+  formData.append("name", input.name);
+  formData.append("unit", input.unit);
+  if (input.altUnits)
+    formData.append("altUnits", JSON.stringify(input.altUnits));
+  if (input.isPerishable !== undefined) {
+    formData.append("isPerishable", String(input.isPerishable));
+  }
+  for (const key of [
+    "nearExpiryDays",
+    "minQuantity",
+    "depth",
+    "width",
+    "height",
+  ] as const) {
+    const value = input[key];
+    if (value !== undefined) formData.append(key, String(value));
+  }
+  appendEvidenceImages(formData, input.images);
+
   const response = await apiClient.post<
     ApiEnvelope<WarehouseItem> | WarehouseItem
-  >("/stock/items", input);
+  >("/stock/items", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
 
   return unwrapApiData(response.data);
 }
@@ -183,13 +212,43 @@ export async function createWarehouseItem(input: CreateWarehouseItemInput) {
 export async function getSkuTemplate(
   type: CreatableWarehouseItemType,
   categoryOptionId?: string,
-) {
-  const response = await apiClient.get<ApiEnvelope<SkuTemplate> | SkuTemplate>(
-    `/stock/item-types/${encodeURIComponent(type)}/sku-template`,
-    { params: { categoryOptionId: optionalText(categoryOptionId) } },
-  );
+): Promise<SkuTemplate> {
+  const categoryId = optionalText(categoryOptionId);
+  const endpoint = `/stock/item-types/${encodeURIComponent(type)}/sku-template`;
+  const response = categoryId
+    ? await apiClient.get<ApiEnvelope<SkuTemplate> | SkuTemplate>(endpoint, {
+        params: { categoryOptionId: categoryId },
+      })
+    : await apiClient.get<ApiEnvelope<SkuTemplate> | SkuTemplate>(endpoint);
 
-  return unwrapApiData(response.data);
+  const template = unwrapApiData(response.data);
+  if (template.kind === "template") {
+    const rawTemplate = template as {
+      category?: string | null;
+      fields: Array<{ categoryKey?: AttributeKey; key?: AttributeKey; required?: boolean }>;
+      itemType: CreatableWarehouseItemType;
+      kind: "template";
+      prefix?: string;
+      templateId: string;
+    };
+    return {
+      ...rawTemplate,
+      fields: rawTemplate.fields.map((field) => ({
+        key: field.categoryKey ?? field.key!,
+        required: field.required ?? true,
+      })),
+    };
+  }
+
+  const seenOptionIds = new Set<string>();
+  return {
+    ...template,
+    options: template.options.filter((option) => {
+      if (seenOptionIds.has(option.id)) return false;
+      seenOptionIds.add(option.id);
+      return true;
+    }),
+  };
 }
 
 export async function previewWarehouseItemSku(

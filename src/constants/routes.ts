@@ -13,7 +13,6 @@ import {
   Server,
   Truck,
   UsersRound,
-  Warehouse,
 } from "lucide-react";
 
 import { getRouteAllowedRoles } from "@/lib/rbac";
@@ -32,10 +31,10 @@ export const dashboardRoutes = [
     allowedRoles: getRouteAllowedRoles("/reports"),
   },
   {
-    href: "/warehouses",
-    label: "Kho",
-    icon: Warehouse,
-    allowedRoles: getRouteAllowedRoles("/warehouses"),
+    href: "/locations",
+    label: "Vị trí kho",
+    icon: MapPinned,
+    allowedRoles: getRouteAllowedRoles("/locations"),
   },
   {
     href: "/products",

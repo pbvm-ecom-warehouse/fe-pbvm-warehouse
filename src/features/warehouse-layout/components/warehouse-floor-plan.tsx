@@ -134,9 +134,10 @@ export function WarehouseFloorPlan({
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const { widthM, heightM, gridM } = layout.canvas;
-  const patternId = `warehouse-grid-${layout.warehouseId}`;
-  const hatchId = `warehouse-zone-hatch-${layout.warehouseId}`;
-  const arrowId = `warehouse-route-arrow-${layout.warehouseId}`;
+  const layoutDomId = layout.id ?? "single-warehouse-layout";
+  const patternId = `warehouse-grid-${layoutDomId}`;
+  const hatchId = `warehouse-zone-hatch-${layoutDomId}`;
+  const arrowId = `warehouse-route-arrow-${layoutDomId}`;
 
   function startDrag(
     event: ReactPointerEvent<SVGElement>,

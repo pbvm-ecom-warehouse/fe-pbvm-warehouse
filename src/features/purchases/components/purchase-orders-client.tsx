@@ -73,10 +73,6 @@ import {
   listSuppliers,
   type Supplier,
 } from "@/features/suppliers/services/supplier.service";
-import {
-  listWarehouses,
-  type WarehouseStructureWarehouse,
-} from "@/features/warehouse-structure/services/warehouse-structure.service";
 import { WarehouseItemCombobox } from "@/features/products/components/warehouse-item-combobox";
 import {
   getWarehouseItem,
@@ -116,7 +112,6 @@ const purchaseKeys = {
     ["purchase-orders", "list", params] as const,
 
   suppliers: ["purchase-orders", "suppliers"] as const,
-  warehouses: ["purchase-orders", "warehouses"] as const,
 };
 
 type PurchaseOrderItemForm = {
@@ -151,7 +146,6 @@ const defaultCreateForm = {
   expectedDate: "",
   note: "",
   supplierId: "",
-  warehouseId: "",
 };
 
 function formatError(error: unknown) {
@@ -308,12 +302,6 @@ export function PurchaseOrdersClient() {
     queryKey: purchaseKeys.suppliers,
   });
 
-  const warehousesQuery = useQuery({
-    enabled: canUsePurchaseOrderApi,
-    queryFn: listWarehouses,
-    queryKey: purchaseKeys.warehouses,
-  });
-
   const purchaseOrders = useMemo(
     () => purchaseOrdersQuery.data?.data ?? [],
     [purchaseOrdersQuery.data?.data],
@@ -321,10 +309,6 @@ export function PurchaseOrdersClient() {
   const suppliers = useMemo(
     () => suppliersQuery.data?.data ?? [],
     [suppliersQuery.data?.data],
-  );
-  const warehouses = useMemo(
-    () => warehousesQuery.data ?? [],
-    [warehousesQuery.data],
   );
 
   const total = purchaseOrdersQuery.data?.total ?? 0;
@@ -381,10 +365,6 @@ export function PurchaseOrdersClient() {
     () => new Map(suppliers.map((supplier) => [supplier.id, supplier])),
     [suppliers],
   );
-  const warehouseById = useMemo(
-    () => new Map(warehouses.map((warehouse) => [warehouse.id, warehouse])),
-    [warehouses],
-  );
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -393,7 +373,6 @@ export function PurchaseOrdersClient() {
         items: toPurchaseOrderItems(itemForms),
         note: optionalText(createForm.note),
         supplierId: createForm.supplierId,
-        warehouseId: createForm.warehouseId,
       }),
     onError: (error) => toast.error(formatError(error)),
     onSuccess: (purchaseOrder) => {
@@ -652,7 +631,6 @@ export function PurchaseOrdersClient() {
                     purchaseOrders={purchaseOrders}
                     selectedId={activePurchaseOrderId}
                     supplierById={supplierById}
-                    warehouseById={warehouseById}
                     onSelect={(purchaseOrder) => {
                       setSelectedPurchaseOrderId(purchaseOrder.id);
                       setPurchaseDetailOpen(true);
@@ -714,7 +692,6 @@ export function PurchaseOrdersClient() {
             }
             onCreate={openGrnDialog}
             purchaseOrderById={new Map(purchaseOrders.map((po) => [po.id, po]))}
-            warehouseById={warehouseById}
             onSelect={setSelectedGoodsReceiptNote}
           />
         </TabsContent>
@@ -756,23 +733,6 @@ export function PurchaseOrdersClient() {
                   {suppliers.map((supplier) => (
                     <SelectItem key={supplier.id} value={supplier.id}>
                       {supplier.code} · {supplier.name}
-                    </SelectItem>
-                  ))}
-                </SelectField>
-                <SelectField
-                  disabled={!canUsePurchaseOrderApi}
-                  label="Kho nhận"
-                  value={createForm.warehouseId}
-                  onChange={(warehouseId) =>
-                    setCreateForm((current) => ({
-                      ...current,
-                      warehouseId,
-                    }))
-                  }
-                >
-                  {warehouses.map((warehouse) => (
-                    <SelectItem key={warehouse.id} value={warehouse.id}>
-                      {warehouse.name}
                     </SelectItem>
                   ))}
                 </SelectField>
@@ -836,7 +796,6 @@ export function PurchaseOrdersClient() {
                 disabled={
                   !canUsePurchaseOrderApi ||
                   !createForm.supplierId ||
-                  !createForm.warehouseId ||
                   itemForms.some(
                     (item) => !item.itemId || !item.sku || !item.unit,
                   ) ||
@@ -879,7 +838,6 @@ export function PurchaseOrdersClient() {
                 detail={detail}
                 loading={detailQuery.isFetching}
                 supplier={supplierById.get(detail.supplierId)}
-                warehouse={warehouseById.get(detail.warehouseId)}
                 warehouseItemById={warehouseItemById}
               />
             ) : null}
@@ -984,7 +942,6 @@ export function PurchaseOrdersClient() {
           purchaseOrder={purchaseOrders.find(
             (po) => po.id === selectedGoodsReceiptNote.purchaseOrderId,
           )}
-          warehouse={warehouseById.get(selectedGoodsReceiptNote.warehouseId)}
         />
       ) : null}
     </div>
@@ -1022,13 +979,11 @@ function PurchaseOrderTable({
   purchaseOrders,
   selectedId,
   supplierById,
-  warehouseById,
 }: {
   onSelect: (purchaseOrder: PurchaseOrder) => void;
   purchaseOrders: PurchaseOrder[];
   selectedId: string;
   supplierById: Map<string, Supplier>;
-  warehouseById: Map<string, WarehouseStructureWarehouse>;
 }) {
   return (
     <Table scrollable>
@@ -1036,7 +991,6 @@ function PurchaseOrderTable({
         <TableRow>
           <TableHead>Số đơn mua</TableHead>
           <TableHead>NCC</TableHead>
-          <TableHead>Kho</TableHead>
           <TableHead>Trạng thái</TableHead>
           <TableHead>Ngày tạo</TableHead>
           <TableHead className="w-36 text-right">Thao tác</TableHead>
@@ -1044,7 +998,7 @@ function PurchaseOrderTable({
       </TableHeader>
       <TableBody>
         {purchaseOrders.length === 0 ? (
-          <EmptyRow colSpan={6} label="Chưa có đơn mua." />
+          <EmptyRow colSpan={5} label="Chưa có đơn mua." />
         ) : (
           purchaseOrders.map((purchaseOrder) => (
             <TableRow
@@ -1061,10 +1015,6 @@ function PurchaseOrderTable({
               <TableCell>
                 {supplierById.get(purchaseOrder.supplierId)?.name ??
                   purchaseOrder.supplierId}
-              </TableCell>
-              <TableCell>
-                {warehouseById.get(purchaseOrder.warehouseId)?.name ??
-                  purchaseOrder.warehouseId}
               </TableCell>
               <TableCell>
                 <StatusBadge tone={statusTone(purchaseOrder.status)}>
@@ -1197,13 +1147,11 @@ function PurchaseOrderDetail({
   detail,
   loading,
   supplier,
-  warehouse,
   warehouseItemById,
 }: {
   detail: PurchaseOrder;
   loading: boolean;
   supplier: Supplier | undefined;
-  warehouse: WarehouseStructureWarehouse | undefined;
   warehouseItemById: Map<string, WarehouseItem>;
 }) {
   const items = detail.items ?? [];
@@ -1216,10 +1164,7 @@ function PurchaseOrderDetail({
           {detail.poNumber}
           {loading ? <LoaderCircle className="size-4 animate-spin" /> : null}
         </CardTitle>
-        <CardDescription>
-          {supplier?.name ?? detail.supplierId} ·{" "}
-          {warehouse?.name ?? detail.warehouseId}
-        </CardDescription>
+        <CardDescription>{supplier?.name ?? detail.supplierId}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
         <div className="grid gap-3 md:grid-cols-4">

@@ -61,15 +61,8 @@ export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
   }
 
   const settingsIndex = routes.findIndex((route) => route.href === "/settings");
-  const isAdmin = user.roles.includes("ADMIN");
-  const warehouseLabel = isAdmin
-    ? "Phạm vi truy cập"
-    : user.warehouseId
-      ? "Kho phụ trách"
-      : "Phạm vi kho";
-  const warehouseName = isAdmin
-    ? "Toàn hệ thống"
-    : (user.warehouseId ?? "Chưa gán kho");
+  const warehouseLabel = "Mô hình vận hành";
+  const warehouseName = "Kho trung tâm";
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-sidebar px-4 py-5 text-sidebar-foreground">

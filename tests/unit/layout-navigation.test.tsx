@@ -34,17 +34,13 @@ vi.mock("@/features/auth/services/auth.service", () => ({
 const { useSessionUser } = await import("@/hooks/use-session-user");
 const mockedUseSessionUser = vi.mocked(useSessionUser);
 
-function sessionUser(
-  roles: SessionUser["roles"],
-  warehouseId?: string,
-): SessionUser {
+function sessionUser(roles: SessionUser["roles"]): SessionUser {
   return {
     id: `unit-${roles.join("-").toLowerCase()}`,
     name: "Unit User",
     roles,
     tenantId: "demo-tenant",
     type: "user",
-    warehouseId,
   };
 }
 
@@ -65,13 +61,13 @@ describe("dashboard navigation chrome", () => {
     mockedUseSessionUser.mockReset();
   });
 
-  it("shows static all-system scope for ADMIN in the sidebar", () => {
+  it("shows the single-warehouse scope for ADMIN in the sidebar", () => {
     mockedUseSessionUser.mockReturnValue(sessionUser(["ADMIN"]));
 
     render(<SidebarContent />);
 
-    expect(screen.getByText("Phạm vi truy cập")).toBeInTheDocument();
-    expect(screen.getByText("Toàn hệ thống")).toBeInTheDocument();
+    expect(screen.getByText("Mô hình vận hành")).toBeInTheDocument();
+    expect(screen.getByText("Kho trung tâm")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /Nhân viên/i }),
     ).toBeInTheDocument();
@@ -81,13 +77,13 @@ describe("dashboard navigation chrome", () => {
     expect(screen.queryByText("Chưa gán kho")).not.toBeInTheDocument();
   });
 
-  it("shows assigned warehouse scope for staff without a fake dropdown", () => {
-    mockedUseSessionUser.mockReturnValue(sessionUser(["RECEIVER"], "central"));
+  it("shows the single-warehouse operating model", () => {
+    mockedUseSessionUser.mockReturnValue(sessionUser(["RECEIVER"]));
 
     render(<SidebarContent />);
 
-    expect(screen.getByText("Kho phụ trách")).toBeInTheDocument();
-    expect(screen.getByText("central")).toBeInTheDocument();
+    expect(screen.getByText("Mô hình vận hành")).toBeInTheDocument();
+    expect(screen.getByText("Kho trung tâm")).toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: /Nhân viên/i }),
     ).not.toBeInTheDocument();

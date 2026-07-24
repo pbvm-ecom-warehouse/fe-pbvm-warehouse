@@ -98,25 +98,18 @@ const PAGE_SIZE = 20;
 
 const stockCountKeys = {
   detail: (id: string) => ["stock-counts", "detail", id] as const,
-  list: (params: {
-    page: number;
-    status: StockCountStatus | "ALL";
-    warehouseId: string;
-  }) => ["stock-counts", "list", params] as const,
+  list: (params: { page: number; status: StockCountStatus | "ALL" }) =>
+    ["stock-counts", "list", params] as const,
 };
 
 const scrapNoteKeys = {
   detail: (id: string) => ["scrap-notes", "detail", id] as const,
-  list: (params: {
-    page: number;
-    status: ScrapNoteStatus | "ALL";
-    warehouseId: string;
-  }) => ["scrap-notes", "list", params] as const,
+  list: (params: { page: number; status: ScrapNoteStatus | "ALL" }) =>
+    ["scrap-notes", "list", params] as const,
 };
 
 const defaultStockCountForm = {
   note: "",
-  warehouseId: "",
   zoneId: "",
 };
 
@@ -134,7 +127,6 @@ const defaultScrapForm = {
   quantity: "1",
   reason: "",
   shelfId: "",
-  warehouseId: "",
 };
 
 function formatError(error: unknown) {
@@ -267,8 +259,6 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
   const [statusFilter, setStatusFilter] = useState<StockCountStatus | "ALL">(
     "ALL",
   );
-  const [warehouseFilter, setWarehouseFilter] = useState("");
-  const [warehouseDraft, setWarehouseDraft] = useState("");
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -285,12 +275,10 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
         limit: PAGE_SIZE,
         page,
         status: statusFilter,
-        warehouseId: warehouseFilter,
       }),
     queryKey: stockCountKeys.list({
       page,
       status: statusFilter,
-      warehouseId: warehouseFilter,
     }),
   });
 
@@ -314,7 +302,6 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
     mutationFn: () =>
       createStockCount({
         note: optionalText(createForm.note),
-        warehouseId: requiredText(createForm.warehouseId),
         zoneId: optionalText(createForm.zoneId),
       }),
     onError: (error) => toast.error(formatError(error)),
@@ -370,16 +357,10 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
   function handleFilter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPage(1);
-    setWarehouseFilter(warehouseDraft.trim());
   }
 
   function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    if (!createForm.warehouseId.trim()) {
-      toast.error("Cần nhập mã kho.");
-      return;
-    }
 
     createMutation.mutate();
   }
@@ -448,13 +429,6 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
                 </SelectItem>
               ))}
             </SelectFilter>
-            <TextField
-              id="stock-count-warehouse-filter"
-              label="Mã kho"
-              required={false}
-              value={warehouseDraft}
-              onChange={setWarehouseDraft}
-            />
             <Button className="self-end" disabled={!canUseApi} type="submit">
               <Search data-icon="inline-start" />
               Lọc
@@ -472,18 +446,10 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
               <DialogHeader>
                 <DialogTitle>Tạo phiếu kiểm</DialogTitle>
                 <DialogDescription>
-                  Hệ thống sẽ tạo các dòng kiểm theo kho hoặc khu vực đã chọn.
+                  Hệ thống sẽ tạo các dòng kiểm theo khu vực đã chọn.
                 </DialogDescription>
               </DialogHeader>
               <form className="space-y-4" onSubmit={handleCreate}>
-                <TextField
-                  id="stock-count-create-warehouse"
-                  label="Mã kho"
-                  value={createForm.warehouseId}
-                  onChange={(warehouseId) =>
-                    setCreateForm((current) => ({ ...current, warehouseId }))
-                  }
-                />
                 <TextField
                   id="stock-count-create-zone"
                   label="Mã khu vực"
@@ -648,7 +614,6 @@ function StockCountTable({
       <TableHeader>
         <TableRow>
           <TableHead>Mã phiếu</TableHead>
-          <TableHead>Kho</TableHead>
           <TableHead>Khu vực</TableHead>
           <TableHead>Trạng thái</TableHead>
           <TableHead>Số dòng</TableHead>
@@ -657,7 +622,7 @@ function StockCountTable({
       </TableHeader>
       <TableBody>
         {items.length === 0 ? (
-          <EmptyRow colSpan={6} label="Chưa có phiếu kiểm." />
+          <EmptyRow colSpan={5} label="Chưa có phiếu kiểm." />
         ) : (
           items.map((item) => (
             <TableRow
@@ -671,7 +636,6 @@ function StockCountTable({
               <TableCell className="font-mono font-semibold">
                 {item.id}
               </TableCell>
-              <TableCell>{item.warehouseId}</TableCell>
               <TableCell>{item.zoneId ?? "Toàn kho"}</TableCell>
               <TableCell>
                 <StatusBadge tone={statusTone(item.status)}>
@@ -724,7 +688,7 @@ function StockCountDetail({
       <CardHeader className="border-b bg-muted/20">
         <CardTitle className="text-base">{detail.id}</CardTitle>
         <CardDescription>
-          Kho {detail.warehouseId} · tạo ngày {formatDate(detail.createdAt)}
+          Tạo ngày {formatDate(detail.createdAt)}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
@@ -831,8 +795,6 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
   const [statusFilter, setStatusFilter] = useState<ScrapNoteStatus | "ALL">(
     "ALL",
   );
-  const [warehouseFilter, setWarehouseFilter] = useState("");
-  const [warehouseDraft, setWarehouseDraft] = useState("");
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -847,12 +809,10 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
         limit: PAGE_SIZE,
         page,
         status: statusFilter,
-        warehouseId: warehouseFilter,
       }),
     queryKey: scrapNoteKeys.list({
       page,
       status: statusFilter,
-      warehouseId: warehouseFilter,
     }),
   });
 
@@ -876,7 +836,6 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
     mutationFn: () =>
       createScrapNote({
         note: optionalText(createForm.note),
-        warehouseId: requiredText(createForm.warehouseId),
         itemImages: [scrapImages],
         items: [
           {
@@ -924,19 +883,17 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
   function handleFilter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPage(1);
-    setWarehouseFilter(warehouseDraft.trim());
   }
 
   function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (
-      !createForm.warehouseId.trim() ||
       !createForm.itemId.trim() ||
       !createForm.shelfId.trim() ||
       !createForm.reason.trim()
     ) {
-      toast.error("Cần nhập kho, mặt hàng, vị trí và lý do hủy.");
+      toast.error("Cần nhập mặt hàng, vị trí và lý do hủy.");
       return;
     }
 
@@ -982,13 +939,6 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
                 </SelectItem>
               ))}
             </SelectFilter>
-            <TextField
-              id="scrap-note-warehouse-filter"
-              label="Mã kho"
-              required={false}
-              value={warehouseDraft}
-              onChange={setWarehouseDraft}
-            />
             <Button className="self-end" disabled={!canUseApi} type="submit">
               <Search data-icon="inline-start" />
               Lọc
@@ -1011,14 +961,6 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
               </DialogHeader>
               <form className="space-y-4" onSubmit={handleCreate}>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <TextField
-                    id="scrap-create-warehouse"
-                    label="Mã kho"
-                    value={createForm.warehouseId}
-                    onChange={(warehouseId) =>
-                      setCreateForm((current) => ({ ...current, warehouseId }))
-                    }
-                  />
                   <TextField
                     id="scrap-create-item"
                     label="Mã mặt hàng"
@@ -1153,7 +1095,6 @@ function ScrapNoteTable({
       <TableHeader>
         <TableRow>
           <TableHead>Mã phiếu</TableHead>
-          <TableHead>Kho</TableHead>
           <TableHead>Trạng thái</TableHead>
           <TableHead>Số dòng</TableHead>
           <TableHead>Ngày tạo</TableHead>
@@ -1162,7 +1103,7 @@ function ScrapNoteTable({
       </TableHeader>
       <TableBody>
         {items.length === 0 ? (
-          <EmptyRow colSpan={6} label="Chưa có phiếu hủy." />
+          <EmptyRow colSpan={5} label="Chưa có phiếu hủy." />
         ) : (
           items.map((item) => (
             <TableRow
@@ -1176,7 +1117,6 @@ function ScrapNoteTable({
               <TableCell className="font-mono font-semibold">
                 {item.id}
               </TableCell>
-              <TableCell>{item.warehouseId}</TableCell>
               <TableCell>
                 <StatusBadge tone={statusTone(item.status)}>
                   {statusLabel(item.status)}
@@ -1229,7 +1169,7 @@ function ScrapNoteDetail({
       <CardHeader className="border-b bg-muted/20">
         <CardTitle className="text-base">{detail.id}</CardTitle>
         <CardDescription>
-          Kho {detail.warehouseId} · tạo ngày {formatDate(detail.createdAt)}
+          Tạo ngày {formatDate(detail.createdAt)}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">

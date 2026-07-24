@@ -14,6 +14,10 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  EvidenceImageGallery,
+  EvidenceImagePicker,
+} from "@/components/evidence-images";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -162,7 +166,12 @@ export function ShippingClient() {
     carrierId: "",
     trackingNumber: "",
   });
-  const [statusForm, setStatusForm] = useState({ note: "", status: "" });
+  const [statusForm, setStatusForm] = useState({
+    failReason: "",
+    note: "",
+    status: "",
+  });
+  const [statusImages, setStatusImages] = useState<File[]>([]);
   const [carrierForm, setCarrierForm] = useState(defaultCarrierForm);
 
   const shipmentsQuery = useQuery({
@@ -209,12 +218,16 @@ export function ShippingClient() {
   const statusMutation = useMutation({
     mutationFn: () =>
       updateShipmentStatus(selectedShipment?.id ?? "", {
+        failReason: statusForm.failReason.trim() || undefined,
+        images: statusImages,
         note: statusForm.note.trim() || undefined,
         status: statusForm.status as ShipmentStatus,
       }),
     onError: (error) => toast.error(formatError(error)),
     onSuccess: () => {
       setStatusOpen(false);
+      setStatusImages([]);
+      setStatusForm({ failReason: "", note: "", status: "" });
       void queryClient.invalidateQueries({
         queryKey: ["shipping", "shipments"],
       });
@@ -263,7 +276,11 @@ export function ShippingClient() {
   }
 
   function openStatusDialog() {
-    setStatusForm({ note: "", status: nextStatuses[0] ?? "" });
+    setStatusForm({
+      failReason: "",
+      note: "",
+      status: nextStatuses[0] ?? "",
+    });
     setStatusOpen(true);
   }
 
@@ -524,6 +541,31 @@ export function ShippingClient() {
                 value={statusForm.note}
               />
             </div>
+            {statusForm.status === "FAILED" ? (
+              <div className="space-y-2">
+                <Label htmlFor="shipment-fail-reason">
+                  Lý do giao thất bại
+                </Label>
+                <Input
+                  id="shipment-fail-reason"
+                  onChange={(event) =>
+                    setStatusForm((form) => ({
+                      ...form,
+                      failReason: event.target.value,
+                    }))
+                  }
+                  required
+                  value={statusForm.failReason}
+                />
+              </div>
+            ) : null}
+            <EvidenceImagePicker
+              files={statusImages}
+              id="shipment-status-images"
+              label="Ảnh giao hàng / POD"
+              onChange={setStatusImages}
+            />
+
             <DialogFooter>
               <Button
                 disabled={statusMutation.isPending || !statusForm.status}
@@ -773,6 +815,39 @@ function ShipmentPanel({
           mono
           value={shipment.trackingNumber ?? "Chưa gán"}
         />
+        {shipment.failReason ? (
+          <InfoRow label="Lý do giao thất bại" value={shipment.failReason} />
+        ) : null}
+        {shipment.statusHistory.length > 0 ? (
+          <div className="space-y-3 border-t pt-4">
+            <div className="text-sm font-semibold">Lịch sử trạng thái</div>
+            {shipment.statusHistory.map((entry, index) => (
+              <div
+                className="rounded-lg border bg-muted/20 p-3"
+                key={`${entry.at}-${entry.status}-${index}`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <StatusBadge tone={statusTone(entry.status)}>
+                    {shipmentStatusLabels[entry.status]}
+                  </StatusBadge>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(entry.at).toLocaleString("vi-VN")}
+                  </span>
+                </div>
+                {entry.note ? (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {entry.note}
+                  </p>
+                ) : null}
+                <EvidenceImageGallery
+                  className="mt-3"
+                  images={entry.images}
+                  label="Ảnh giao hàng / POD"
+                />
+              </div>
+            ))}
+          </div>
+        ) : null}
         {canOperate ? (
           <div className="grid gap-2 border-t pt-4">
             <Button onClick={onAssign} type="button" variant="outline">

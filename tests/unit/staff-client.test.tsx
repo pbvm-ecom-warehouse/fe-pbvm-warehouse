@@ -51,7 +51,6 @@ function sessionUser(roles: SessionUser["roles"]): SessionUser {
     roles,
     tenantId: "demo-tenant",
     type: "user",
-    warehouseId: "central",
   };
 }
 
@@ -88,7 +87,6 @@ describe("staff page", () => {
           status: "ACTIVE",
           updatedAt: "2026-07-16T01:31:58.557Z",
           username: "admin",
-          warehouseId: "central",
         },
         {
           createdAt: "2026-07-13T07:15:00.000Z",
@@ -100,7 +98,6 @@ describe("staff page", () => {
           status: "LOCKED",
           updatedAt: "2026-07-16T03:35:00.000Z",
           username: "printer01",
-          warehouseId: "central",
         },
       ],
       limit: 20,
@@ -240,7 +237,6 @@ describe("staff page", () => {
           role: "RECEIVER",
           status: "ACTIVE",
           mustChangePassword: true,
-          warehouseId: "central",
           updatedAt: "2026-07-23T08:30:00.000Z",
         },
       ],
@@ -256,7 +252,6 @@ describe("staff page", () => {
       role: "RECEIVER",
       status: "ACTIVE",
       mustChangePassword: true,
-      warehouseId: "central",
       avatarUrl: "https://cdn.example.com/receiver.webp",
       createdAt: "2026-07-20T08:30:00.000Z",
       updatedAt: "2026-07-23T08:30:00.000Z",
@@ -310,8 +305,6 @@ describe("staff page", () => {
     await waitFor(() =>
       expect(mockedListWmsUsers).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          limit: 20,
-          page: 1,
           search: "receiver01",
         }),
       ),

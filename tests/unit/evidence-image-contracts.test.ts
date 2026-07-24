@@ -79,11 +79,10 @@ describe("evidence image contracts", () => {
           shelfId: "shelf-2",
         },
       ],
-      warehouseId: "warehouse-1",
     });
 
     const body = formDataFromLastPost();
-    expect(body.get("warehouseId")).toBe("warehouse-1");
+    expect(body.get("warehouseId")).toBeNull();
     expect(JSON.parse(String(body.get("items")))).toEqual([
       { condition: "GOOD", itemId: "item-1", shelfId: "shelf-1" },
       { condition: "DAMAGED", itemId: "item-2", shelfId: "shelf-2" },
@@ -107,11 +106,10 @@ describe("evidence image contracts", () => {
         },
       ],
       note: "Hàng vỡ",
-      warehouseId: "warehouse-1",
     });
 
     const body = formDataFromLastPost();
-    expect(body.get("warehouseId")).toBe("warehouse-1");
+    expect(body.get("warehouseId")).toBeNull();
     expect(body.get("note")).toBe("Hàng vỡ");
     expect(JSON.parse(String(body.get("items")))).toEqual([
       {

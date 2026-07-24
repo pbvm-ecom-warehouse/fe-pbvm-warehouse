@@ -20,7 +20,6 @@ export type PutawayTask = {
   id: string;
   grnId: string;
   grnNumber?: string;
-  warehouseId: string;
   status: PutawayTaskStatus;
   items: PutawayTaskItem[];
   createdAt?: string;
@@ -29,7 +28,6 @@ export type PutawayTask = {
 
 export type QueryPutawayTasksInput = {
   status?: PutawayTaskStatus | "ALL";
-  warehouseId?: string;
   page?: number;
   limit?: number;
 };
@@ -40,11 +38,6 @@ export type ConfirmPutawayLineInput = {
   quantity: number;
   lotId?: string;
 };
-
-function optionalText(value: string | undefined) {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
-}
 
 export function normalizePutawayTaskListResponse(
   payload: ApiListLike<PutawayTask>,
@@ -61,7 +54,6 @@ export async function listPutawayTasks(input: QueryPutawayTasksInput = {}) {
         page: input.page,
         status:
           input.status && input.status !== "ALL" ? input.status : undefined,
-        warehouseId: optionalText(input.warehouseId),
       },
     },
   );

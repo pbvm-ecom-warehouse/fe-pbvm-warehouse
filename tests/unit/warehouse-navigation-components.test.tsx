@@ -18,7 +18,6 @@ function WarehouseSceneHarness() {
   const suggestions = fallbackPutawaySuggestions({
     sku: "CUP-BLANK-500",
     quantity: 80,
-    warehouseId: "central",
   });
   const selectedSuggestion = selectSuggestedShelf(suggestions);
   const [sceneMode, setSceneMode] = useState<WarehouseSceneMode>("map");

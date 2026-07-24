@@ -235,7 +235,7 @@ function RackElevation({
           <div>
             <h3 className="text-xl font-semibold">{rackGroup.rackName}</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Chi tiết vị trí · {rackGroup.warehouseCode} / {rackGroup.zoneName}
+              Chi tiết vị trí · {rackGroup.zoneName}
             </p>
           </div>
           <div className="font-mono text-xs text-slate-600">

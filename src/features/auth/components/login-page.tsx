@@ -2,12 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  ArrowRight,
-  LoaderCircle,
-  LogIn,
-  ShieldCheck,
-} from "lucide-react";
+import { ArrowRight, LoaderCircle, LogIn, ShieldCheck } from "lucide-react";
 import { isAxiosError } from "axios";
 import { toast } from "sonner";
 
@@ -25,9 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSessionUser } from "@/hooks/use-session-user";
 import { getApiErrorMessage } from "@/lib/api-contract";
-import {
-  ROLE_LABELS,
-} from "@/lib/rbac";
+import { ROLE_LABELS } from "@/lib/rbac";
 import { useAuthStore } from "@/stores/auth-store";
 
 import { changePassword, login, logout } from "../services/auth.service";
@@ -64,7 +57,9 @@ export function LoginPageClient() {
     const parsed = loginSchema.safeParse(credentials);
 
     if (!parsed.success) {
-      setErrorMessage(parsed.error.issues[0]?.message ?? "Thông tin đăng nhập chưa hợp lệ");
+      setErrorMessage(
+        parsed.error.issues[0]?.message ?? "Thông tin đăng nhập chưa hợp lệ",
+      );
       return;
     }
 
@@ -85,7 +80,10 @@ export function LoginPageClient() {
     } catch (error) {
       if (isAxiosError(error)) {
         const apiMessage = getApiErrorMessage(error);
-        setErrorMessage(apiMessage ?? "Đăng nhập thất bại. Kiểm tra lại username và mật khẩu.");
+        setErrorMessage(
+          apiMessage ??
+            "Đăng nhập thất bại. Kiểm tra lại username và mật khẩu.",
+        );
       } else {
         setErrorMessage("Không kết nối được WMS.");
       }
@@ -113,7 +111,9 @@ export function LoginPageClient() {
       const result = await changePassword(parsed.data);
 
       if (result.mustChangePassword) {
-        setErrorMessage("Tài khoản vẫn cần đổi mật khẩu. Hãy thử mật khẩu mới khác.");
+        setErrorMessage(
+          "Tài khoản vẫn cần đổi mật khẩu. Hãy thử mật khẩu mới khác.",
+        );
         return;
       }
 
@@ -207,9 +207,16 @@ export function LoginPageClient() {
                   {errorMessage}
                 </div>
               ) : null}
-              <Button className="h-10 w-full" disabled={isChangingPassword} type="submit">
+              <Button
+                className="h-10 w-full"
+                disabled={isChangingPassword}
+                type="submit"
+              >
                 {isChangingPassword ? (
-                  <LoaderCircle data-icon="inline-start" className="animate-spin" />
+                  <LoaderCircle
+                    data-icon="inline-start"
+                    className="animate-spin"
+                  />
                 ) : (
                   <ShieldCheck data-icon="inline-start" />
                 )}
@@ -232,16 +239,15 @@ export function LoginPageClient() {
               Phiên WMS hiện tại
             </CardTitle>
             <CardDescription>
-              Bạn đã có phiên đăng nhập. Có thể vào trang tổng quan hoặc đăng xuất để
-              đổi tài khoản.
+              Bạn đã có phiên đăng nhập. Có thể vào trang tổng quan hoặc đăng
+              xuất để đổi tài khoản.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="rounded-lg border border-border/70 bg-muted/25 p-4">
               <div className="text-sm font-semibold">{user.name}</div>
               <div className="mt-1 text-xs text-muted-foreground">
-                Kho phụ trách: {user.warehouseId ?? "chưa gán"} · Đơn vị:{" "}
-                {user.tenantId}
+                Kho trung tâm · Đơn vị: {user.tenantId}
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {currentRoles.map((role) => (
@@ -253,7 +259,10 @@ export function LoginPageClient() {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Button className="sm:flex-1" onClick={() => router.replace("/dashboard")}>
+              <Button
+                className="sm:flex-1"
+                onClick={() => router.replace("/dashboard")}
+              >
                 <ArrowRight data-icon="inline-start" />
                 Vào trang tổng quan
               </Button>
@@ -281,7 +290,6 @@ export function LoginPageClient() {
               Đăng nhập nội bộ bằng username và mật khẩu.
             </h1>
           </div>
-         
         </section>
 
         <div className="grid gap-4 p-6 sm:p-8 lg:p-10">
@@ -331,9 +339,16 @@ export function LoginPageClient() {
                     {errorMessage}
                   </div>
                 ) : null}
-                <Button className="h-10 w-full" disabled={isSubmitting} type="submit">
+                <Button
+                  className="h-10 w-full"
+                  disabled={isSubmitting}
+                  type="submit"
+                >
                   {isSubmitting ? (
-                    <LoaderCircle data-icon="inline-start" className="animate-spin" />
+                    <LoaderCircle
+                      data-icon="inline-start"
+                      className="animate-spin"
+                    />
                   ) : (
                     <LogIn data-icon="inline-start" />
                   )}

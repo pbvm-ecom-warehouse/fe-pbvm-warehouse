@@ -5,7 +5,6 @@ export const printJobSchema = z
     orderId: z.string().min(1, "Thiếu tham chiếu đơn hàng"),
     inputItemId: z.string().min(1, "Chọn SKU ly trắng"),
     outputItemId: z.string().min(1, "Chọn SKU ly đã in"),
-    warehouseId: z.string().min(1, "Chọn kho xử lý"),
     quantity: z.coerce.number().int().positive("Số lượng phải lớn hơn 0"),
     availableQty: z.coerce.number().int().nonnegative(),
     designId: z.string().min(1, "Thiếu designId cho ly in custom"),

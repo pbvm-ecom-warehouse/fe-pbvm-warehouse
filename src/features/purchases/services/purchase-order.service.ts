@@ -24,7 +24,6 @@ export type PurchaseOrder = {
   id: string;
   poNumber: string;
   supplierId: string;
-  warehouseId: string;
   status: PurchaseOrderStatus;
   orderDate: string;
   expectedDate?: string;
@@ -50,7 +49,6 @@ export type PurchaseOrderListResult = {
 
 export type CreatePurchaseOrderInput = {
   supplierId: string;
-  warehouseId: string;
   expectedDate?: string;
   note?: string;
   items: PurchaseOrderItem[];
@@ -106,17 +104,14 @@ export function normalizePurchaseOrderListResponse(
   return toPurchaseOrderListResult(payload);
 }
 
-export async function listPurchaseOrders(
-  input: QueryPurchaseOrdersInput = {},
-) {
+export async function listPurchaseOrders(input: QueryPurchaseOrdersInput = {}) {
   const response = await apiClient.get<
     PurchaseOrderListEnvelope | PurchaseOrderListPayload | PurchaseOrder[]
   >("/purchase-orders", {
     params: {
       limit: input.limit,
       page: input.page,
-      status:
-        input.status && input.status !== "ALL" ? input.status : undefined,
+      status: input.status && input.status !== "ALL" ? input.status : undefined,
       supplierId: toOptionalString(input.supplierId),
     },
   });
@@ -125,18 +120,17 @@ export async function listPurchaseOrders(
 }
 
 export async function getPurchaseOrder(purchaseOrderId: string) {
-  const response = await apiClient.get<ApiEnvelope<PurchaseOrder> | PurchaseOrder>(
-    `/purchase-orders/${encodeURIComponent(purchaseOrderId)}`,
-  );
+  const response = await apiClient.get<
+    ApiEnvelope<PurchaseOrder> | PurchaseOrder
+  >(`/purchase-orders/${encodeURIComponent(purchaseOrderId)}`);
 
   return unwrapApiData(response.data);
 }
 
 export async function createPurchaseOrder(input: CreatePurchaseOrderInput) {
-  const response = await apiClient.post<ApiEnvelope<PurchaseOrder> | PurchaseOrder>(
-    "/purchase-orders",
-    input,
-  );
+  const response = await apiClient.post<
+    ApiEnvelope<PurchaseOrder> | PurchaseOrder
+  >("/purchase-orders", input);
 
   return unwrapApiData(response.data);
 }
