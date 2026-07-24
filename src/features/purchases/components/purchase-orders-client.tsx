@@ -71,8 +71,10 @@ import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
 import { useSessionUser } from "@/hooks/use-session-user";
 import {
   getSupplier,
+  listSupplierItemsBySupplier,
   listSuppliers,
   type Supplier,
+  type SupplierItem,
 } from "@/features/suppliers/services/supplier.service";
 import { WarehouseItemCombobox } from "@/features/products/components/warehouse-item-combobox";
 import {
@@ -115,6 +117,8 @@ const purchaseKeys = {
 
   supplierDetail: (supplierId: string) =>
     ["purchase-orders", "supplier-detail", supplierId] as const,
+  supplierItems: (supplierId: string) =>
+    ["purchase-orders", "supplier-items", supplierId] as const,
   suppliers: ["purchase-orders", "suppliers"] as const,
 };
 
@@ -361,6 +365,49 @@ export function PurchaseOrdersClient({
     queryFn: () => listSuppliers({ limit: 100, page: 1, status: "ACTIVE" }),
     queryKey: purchaseKeys.suppliers,
   });
+  const supplierItemsQuery = useQuery({
+    enabled:
+      canCreatePurchaseOrder && dialogOpen && Boolean(createForm.supplierId),
+    queryFn: () => listSupplierItemsBySupplier(createForm.supplierId),
+    queryKey: purchaseKeys.supplierItems(createForm.supplierId),
+  });
+  const activeSupplierItems = useMemo(
+    () =>
+      (supplierItemsQuery.data ?? []).filter(
+        (supplierItem) => supplierItem.isActive,
+      ),
+    [supplierItemsQuery.data],
+  );
+  const supplierWarehouseItemQueries = useQueries({
+    queries: activeSupplierItems.map((supplierItem) => ({
+      enabled: canCreatePurchaseOrder && dialogOpen,
+      queryFn: () => getWarehouseItem(supplierItem.itemId),
+      queryKey: ["stock-items", "detail", supplierItem.itemId],
+    })),
+  });
+  const supplierWarehouseItems = useMemo(
+    () =>
+      supplierWarehouseItemQueries
+        .map((query) => query.data)
+        .filter((item): item is WarehouseItem => Boolean(item?.isActive)),
+    [supplierWarehouseItemQueries],
+  );
+  const supplierItemByItemId = useMemo(
+    () =>
+      new Map<string, SupplierItem>(
+        activeSupplierItems.map((supplierItem) => [
+          supplierItem.itemId,
+          supplierItem,
+        ]),
+      ),
+    [activeSupplierItems],
+  );
+  const supplierWarehouseItemsLoading =
+    supplierItemsQuery.isFetching ||
+    supplierWarehouseItemQueries.some((query) => query.isFetching);
+  const supplierWarehouseItemsError =
+    supplierItemsQuery.error ??
+    supplierWarehouseItemQueries.find((query) => query.error)?.error;
 
   const purchaseOrders = useMemo(
     () => purchaseOrdersQuery.data?.data ?? [],
@@ -375,7 +422,7 @@ export function PurchaseOrdersClient({
         orderDate: "",
         createdAt: "",
         updatedAt: "",
-        items: po.items.map((item) => ({ ...item, unitPrice: 0 })),
+        items: (po.items ?? []).map((item) => ({ ...item, unitPrice: 0 })),
       })),
     [receivingPurchaseOrdersQuery.data?.data],
   );
@@ -826,12 +873,13 @@ export function PurchaseOrdersClient({
                   disabled={!canCreatePurchaseOrder}
                   label="Nhà cung cấp"
                   value={createForm.supplierId}
-                  onChange={(supplierId) =>
+                  onChange={(supplierId) => {
                     setCreateForm((current) => ({
                       ...current,
                       supplierId,
-                    }))
-                  }
+                    }));
+                    setItemForms([defaultItemForm]);
+                  }}
                 >
                   {suppliers.map((supplier) => (
                     <SelectItem key={supplier.id} value={supplier.id}>
@@ -839,7 +887,7 @@ export function PurchaseOrdersClient({
                     </SelectItem>
                   ))}
                 </SelectField>
-                <div className="space-y-2 md:col-span-2">
+                <div className="space-y-2">
                   <Label htmlFor="po-expected-date">Ngày dự kiến</Label>
                   <Input
                     id="po-expected-date"
@@ -884,11 +932,16 @@ export function PurchaseOrdersClient({
                 </div>
                 {itemForms.map((item, index) => (
                   <PurchaseOrderItemFields
+                    availableItems={supplierWarehouseItems}
+                    disabled={!createForm.supplierId}
                     index={index}
                     item={item}
                     key={index}
+                    loadError={supplierWarehouseItemsError}
+                    loading={supplierWarehouseItemsLoading}
                     onChange={(next) => updateItemForm(index, next)}
                     onRemove={() => removeItemRow(index)}
+                    supplierItemByItemId={supplierItemByItemId}
                   />
                 ))}
               </div>
@@ -1110,7 +1163,7 @@ function SelectField({
     <div className="space-y-2">
       <Label>{label}</Label>
       <Select disabled={disabled} value={value} onValueChange={onChange}>
-        <SelectTrigger className="w-full">
+        <SelectTrigger aria-label={label} className="w-full">
           <SelectValue placeholder={label} />
         </SelectTrigger>
         <SelectContent>{children}</SelectContent>
@@ -1192,38 +1245,57 @@ function PurchaseOrderTable({
 }
 
 function PurchaseOrderItemFields({
+  availableItems,
+  disabled,
   index,
   item,
+  loadError,
+  loading,
   onChange,
   onRemove,
+  supplierItemByItemId,
 }: {
+  availableItems: WarehouseItem[];
+  disabled: boolean;
   index: number;
   item: PurchaseOrderItemForm;
+  loadError: unknown;
+  loading: boolean;
   onChange: (item: PurchaseOrderItemForm) => void;
   onRemove: () => void;
+  supplierItemByItemId: Map<string, SupplierItem>;
 }) {
   const itemId = `purchase-item-${index}`;
 
   return (
     <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-12">
-      <div className="min-w-0 space-y-2 sm:col-span-2 lg:col-span-4">
+      <div className="min-w-0 space-y-2 sm:col-span-2 lg:col-span-3">
         <Label htmlFor={`${itemId}-picker`}>Mặt hàng</Label>
         <WarehouseItemCombobox
+          disabled={disabled}
           id={`${itemId}-picker`}
+          items={availableItems}
           label={`Mặt hàng dòng ${index + 1}`}
+          loadError={loadError}
+          loading={loading}
+          placeholder={disabled ? "Chọn nhà cung cấp trước" : "Chọn mặt hàng"}
+          presentation="name-sku"
           selectedItemId={item.itemId}
           selectedSku={item.sku}
-          onSelect={(stockItem) =>
+          onSelect={(stockItem) => {
+            const supplierItem = supplierItemByItemId.get(stockItem.id);
             onChange({
               ...item,
+              expectedQty: String(Math.max(1, supplierItem?.minOrderQty ?? 1)),
               itemId: stockItem.id,
               sku: stockItem.sku,
               unit: stockItem.unit,
-            })
-          }
+              unitPrice: String(supplierItem?.purchasePrice ?? 0),
+            });
+          }}
         />
       </div>
-      <div className="min-w-0 space-y-2 lg:col-span-2">
+      <div className="min-w-0 space-y-2 lg:col-span-3">
         <Label htmlFor={`${itemId}-sku`}>SKU</Label>
         <Input
           aria-label={`SKU dòng ${index + 1}`}
@@ -1457,4 +1529,3 @@ function InfoBox({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-

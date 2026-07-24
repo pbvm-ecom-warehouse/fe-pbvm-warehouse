@@ -415,7 +415,36 @@ describe("purchase and supplier UX", () => {
     expect(await screen.findByText("123 Lê Văn Lương, Quận 7")).toBeVisible();
     expect(screen.getAllByText("Ngưng dùng").at(-1)).toBeVisible();
   });
-  it("uses a non-horizontal purchase dialog with visible item labels and server search", async () => {
+  it("loads only active items of the selected supplier and fills the PO line", async () => {
+    mockedListSupplierItems.mockResolvedValue([
+      {
+        ...supplierItem,
+        leadTimeDays: 5,
+        minOrderQty: 24,
+      },
+      {
+        ...supplierItem,
+        id: "si-inactive",
+        isActive: false,
+        itemId: "item-inactive",
+        purchasePrice: 99000,
+      },
+    ]);
+    mockedGetWarehouseItem.mockImplementation(async (itemId) => ({
+      createdAt: "2026-07-01T00:00:00.000Z",
+      id: itemId,
+      isActive: true,
+      isPerishable: false,
+      name:
+        itemId === "item-inactive"
+          ? "Mặt hàng ngưng báo giá"
+          : "Ly nhựa 500 ml",
+      sku: itemId === "item-inactive" ? "SKU-INACTIVE" : "SKU-001",
+      type: "CUP_BLANK",
+      unit: "cái",
+      updatedAt: "2026-07-23T00:00:00.000Z",
+    }));
+
     renderWithQueryClient(<PurchaseOrdersClient />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Tạo đơn mua" }));
@@ -430,23 +459,39 @@ describe("purchase and supplier UX", () => {
     expect(screen.getByText("Số lượng", { selector: "label" })).toBeVisible();
     expect(screen.getByText("Đơn vị", { selector: "label" })).toBeVisible();
     expect(screen.getByText("Đơn giá", { selector: "label" })).toBeVisible();
+    expect(screen.getByLabelText("Ngày dự kiến").parentElement).not.toHaveClass(
+      "md:col-span-2",
+    );
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Nhà cung cấp" }));
+    fireEvent.click(
+      await screen.findByRole("option", { name: /Công ty Minh Long/i }),
+    );
+
+    await waitFor(() =>
+      expect(mockedListSupplierItems).toHaveBeenCalledWith("sup-1"),
+    );
+    await waitFor(() =>
+      expect(mockedGetWarehouseItem).toHaveBeenCalledWith("item-1"),
+    );
+    expect(mockedGetWarehouseItem).not.toHaveBeenCalledWith("item-inactive");
 
     fireEvent.click(screen.getByRole("combobox", { name: "Mặt hàng dòng 1" }));
-    fireEvent.change(
-      await screen.findByPlaceholderText("Tìm SKU hoặc tên mặt hàng"),
-      { target: { value: "PET" } },
+    expect(
+      screen.queryByRole("option", { name: /Mặt hàng ngưng báo giá/i }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      await screen.findByRole("option", { name: /Ly nhựa 500 ml.*SKU-001/i }),
     );
 
-    await waitFor(
-      () =>
-        expect(mockedListWarehouseItems).toHaveBeenLastCalledWith({
-          isActive: true,
-          limit: 100,
-          page: 1,
-          search: "PET",
-        }),
-      { timeout: 1000 },
-    );
+    expect(
+      screen.getByRole("combobox", { name: "Mặt hàng dòng 1" }),
+    ).toHaveTextContent("Ly nhựa 500 ml");
+    expect(screen.getByLabelText("SKU dòng 1")).toHaveValue("SKU-001");
+    expect(screen.getByLabelText("Số lượng dòng 1")).toHaveValue(24);
+    expect(screen.getByLabelText("Đơn vị dòng 1")).toHaveValue("cái");
+    expect(screen.getByLabelText("Đơn giá dòng 1")).toHaveValue(15000);
+    expect(mockedListWarehouseItems).not.toHaveBeenCalled();
   });
 
   it("keeps PO detail read-only and gives managers only GRN approval", async () => {
@@ -646,6 +691,3 @@ describe("purchase and supplier UX", () => {
     );
   });
 });
-
-
-
