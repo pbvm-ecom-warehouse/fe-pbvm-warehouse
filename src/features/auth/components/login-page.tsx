@@ -54,7 +54,10 @@ export function LoginPageClient() {
     event.preventDefault();
     setErrorMessage(null);
 
-    const parsed = loginSchema.safeParse(credentials);
+    const parsed = loginSchema.safeParse({
+      ...credentials,
+      username: credentials.username.trim(),
+    });
 
     if (!parsed.success) {
       setErrorMessage(
