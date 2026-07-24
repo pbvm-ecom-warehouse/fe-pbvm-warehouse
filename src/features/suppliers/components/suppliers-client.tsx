@@ -62,11 +62,13 @@ import { hasAnyRole } from "@/lib/rbac";
 import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
 import { useSessionUser } from "@/hooks/use-session-user";
 import { suggestSupplierCode } from "@/features/suppliers/lib/supplier-code";
+import { WarehouseItemCombobox } from "@/features/products/components/warehouse-item-combobox";
 
 import {
   changeSupplierStatus,
   createSupplier,
   deleteSupplier,
+  getSupplier,
   listSupplierItemsBySupplier,
   listSuppliers,
   SUPPLIER_STATUSES,
@@ -81,6 +83,7 @@ import {
 const PAGE_SIZE = 20;
 
 const supplierKeys = {
+  detail: (supplierId: string) => ["suppliers", "detail", supplierId] as const,
   items: (supplierId: string) => ["suppliers", "items", supplierId] as const,
   list: (params: { page: number; search: string; status: string }) =>
     ["suppliers", "list", params] as const,
@@ -468,21 +471,12 @@ export function SuppliersClient() {
       >
         <DialogContent size="5xl" className="max-h-[90vh] overflow-y-auto p-0">
           {editingSupplier ? (
-            <>
-              <DialogHeader className="border-b bg-muted/20 px-6 py-4">
-                <DialogTitle>{editingSupplier.name}</DialogTitle>
-                <DialogDescription>{editingSupplier.code}</DialogDescription>
-              </DialogHeader>
-              <div className="p-4">
-                <SupplierDetailSection
-                  canDelete={canDelete}
-                  canManage={canManage}
-                  key={editingSupplier.id}
-                  supplier={editingSupplier}
-                  onDeleted={() => setEditingSupplier(null)}
-                />
-              </div>
-            </>
+            <SupplierDetailContent
+              canDelete={canDelete}
+              canManage={canManage}
+              summary={editingSupplier}
+              onDeleted={() => setEditingSupplier(null)}
+            />
           ) : null}
         </DialogContent>
       </Dialog>
@@ -527,6 +521,67 @@ export function SuppliersClient() {
   );
 }
 
+function SupplierDetailContent({
+  canDelete,
+  canManage,
+  onDeleted,
+  summary,
+}: {
+  canDelete: boolean;
+  canManage: boolean;
+  onDeleted: () => void;
+  summary: Supplier;
+}) {
+  const detailQuery = useQuery({
+    enabled: canManage,
+    queryFn: () => getSupplier(summary.id),
+    queryKey: supplierKeys.detail(summary.id),
+  });
+  const supplier = detailQuery.data;
+
+  return (
+    <>
+      <DialogHeader className="border-b bg-muted/20 px-6 py-4">
+        <DialogTitle>{supplier?.name ?? summary.name}</DialogTitle>
+        <DialogDescription>{supplier?.code ?? summary.code}</DialogDescription>
+      </DialogHeader>
+      <div className="p-4">
+        {detailQuery.isLoading ? (
+          <div
+            aria-label="Đang tải chi tiết nhà cung cấp"
+            className="flex min-h-48 items-center justify-center gap-2 text-sm text-muted-foreground"
+            role="status"
+          >
+            <LoaderCircle className="size-4 animate-spin" />
+            Đang tải chi tiết nhà cung cấp...
+          </div>
+        ) : null}
+        {detailQuery.error ? (
+          <div className="space-y-3">
+            <ErrorBanner error={detailQuery.error} />
+            <Button
+              onClick={() => void detailQuery.refetch()}
+              type="button"
+              variant="outline"
+            >
+              <RefreshCw data-icon="inline-start" />
+              Thử lại
+            </Button>
+          </div>
+        ) : null}
+        {supplier ? (
+          <SupplierDetailSection
+            canDelete={canDelete}
+            canManage={canManage}
+            key={`${supplier.id}:${supplier.updatedAt}`}
+            supplier={supplier}
+            onDeleted={onDeleted}
+          />
+        ) : null}
+      </div>
+    </>
+  );
+}
 function SupplierDetailSection({
   canDelete,
   canManage,
@@ -569,7 +624,11 @@ function SupplierDetailSection({
   const updateSupplierMutation = useMutation({
     mutationFn: () => updateSupplier(supplier.id, supplierPayload(editForm)),
     onError: (error) => toast.error(formatError(error)),
-    onSuccess: () => {
+    onSuccess: (updatedSupplier) => {
+      queryClient.setQueryData(
+        supplierKeys.detail(supplier.id),
+        updatedSupplier,
+      );
       void queryClient.invalidateQueries({ queryKey: ["suppliers", "list"] });
       toast.success("Đã cập nhật nhà cung cấp");
     },
@@ -578,7 +637,11 @@ function SupplierDetailSection({
   const changeStatusMutation = useMutation({
     mutationFn: () => changeSupplierStatus(supplier.id, nextStatus),
     onError: (error) => toast.error(formatError(error)),
-    onSuccess: () => {
+    onSuccess: (updatedSupplier) => {
+      queryClient.setQueryData(
+        supplierKeys.detail(supplier.id),
+        updatedSupplier,
+      );
       void queryClient.invalidateQueries({ queryKey: ["suppliers", "list"] });
       toast.success("Đã đổi trạng thái");
     },
@@ -707,15 +770,20 @@ function SupplierDetailSection({
             onSubmit={handleChangeStatus}
           >
             <div className="space-y-2">
-              <Label>Trạng thái</Label>
+              <Label htmlFor="supplier-status">Trạng thái</Label>
               <Select
+                disabled={!canManage || changeStatusMutation.isPending}
                 value={nextStatus}
                 onValueChange={(value) =>
                   setNextStatus(value as SupplierStatus)
                 }
               >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
+                <SelectTrigger
+                  aria-label="Trạng thái nhà cung cấp"
+                  className="w-full"
+                  id="supplier-status"
+                >
+                  <SelectValue placeholder="Chọn trạng thái" />
                 </SelectTrigger>
                 <SelectContent>
                   {SUPPLIER_STATUSES.map((status) => (
@@ -837,14 +905,21 @@ function SupplierDetailSection({
             className="grid gap-3 md:grid-cols-3"
             onSubmit={handleUpsertItem}
           >
-            <TextField
-              id="supplier-item-id"
-              label="Mã mặt hàng kho"
-              value={itemForm.itemId}
-              onChange={(value) =>
-                setItemForm((current) => ({ ...current, itemId: value }))
-              }
-            />
+            <div className="space-y-2">
+              <Label htmlFor="supplier-item-id">Mặt hàng kho</Label>
+              <WarehouseItemCombobox
+                disabled={!canManage}
+                id="supplier-item-id"
+                label="Mặt hàng kho"
+                selectedItemId={itemForm.itemId}
+                onSelect={(item) =>
+                  setItemForm((current) => ({
+                    ...current,
+                    itemId: item.id,
+                  }))
+                }
+              />
+            </div>
             <TextField
               id="supplier-item-code"
               label="Mã hàng NCC"
@@ -1194,12 +1269,16 @@ function SupplierItemEditDialog({
         </DialogHeader>
         <form className="space-y-4" onSubmit={onSubmit}>
           <div className="grid gap-3 md:grid-cols-2">
-            <TextField
-              id="supplier-item-edit-item-id"
-              label="Mã mặt hàng kho"
-              value={form.itemId}
-              onChange={(value) => onChange({ ...form, itemId: value })}
-            />
+            <div className="space-y-2">
+              <Label htmlFor="supplier-item-edit-item-id">Mặt hàng kho</Label>
+              <WarehouseItemCombobox
+                disabled
+                id="supplier-item-edit-item-id"
+                label="Mặt hàng kho"
+                selectedItemId={form.itemId}
+                onSelect={() => undefined}
+              />
+            </div>
             <TextField
               id="supplier-item-edit-code"
               label="Mã hàng NCC"

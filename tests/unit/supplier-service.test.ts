@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiClient } from "@/lib/api-client";
 import {
   changeSupplierStatus,
+  getSupplier,
   listSupplierItemsBySupplier,
   listSuppliers,
   normalizeSupplierListResponse,
@@ -108,6 +109,33 @@ describe("supplier API service", () => {
     });
   });
 
+  it("fetches authoritative supplier detail and normalizes nullable fields", async () => {
+    mockedGet.mockResolvedValueOnce({
+      data: {
+        data: {
+          ...supplier,
+          address: null,
+          contactName: null,
+          email: " contact@example.com ",
+          note: null,
+          phone: null,
+          taxCode: null,
+        },
+        meta: { requestId: "req-detail" },
+      },
+    });
+
+    await expect(getSupplier("sup/1")).resolves.toEqual({
+      ...supplier,
+      address: undefined,
+      contactName: undefined,
+      email: "contact@example.com",
+      note: undefined,
+      phone: undefined,
+      taxCode: undefined,
+    });
+    expect(mockedGet).toHaveBeenCalledWith("/supplier/sup%2F1");
+  });
   it("uses supplier item routes exposed by backend Swagger", async () => {
     mockedGet.mockResolvedValueOnce({ data: [] });
     mockedPost.mockResolvedValueOnce({

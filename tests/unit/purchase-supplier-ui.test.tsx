@@ -74,6 +74,7 @@ vi.mock(
       changeSupplierStatus: vi.fn(),
       createSupplier: vi.fn(),
       deleteSupplier: vi.fn(),
+      getSupplier: vi.fn(),
       getSupplierItem: vi.fn(),
       listSupplierItemsBySupplier: vi.fn(),
       listSuppliers: vi.fn(),
@@ -137,6 +138,8 @@ const mockedListPurchaseOrders = vi.mocked(purchaseService.listPurchaseOrders);
 const mockedGetPurchaseOrder = vi.mocked(purchaseService.getPurchaseOrder);
 const mockedListGrns = vi.mocked(grnService.listGoodsReceiptNotes);
 const mockedListSuppliers = vi.mocked(supplierService.listSuppliers);
+const mockedGetSupplier = vi.mocked(supplierService.getSupplier);
+const mockedUpsertSupplierItem = vi.mocked(supplierService.upsertSupplierItem);
 const mockedListSupplierItems = vi.mocked(
   supplierService.listSupplierItemsBySupplier,
 );
@@ -225,6 +228,16 @@ describe("purchase and supplier UX", () => {
       page: 1,
       total: 1,
     });
+    mockedGetSupplier.mockResolvedValue({
+      ...supplier,
+      address: "123 Lê Văn Lương, Quận 7",
+      contactName: undefined,
+      email: undefined,
+      note: undefined,
+      phone: undefined,
+      status: "INACTIVE",
+      taxCode: undefined,
+    });
     mockedListSupplierItems.mockResolvedValue([]);
     mockedGetSupplierItem.mockResolvedValue(supplierItem);
     mockedListPurchaseOrders.mockResolvedValue({
@@ -306,6 +319,74 @@ describe("purchase and supplier UX", () => {
     ).toBeInTheDocument();
   });
 
+  it("selects supplier items from refreshed warehouse-item options", async () => {
+    mockedListWarehouseItems.mockResolvedValue({
+      data: [
+        {
+          createdAt: "2026-07-01T00:00:00.000Z",
+          id: "item-1",
+          isActive: true,
+          isPerishable: false,
+          name: "Ly nhựa 500 ml",
+          sku: "SKU-001",
+          type: "CUP_BLANK",
+          unit: "cái",
+          updatedAt: "2026-07-23T00:00:00.000Z",
+        },
+      ],
+      limit: 100,
+      page: 1,
+      total: 1,
+    });
+    mockedUpsertSupplierItem.mockResolvedValue(supplierItem);
+    renderWithQueryClient(<SuppliersClient />);
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Xem chi tiết nhà cung cấp Công ty Minh Long",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(
+      await within(dialog).findByRole("combobox", { name: "Mặt hàng kho" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("option", {
+        name: /SKU-001.*Ly nhựa 500 ml/i,
+      }),
+    );
+    fireEvent.change(within(dialog).getByLabelText("Giá nhập"), {
+      target: { value: "15000" },
+    });
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Lưu mặt hàng" }),
+    );
+
+    await waitFor(() =>
+      expect(mockedUpsertSupplierItem).toHaveBeenCalledWith(
+        expect.objectContaining({ itemId: "item-1", purchasePrice: 15000 }),
+      ),
+    );
+  });
+  it("loads authoritative supplier detail and displays its selected status", async () => {
+    renderWithQueryClient(<SuppliersClient />);
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Xem chi tiết nhà cung cấp Công ty Minh Long",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mockedGetSupplier).toHaveBeenCalledWith("sup-1"),
+    );
+    expect(await screen.findByLabelText("Địa chỉ")).toHaveValue(
+      "123 Lê Văn Lương, Quận 7",
+    );
+    expect(
+      screen.getByRole("combobox", { name: "Trạng thái nhà cung cấp" }),
+    ).toHaveTextContent("Ngưng dùng");
+  });
   it("uses a non-horizontal purchase dialog with visible item labels and server search", async () => {
     renderWithQueryClient(<PurchaseOrdersClient />);
 
