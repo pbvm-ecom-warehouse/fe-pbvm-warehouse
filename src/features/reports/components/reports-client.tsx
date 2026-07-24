@@ -590,7 +590,7 @@ export function ReportsClient() {
                   aria-label="Biểu đồ biến động theo nghiệp vụ"
                   className="h-64 min-w-0"
                 >
-                  <ResponsiveContainer height="100%" width="100%">
+                  <ResponsiveContainer height={256} width="100%">
                     <BarChart
                       data={chartRows}
                       margin={{ bottom: 8, left: 0, right: 12, top: 8 }}

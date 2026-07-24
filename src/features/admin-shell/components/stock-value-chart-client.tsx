@@ -27,7 +27,7 @@ export function StockValueChartClient({ data }: StockValueChartClientProps) {
 
   return (
     <div className="h-72 w-full">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height={288}>
         <AreaChart data={data}>
           <defs>
             <linearGradient id="ingredients" x1="0" x2="0" y1="0" y2="1">
