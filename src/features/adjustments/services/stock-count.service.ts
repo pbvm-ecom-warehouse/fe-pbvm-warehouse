@@ -26,7 +26,6 @@ export type StockCountItem = {
 
 export type StockCount = {
   id: string;
-  warehouseId: string;
   zoneId?: string | null;
   status: StockCountStatus;
   note?: string;
@@ -41,13 +40,11 @@ export type StockCount = {
 
 export type QueryStockCountsInput = {
   status?: StockCountStatus | "ALL";
-  warehouseId?: string;
   page?: number;
   limit?: number;
 };
 
 export type CreateStockCountInput = {
-  warehouseId: string;
   zoneId?: string;
   note?: string;
 };
@@ -64,11 +61,6 @@ export type ApproveStockCountInput = {
   reason?: string;
 };
 
-function optionalText(value: string | undefined) {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
-}
-
 export function normalizeStockCountListResponse(
   payload: ApiListLike<StockCount>,
 ) {
@@ -84,7 +76,6 @@ export async function listStockCounts(input: QueryStockCountsInput = {}) {
         page: input.page,
         status:
           input.status && input.status !== "ALL" ? input.status : undefined,
-        warehouseId: optionalText(input.warehouseId),
       },
     },
   );

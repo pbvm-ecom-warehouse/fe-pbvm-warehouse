@@ -107,7 +107,9 @@ describe("WMS RBAC helpers", () => {
     expect(hasModuleActionAccess("staff", ["MANAGER"])).toBe(true);
     expect(hasModuleActionAccess("suppliers", ["MANAGER"])).toBe(true);
     expect(hasModuleActionAccess("purchases", ["MANAGER"])).toBe(true);
-    expect(hasRouteAccess("/warehouses", ["RECEIVER"])).toBe(false);
+    expect(dashboardRoutes.map((route) => route.href)).not.toContain(
+      "/warehouses",
+    );
   });
 
   it("uses the documented priority for default focus", () => {
@@ -124,16 +126,16 @@ describe("WMS session normalization", () => {
       roles: ["RECEIVER", "PICKER"],
       tenantId: "tenant-1",
       type: "user",
-      warehouseId: "wh-1",
     });
 
     expect(sessionUserFromAccessToken(token, "fallback-tenant")).toEqual({
+      avatarUrl: undefined,
+      email: undefined,
       id: "user-1",
       name: "Receiver One",
       roles: ["RECEIVER", "PICKER"],
       tenantId: "tenant-1",
       type: "user",
-      warehouseId: "wh-1",
     });
   });
 

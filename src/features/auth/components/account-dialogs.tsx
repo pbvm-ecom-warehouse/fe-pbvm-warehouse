@@ -213,7 +213,10 @@ export function AccountProfileDialog({
               label="Vai trò"
               value={formatRole(profile.role, profile.roles)}
             />
-            <ProfileRow label="Kho phụ trách" value={profile.warehouseId} />
+            <ProfileRow
+              label="Số điện thoại"
+              value={profile.phone || "Chưa cập nhật"}
+            />
             <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/20 px-3 py-2 sm:grid-cols-[150px_1fr] sm:items-center">
               <span className="text-xs font-medium text-muted-foreground">
                 Trạng thái

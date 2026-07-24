@@ -38,7 +38,6 @@ function migrateUser(user: unknown): SessionUser | null {
       roles,
       tenantId: persistedUser.tenantId,
       type: persistedUser.type ?? "user",
-      warehouseId: persistedUser.warehouseId,
     },
     persistedUser.tenantId,
   );

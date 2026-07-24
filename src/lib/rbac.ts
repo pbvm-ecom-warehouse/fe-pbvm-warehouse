@@ -57,7 +57,7 @@ const RETIRED_ROUTES = new Set<string>(["/inventory", "/transfers"]);
 
 export const ROUTE_ACCESS_BY_HREF = {
   "/dashboard": ALL_STAFF_ROLES,
-  "/warehouses": ["MANAGER"],
+  "/locations": ["MANAGER"],
   "/products": ["ADMIN", "MANAGER", "PRINTER"],
   "/warehouse-navigation": ["ADMIN", "MANAGER", "RECEIVER", "PICKER"],
   "/purchases": ["ADMIN", "MANAGER"],
@@ -75,7 +75,7 @@ export const ROUTE_ACCESS_BY_HREF = {
 } as const satisfies Record<string, readonly WmsRole[]>;
 
 export const MODULE_PRIMARY_ACTION_ROLES = {
-  warehouses: ["MANAGER"],
+  locations: ["MANAGER"],
   products: ["ADMIN", "MANAGER"],
   purchases: ["ADMIN", "MANAGER"],
   "goods-issues": ["ADMIN", "MANAGER", "PICKER"],

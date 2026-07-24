@@ -11,12 +11,9 @@ export type AuthTokenResponse = {
 export type WmsUserStatus = "ACTIVE" | "LOCKED";
 
 export type ListWmsUsersQuery = {
-  limit?: number;
-  page?: number;
   role?: string;
   search?: string;
   status?: WmsUserStatus;
-  warehouseId?: string;
 };
 
 export type WmsUserResponse = {
@@ -24,12 +21,12 @@ export type WmsUserResponse = {
   avatarUrl?: string;
   username: string;
   email?: string;
+  phone?: string;
   name?: string;
   role: string;
   roles?: string[];
   status: WmsUserStatus;
   mustChangePassword: boolean;
-  warehouseId?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -48,6 +45,7 @@ export type CreateUserInput = {
   username: string;
   password: string;
   email?: string;
+  phone?: string;
   name?: string;
   role?: string;
 };
@@ -63,7 +61,7 @@ export type CreateUserResponse = {
 export type UpdateUserInput = {
   name?: string;
   email?: string;
-  warehouseId?: string;
+  phone?: string;
 };
 
 export type UpdateUserRoleInput = {
@@ -169,7 +167,6 @@ export type WarehouseLayoutGate = {
 
 export type WarehouseLayout = {
   id?: string;
-  warehouseId: string;
   revision: number;
   status: WarehouseLayoutStatus;
   canvas: WarehouseLayoutCanvas;
@@ -182,8 +179,6 @@ export type WarehouseLayout = {
 
 export type WarehouseShelf = {
   id: string;
-  warehouseId: string;
-  warehouseCode: string;
   zoneCode: string;
   zoneName: string;
   rackCode: string;
@@ -270,7 +265,6 @@ export type Product = TenantScoped & {
 
 export type StockLedgerRow = {
   id: string;
-  warehouseName: string;
   productSku: string;
   productName: string;
   quantity: number;
@@ -281,7 +275,6 @@ export type StockLedgerRow = {
 
 export type StockMovement = {
   id: string;
-  warehouseName: string;
   productName: string;
   moveType: MoveType;
   quantity: number;

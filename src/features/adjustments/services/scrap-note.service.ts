@@ -19,7 +19,6 @@ export type ScrapNoteItem = {
 
 export type ScrapNote = {
   id: string;
-  warehouseId: string;
   status: ScrapNoteStatus;
   note?: string;
   createdBy: string;
@@ -32,7 +31,6 @@ export type ScrapNote = {
 
 export type QueryScrapNotesInput = {
   status?: ScrapNoteStatus | "ALL";
-  warehouseId?: string;
   page?: number;
   limit?: number;
 };
@@ -46,7 +44,6 @@ export type CreateScrapNoteItemInput = {
 };
 
 export type CreateScrapNoteInput = {
-  warehouseId: string;
   note?: string;
   items: CreateScrapNoteItemInput[];
   itemImages?: File[][];
@@ -55,11 +52,6 @@ export type CreateScrapNoteInput = {
 export type RejectScrapNoteInput = {
   rejectReason: string;
 };
-
-function optionalText(value: string | undefined) {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
-}
 
 export function normalizeScrapNoteListResponse(
   payload: ApiListLike<ScrapNote>,
@@ -73,7 +65,6 @@ export async function listScrapNotes(input: QueryScrapNotesInput = {}) {
       limit: input.limit,
       page: input.page,
       status: input.status && input.status !== "ALL" ? input.status : undefined,
-      warehouseId: optionalText(input.warehouseId),
     },
   });
 
@@ -90,7 +81,6 @@ export async function getScrapNote(scrapNoteId: string) {
 
 export async function createScrapNote(input: CreateScrapNoteInput) {
   const formData = new FormData();
-  formData.append("warehouseId", input.warehouseId);
   if (input.note) formData.append("note", input.note);
   formData.append("items", JSON.stringify(input.items));
   appendIndexedEvidenceImages(formData, input.itemImages);

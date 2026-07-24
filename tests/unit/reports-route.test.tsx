@@ -8,7 +8,6 @@ import {
   getPerformanceReport,
   getStockReport,
 } from "@/features/reports/services/report.service";
-import { listWarehouses } from "@/features/warehouse-structure/services/warehouse-structure.service";
 
 vi.mock("@/features/reports/services/report.service", () => ({
   getLotReport: vi.fn(),
@@ -16,45 +15,23 @@ vi.mock("@/features/reports/services/report.service", () => ({
   getStockReport: vi.fn(),
 }));
 
-vi.mock("@/features/warehouse-structure/services/warehouse-structure.service", () => ({
-  listWarehouses: vi.fn(),
-}));
+vi.mock(
+  "@/features/warehouse-structure/services/warehouse-structure.service",
+  () => ({}),
+);
 
 const mockedGetLotReport = vi.mocked(getLotReport);
 const mockedGetPerformanceReport = vi.mocked(getPerformanceReport);
 const mockedGetStockReport = vi.mocked(getStockReport);
-const mockedListWarehouses = vi.mocked(listWarehouses);
 
 describe("reports route", () => {
   beforeEach(() => {
     mockedGetLotReport.mockReset();
     mockedGetPerformanceReport.mockReset();
     mockedGetStockReport.mockReset();
-    mockedListWarehouses.mockReset();
-    mockedGetLotReport.mockResolvedValue({
-      data: [],
-      pagination: {
-        hasNext: false,
-        hasPrev: false,
-        limit: 20,
-        page: 1,
-        totalItems: 0,
-        totalPages: 0,
-      },
-    });
+    mockedGetLotReport.mockResolvedValue([]);
     mockedGetPerformanceReport.mockResolvedValue([]);
-    mockedGetStockReport.mockResolvedValue({
-      data: [],
-      pagination: {
-        hasNext: false,
-        hasPrev: false,
-        limit: 20,
-        page: 1,
-        totalItems: 0,
-        totalPages: 0,
-      },
-    });
-    mockedListWarehouses.mockResolvedValue([]);
+    mockedGetStockReport.mockResolvedValue([]);
   });
 
   it("mounts the live report interface instead of the static module placeholder", async () => {
@@ -68,7 +45,9 @@ describe("reports route", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "Báo cáo kho" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Báo cáo kho" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Tồn kho" })).toBeInTheDocument();
     expect(screen.queryByText("Tạo báo cáo")).not.toBeInTheDocument();
     expect(screen.queryByText("Báo cáo gần đây")).not.toBeInTheDocument();

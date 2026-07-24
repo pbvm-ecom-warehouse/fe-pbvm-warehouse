@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { EvidenceImagePicker } from "@/components/evidence-images";
 import { Barcode } from "@/components/barcode";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -151,6 +152,7 @@ export function CreateWarehouseItemPanel({
   onCreated: (item: WarehouseItem) => void;
 }) {
   const [form, setForm] = useState<CreateForm>(initialForm);
+  const [images, setImages] = useState<File[]>([]);
   const [createdItem, setCreatedItem] = useState<WarehouseItem | null>(null);
 
   const rootTemplateQuery = useQuery({
@@ -262,6 +264,7 @@ export function CreateWarehouseItemPanel({
         attributeOptionIds: selectedOptionIds,
         depth: optionalNumber(form.depth),
         height: optionalNumber(form.height),
+        images,
         isPerishable: form.isPerishable,
         minQuantity: optionalNumber(form.minQuantity),
         name: form.name.trim(),
@@ -299,6 +302,7 @@ export function CreateWarehouseItemPanel({
 
   function reset(nextType: CreatableWarehouseItemType = "CUP_BLANK") {
     setForm({ ...initialForm(), type: nextType });
+    setImages([]);
     setCreatedItem(null);
     createMutation.reset();
   }
@@ -549,6 +553,12 @@ export function CreateWarehouseItemPanel({
               }
             />
           ) : null}
+          <EvidenceImagePicker
+            files={images}
+            id="create-item-images"
+            label="Ảnh mặt hàng"
+            onChange={setImages}
+          />
           <AltUnitsEditor
             value={form.altUnits}
             onChange={(altUnits) =>

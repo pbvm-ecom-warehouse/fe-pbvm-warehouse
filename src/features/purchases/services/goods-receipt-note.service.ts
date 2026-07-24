@@ -26,7 +26,6 @@ export type GoodsReceiptNote = {
   id: string;
   grnNumber: string;
   purchaseOrderId: string;
-  warehouseId: string;
   status: GoodsReceiptNoteStatus;
   items: GoodsReceiptNoteItem[];
   images?: string[];

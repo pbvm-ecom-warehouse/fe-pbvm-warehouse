@@ -40,7 +40,6 @@ export function InventoryTable({ rows }: { rows: StockLedgerRow[] }) {
       <TableHeader>
         <TableRow>
           <TableHead>SKU</TableHead>
-          <TableHead>Kho</TableHead>
           <TableHead className="text-right">Tồn thực tế</TableHead>
           <TableHead className="text-right">Đã giữ</TableHead>
           <TableHead className="text-right">Khả dụng</TableHead>
@@ -76,7 +75,6 @@ export function InventoryTable({ rows }: { rows: StockLedgerRow[] }) {
                   {row.productName}
                 </div>
               </TableCell>
-              <TableCell className="font-medium">{row.warehouseName}</TableCell>
               <TableCell className="font-mono text-right font-semibold">
                 {row.quantity}
               </TableCell>

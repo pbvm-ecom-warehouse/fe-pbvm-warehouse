@@ -56,7 +56,6 @@ import {
   listWarehouseItems,
   type WarehouseItem,
 } from "@/features/products/services/warehouse-items.service";
-import { listWarehouses } from "@/features/warehouse-structure/services/warehouse-structure.service";
 import { useSessionUser } from "@/hooks/use-session-user";
 import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
@@ -88,7 +87,6 @@ const goodsReturnKeys = {
     orderId: string;
     page: number;
     status: GoodsReturnStatus | "ALL";
-    warehouseId: string;
   }) => ["goods-returns", "list", params] as const,
 };
 
@@ -150,12 +148,10 @@ export function GoodsReturnsClient() {
   const [statusFilter, setStatusFilter] = useState<GoodsReturnStatus | "ALL">(
     "ALL",
   );
-  const [warehouseFilter, setWarehouseFilter] = useState("");
   const [orderFilter, setOrderFilter] = useState("");
   const [page, setPage] = useState(1);
   const [selectedReturnId, setSelectedReturnId] = useState("");
   const [createForm, setCreateForm] = useState(defaultCreateForm);
-  const [inspectWarehouseId, setInspectWarehouseId] = useState("");
   const [inspectLines, setInspectLines] = useState<
     Record<string, InspectLineForm>
   >({});
@@ -171,13 +167,11 @@ export function GoodsReturnsClient() {
         orderId: orderFilter,
         page,
         status: statusFilter,
-        warehouseId: warehouseFilter,
       }),
     queryKey: goodsReturnKeys.list({
       orderId: orderFilter,
       page,
       status: statusFilter,
-      warehouseId: warehouseFilter,
     }),
   });
 
@@ -197,13 +191,6 @@ export function GoodsReturnsClient() {
     queryKey: goodsReturnKeys.detail(activeReturnId),
   });
   const detail = detailQuery.data ?? selectedReturn;
-
-  const warehousesQuery = useQuery({
-    enabled: canView,
-    queryFn: listWarehouses,
-    queryKey: ["goods-returns", "warehouses"],
-  });
-  const warehouses = warehousesQuery.data ?? [];
 
   const stockItemsQuery = useQuery({
     enabled: canMutate,
@@ -242,13 +229,11 @@ export function GoodsReturnsClient() {
           ) ?? [],
         itemImages:
           detail?.items.map((item) => inspectImages[item.itemId] ?? []) ?? [],
-        warehouseId: inspectWarehouseId,
       }),
     onError: (error) => toast.error(formatError(error)),
     onSuccess: (updated) => {
       setInspectLines(toInspectForm(updated.items));
       setInspectImages({});
-      setInspectWarehouseId(updated.warehouseId ?? inspectWarehouseId);
       void queryClient.invalidateQueries({ queryKey: ["goods-returns"] });
       toast.success("Đã ghi nhận phân loại hàng hoàn");
     },
@@ -291,8 +276,7 @@ export function GoodsReturnsClient() {
   function handleInspect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!detail || !activeReturnId || !inspectWarehouseId) {
-      toast.error("Cần chọn kho nhận hàng hoàn.");
+    if (!detail || !activeReturnId) {
       return;
     }
 
@@ -310,7 +294,6 @@ export function GoodsReturnsClient() {
 
   function selectReturn(goodsReturn: GoodsReturn) {
     setSelectedReturnId(goodsReturn.id);
-    setInspectWarehouseId(goodsReturn.warehouseId ?? user?.warehouseId ?? "");
     setInspectLines(toInspectForm(goodsReturn.items));
     setInspectImages({});
   }
@@ -409,13 +392,6 @@ export function GoodsReturnsClient() {
                 value={orderFilter}
                 onChange={setOrderFilter}
               />
-              <TextField
-                id="goods-return-warehouse-filter"
-                label="Mã kho"
-                required={false}
-                value={warehouseFilter}
-                onChange={setWarehouseFilter}
-              />
               <Button className="self-end" disabled={!canView} type="submit">
                 <Search data-icon="inline-start" />
                 Lọc
@@ -460,12 +436,7 @@ export function GoodsReturnsClient() {
           {detail ? (
             <GoodsReturnDetail
               detail={detail}
-              onSelect={() => {
-                setInspectWarehouseId(
-                  detail.warehouseId ?? user?.warehouseId ?? "",
-                );
-                setInspectLines(toInspectForm(detail.items));
-              }}
+              onSelect={() => setInspectLines(toInspectForm(detail.items))}
             />
           ) : null}
         </div>
@@ -499,26 +470,6 @@ export function GoodsReturnsClient() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <form className="space-y-3" onSubmit={handleInspect}>
-                  <div className="space-y-2">
-                    <Label>Kho nhận hàng hoàn</Label>
-                    <Select
-                      disabled={!canMutate}
-                      value={inspectWarehouseId}
-                      onValueChange={setInspectWarehouseId}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Chọn kho" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {warehouses.map((warehouse) => (
-                          <SelectItem key={warehouse.id} value={warehouse.id}>
-                            {warehouse.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
                   <div className="space-y-3">
                     {detail.items.map((item) => (
                       <InspectLineEditor
@@ -717,9 +668,7 @@ function GoodsReturnDetail({
         <CardTitle className="text-base">
           {detail.orderId ?? "Phiếu hoàn không gắn đơn"}
         </CardTitle>
-        <CardDescription>
-          Kho {detail.warehouseId ?? "chưa chọn"} · {statusLabel(detail.status)}
-        </CardDescription>
+        <CardDescription>{statusLabel(detail.status)}</CardDescription>
       </CardHeader>
       <CardContent className="pt-4">
         <Table scrollable>

@@ -16,7 +16,7 @@ export type LayoutRect = {
 export type RackConfigurationScope = "ZONE" | "WAREHOUSE";
 
 export const fallbackWarehouseLayout: WarehouseLayout = {
-  warehouseId: "central",
+  id: "single-warehouse-layout",
   revision: 1,
   status: "PUBLISHED",
   canvas: { widthM: 40, heightM: 24, gridM: 0.5 },

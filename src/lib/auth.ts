@@ -15,7 +15,6 @@ export type SessionUser = {
   email?: string;
   roles: WmsRole[];
   tenantId: string;
-  warehouseId?: string;
   type: "user";
 };
 
@@ -39,8 +38,6 @@ type WmsJwtPayload = JWTPayload & {
   type?: unknown;
   userId?: unknown;
   username?: unknown;
-  warehouseId?: unknown;
-  warehouse_id?: unknown;
 };
 
 function stringClaim(value: unknown) {
@@ -91,8 +88,6 @@ export function sessionUserFromClaims(
       stringClaim(payload.tenantId) ??
       stringClaim(payload.tenant_id) ??
       fallbackTenantId,
-    warehouseId:
-      stringClaim(payload.warehouseId) ?? stringClaim(payload.warehouse_id),
     type: "user",
   };
 }
@@ -120,7 +115,7 @@ export function sessionUserFromWmsUserResponse(
     email: user.email?.trim() || fallback?.email,
     roles,
     tenantId: fallback?.tenantId ?? fallbackTenantId,
-    warehouseId: user.warehouseId ?? fallback?.warehouseId,
+
     type: "user",
   };
 }

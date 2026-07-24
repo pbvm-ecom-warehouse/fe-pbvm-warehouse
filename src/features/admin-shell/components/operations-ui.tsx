@@ -30,17 +30,21 @@ export function PageHeader({
           {title}
         </h1>
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      {actions ? (
+        <div className="flex flex-wrap items-center gap-2">{actions}</div>
+      ) : null}
     </div>
   );
 }
 
 export function TablePanel({
+  action,
   children,
   className,
   count,
   title,
 }: {
+  action?: ReactNode;
   children: ReactNode;
   className?: string;
   count?: ReactNode;
@@ -51,11 +55,14 @@ export function TablePanel({
       <CardHeader className="border-b bg-muted/25 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="text-base">{title}</CardTitle>
-          {count ? (
-            <div className="font-mono text-xs font-medium text-muted-foreground">
-              {count}
-            </div>
-          ) : null}
+          <div className="flex items-center gap-2">
+            {count ? (
+              <div className="font-mono text-xs font-medium text-muted-foreground">
+                {count}
+              </div>
+            ) : null}
+            {action}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">{children}</CardContent>
@@ -157,7 +164,10 @@ export function TableSkeleton({
       {Array.from({ length: rows }).map((_, rowIndex) => (
         <div className="flex gap-2" key={rowIndex}>
           {Array.from({ length: columns }).map((__, columnIndex) => (
-            <Skeleton className="h-7 min-w-0 flex-1 rounded-md" key={columnIndex} />
+            <Skeleton
+              className="h-7 min-w-0 flex-1 rounded-md"
+              key={columnIndex}
+            />
           ))}
         </div>
       ))}

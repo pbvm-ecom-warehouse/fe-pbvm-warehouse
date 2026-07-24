@@ -20,7 +20,6 @@ describe("warehouse put-away navigation", () => {
     const suggestions = fallbackPutawaySuggestions({
       sku: "CUP-BLANK-500",
       quantity: 80,
-      warehouseId: "central",
     });
 
     expect(suggestions[0]?.advisory).toBe(true);
@@ -33,13 +32,11 @@ describe("warehouse put-away navigation", () => {
       fallbackPutawaySuggestions({
         sku: "CUP-BLANK-500",
         quantity: 80,
-        warehouseId: "central",
       }),
     );
 
     expect(suggestion).toBeTruthy();
     expect(buildNavigationPath(suggestion!.shelf)).toEqual([
-      "CENTRAL",
       "Zone A",
       "Rack A1",
       "A1-S02",
@@ -52,7 +49,6 @@ describe("warehouse put-away navigation", () => {
       fallbackPutawaySuggestions({
         sku: "CUP-BLANK-500",
         quantity: 80,
-        warehouseId: "central",
       }),
     );
 
@@ -64,7 +60,6 @@ describe("warehouse put-away navigation", () => {
       fallbackPutawaySuggestions({
         sku: "CUP-BLANK-500",
         quantity: 80,
-        warehouseId: "central",
       }),
     );
 
@@ -86,7 +81,6 @@ describe("warehouse put-away navigation", () => {
       fallbackPutawaySuggestions({
         sku: "CUP-BLANK-500",
         quantity: 1,
-        warehouseId: "central",
       }).map((suggestion) => suggestion.shelf),
     );
 
@@ -168,7 +162,6 @@ describe("warehouse put-away navigation", () => {
       code: "A1-S02",
       level: 2,
       rackCode: "A1",
-      warehouseId: "central",
       zoneCode: "A",
     });
     expect(shelf?.innerDepth).toBe(150);
@@ -185,7 +178,7 @@ describe("warehouse put-away navigation", () => {
     expect(suggestions[0]).toMatchObject({
       advisory: true,
       capacity: 120,
-      pathLabel: "central / Zone A / Rack A1 / A1-S02",
+      pathLabel: "Zone A / Rack A1 / A1-S02",
       reason: "Gợi ý từ WMS theo sức chứa còn lại",
     });
     expect(suggestions[0]?.route?.to.code).toBe("A1-S02");

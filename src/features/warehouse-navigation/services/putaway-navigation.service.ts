@@ -5,7 +5,10 @@ import {
   unwrapApiData,
 } from "@/lib/api-contract";
 
-import type { PutawaySuggestionInput } from "../utils/putaway-navigation";
+export type PutawaySuggestionInput = {
+  quantity: number;
+  sku: string;
+};
 
 export type PutawaySuggestionWarning =
   | "ITEM_NO_DIMENSIONS"
@@ -38,7 +41,6 @@ export async function listPutawaySuggestionResult(
       params: {
         qty: input.quantity,
         sku: input.sku,
-        warehouseId: input.warehouseId,
       },
     });
     const payload = unwrapApiData(response.data);

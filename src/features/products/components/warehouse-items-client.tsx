@@ -70,7 +70,6 @@ import {
   type WarehouseItem,
   type WarehouseItemType,
 } from "../services/warehouse-items.service";
-import { formatWarehouseItemListValue } from "../utils/warehouse-item-format";
 
 const PAGE_SIZE = 20;
 const WAREHOUSE_UNITS = ["cái", "thùng", "hộp", "kg", "g", "lít", "ml", "m"];
@@ -83,7 +82,6 @@ type AltUnitForm = {
 type ItemForm = {
   name: string;
   unit: string;
-  altBarcodes: string;
   altUnits: AltUnitForm[];
   isPerishable: boolean;
   nearExpiryDays: string;
@@ -103,13 +101,6 @@ const productKeys = {
 
 function formatError(error: unknown) {
   return getApiErrorMessage(error) ?? "Không kết nối được WMS.";
-}
-
-function splitList(value: string) {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
 }
 
 function optionalNumber(value: string) {
@@ -171,7 +162,6 @@ function altUnitsToPayload(units: AltUnitForm[]): WarehouseItemAltUnit[] {
 
 function itemToForm(item: WarehouseItem): ItemForm {
   return {
-    altBarcodes: formatWarehouseItemListValue(item.altBarcodes),
     altUnits: normalizeAltUnits(item.altUnits),
     depth: item.depth?.toString() ?? "",
     height: item.height?.toString() ?? "",
@@ -185,7 +175,6 @@ function itemToForm(item: WarehouseItem): ItemForm {
 
 function formToUpdatePayload(form: ItemForm): UpdateWarehouseItemInput {
   return {
-    altBarcodes: splitList(form.altBarcodes),
     altUnits: altUnitsToPayload(form.altUnits),
     depth: optionalNumber(form.depth),
     height: optionalNumber(form.height),
@@ -635,13 +624,6 @@ function ItemFormFields({
           label="Đơn vị"
           value={form.unit}
           onChange={(unit) => onChange({ ...form, unit })}
-        />
-        <TextField
-          id="item-alt-barcodes"
-          label="Mã vạch phụ"
-          required={false}
-          value={form.altBarcodes}
-          onChange={(altBarcodes) => onChange({ ...form, altBarcodes })}
         />
         <AltUnitsField
           value={form.altUnits}

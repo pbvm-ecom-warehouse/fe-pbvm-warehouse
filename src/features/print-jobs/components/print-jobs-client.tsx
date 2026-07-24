@@ -633,9 +633,7 @@ function PrintJobDetail({
     <Card>
       <CardHeader className="border-b bg-muted/20">
         <CardTitle className="text-base">{detail.orderId}</CardTitle>
-        <CardDescription>
-          Kho {detail.warehouseId} · {printJobStatusLabel(detail.status)}
-        </CardDescription>
+        <CardDescription>{printJobStatusLabel(detail.status)}</CardDescription>
       </CardHeader>
       <CardContent className="pt-4">
         <Table scrollable>

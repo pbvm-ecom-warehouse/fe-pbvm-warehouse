@@ -26,7 +26,6 @@ async function seedWmsSession(
               roles,
               tenantId: "demo-tenant",
               type: "user",
-              warehouseId: "MW-001",
             },
           },
           version: 2,
@@ -380,7 +379,6 @@ test("manager opens purchases when purchase order items are missing", async ({
     status: "CONFIRMED",
     supplierId: "supplier-1",
     updatedAt: "2026-07-13T00:00:00.000Z",
-    warehouseId: "wh-1",
   };
 
   await page.route("**/api/wms/supplier?**", async (route) => {
@@ -399,22 +397,6 @@ test("manager opens purchases when purchase order items are missing", async ({
         limit: 100,
         page: 1,
         total: 1,
-      }),
-    });
-  });
-  await page.route("**/api/wms/warehouse", async (route) => {
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: [
-          {
-            address: "Kho A",
-            id: "wh-1",
-            isActive: true,
-            name: "Kho A",
-          },
-        ],
-        meta: { requestId: "warehouse-list" },
       }),
     });
   });
@@ -714,7 +696,6 @@ test("admin sees system health and staff list management", async ({ page }) => {
       status: "ACTIVE",
       updatedAt: "2026-07-23T00:00:00.000Z",
       username: "admin_login",
-      warehouseId: "wh-central",
     };
     await route.fulfill({
       contentType: "application/json",
@@ -902,7 +883,6 @@ test("printer can use print jobs but not purchases", async ({ page }) => {
           ? "IN_PROGRESS"
           : "COMPLETED",
     updatedAt: "2026-07-04T00:00:00.000Z",
-    warehouseId: "central",
   });
   const postBodies: unknown[] = [];
 
@@ -987,7 +967,6 @@ test("manager can view print jobs without processing controls", async ({
     orderId: "order-1",
     status: "PENDING",
     updatedAt: "2026-07-04T00:00:00.000Z",
-    warehouseId: "central",
   };
 
   await page.route("**/api/wms/print-jobs**", async (route) => {
@@ -1029,54 +1008,58 @@ test("picker mobile drawer exposes picker routes", async ({ page }) => {
   await expect(page.getByRole("link", { name: /Nhập hàng/i })).toHaveCount(0);
 });
 
-test("admin manages warehouse list and layout canvas", async ({ page }) => {
-  await seedWmsSession(page, ["ADMIN"], "Admin User");
-  let layoutCalled = false;
+test("manager manages the single-warehouse location structure", async ({
+  page,
+}) => {
+  await seedWmsSession(page, ["MANAGER"], "Manager User");
+  let legacyWarehouseCalled = false;
 
-  await page.route("**/api/wms/warehouse/*/layout**", async (route) => {
-    layoutCalled = true;
+  await page.route("**/api/wms/warehouse**", async (route) => {
+    legacyWarehouseCalled = true;
+    await route.abort();
+  });
+  await page.route("**/api/wms/location/zones", async (route) => {
     await route.fulfill({
-      status: 404,
       contentType: "application/json",
       body: JSON.stringify({
-        error: { code: "NOT_FOUND", message: "missing" },
+        data: [{ code: "A", id: "zone-1", name: "Khu A" }],
+        meta: { requestId: "location-zones" },
       }),
     });
   });
-  await page.route("**/api/wms/warehouse", async (route) => {
+  await page.route("**/api/wms/location/racks**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: [{ code: "A1", id: "rack-1", name: "Kệ A1", zoneId: "zone-1" }],
+        meta: { requestId: "location-racks" },
+      }),
+    });
+  });
+  await page.route("**/api/wms/location/shelves**", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
         data: [
           {
-            address: "Kho trung tâm",
-            createdAt: "2026-07-01T00:00:00.000Z",
-            id: "wh-1",
-            isActive: true,
-            name: "Kho trung tâm",
-            updatedAt: "2026-07-01T00:00:00.000Z",
+            code: "A1-S01",
+            id: "shelf-1",
+            isStaging: false,
+            level: 1,
+            rackId: "rack-1",
           },
         ],
-        meta: { requestId: "warehouse-list" },
+        meta: { requestId: "location-shelves" },
       }),
     });
   });
 
-  await page.goto("/warehouses");
-  await expect(page.getByRole("heading", { name: /^Kho$/i })).toBeVisible();
-  await expect(page.getByText("Danh sách kho", { exact: true })).toBeVisible();
-  await expect(page.getByRole("row", { name: /Kho trung tâm/i })).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: /Sơ đồ kho Kho trung tâm/i }),
-  ).toBeVisible();
-  await expect(page.getByText("Chưa có API lưu sơ đồ")).toBeVisible();
-  await expect(page.getByRole("button", { name: /Khu vực/i })).toBeVisible();
-  expect(layoutCalled).toBe(true);
-
-  await page.getByRole("button", { name: /Khu vực/i }).click();
-  await expect(
-    page.getByRole("button", { name: /Lưu bản nháp/i }),
-  ).toBeDisabled();
+  await page.goto("/locations");
+  await expect(page.getByRole("heading", { name: "Vị trí kho" })).toBeVisible();
+  await expect(page.getByText("Khu A")).toBeVisible();
+  await expect(page.getByText("Kệ A1")).toBeVisible();
+  await expect(page.getByText("A1-S01")).toBeVisible();
+  expect(legacyWarehouseCalled).toBe(false);
 });
 
 test("receiver confirms put-away task through warehouse navigation", async ({
@@ -1098,7 +1081,6 @@ test("receiver confirms put-away task through warehouse navigation", async ({
       },
     ],
     status: "PENDING",
-    warehouseId: "central",
   };
 
   await page.route("**/api/wms/putaway-tasks**", async (route) => {
@@ -1145,15 +1127,6 @@ test("receiver confirms put-away task through warehouse navigation", async ({
       }),
     });
   });
-  await page.route("**/api/wms/warehouse/*/layout**", async (route) => {
-    await route.fulfill({
-      status: 404,
-      contentType: "application/json",
-      body: JSON.stringify({
-        error: { code: "NOT_FOUND", message: "missing" },
-      }),
-    });
-  });
 
   await page.goto("/warehouse-navigation");
   await expect(page.getByRole("heading", { name: "Cất hàng" })).toBeVisible();
@@ -1184,7 +1157,6 @@ test("picker sees picking location and confirms goods issue line", async ({
     ],
     orderId: "ORD-1",
     status: "PENDING",
-    warehouseId: "central",
   };
 
   await page.route("**/api/wms/goods-issues**", async (route) => {
@@ -1240,15 +1212,6 @@ test("picker sees picking location and confirms goods issue line", async ({
       }),
     });
   });
-  await page.route("**/api/wms/warehouse/*/layout**", async (route) => {
-    await route.fulfill({
-      status: 404,
-      contentType: "application/json",
-      body: JSON.stringify({
-        error: { code: "NOT_FOUND", message: "missing" },
-      }),
-    });
-  });
 
   await page.goto("/goods-issues");
   await expect(page.getByRole("heading", { name: "Xuất kho" })).toBeVisible();
@@ -1280,7 +1243,6 @@ test("shipper assigns a carrier and advances a shipment", async ({ page }) => {
     carrierId,
     codAmount: 320000,
     createdAt: "2026-07-21T00:00:00.000Z",
-    fulfillWarehouseId: "warehouse-1",
     goodsIssueId: "issue-1",
     id: "shipment-1",
     orderId: "ORD-001",
@@ -1307,12 +1269,16 @@ test("shipper assigns a carrier and advances a shipment", async ({ page }) => {
     const url = request.url();
 
     if (request.method() === "PATCH") {
-      const payload = request.postDataJSON();
       if (url.endsWith("/assign")) {
+        const payload = request.postDataJSON();
         carrierId = payload.carrierId;
         trackingNumber = payload.trackingNumber;
       } else {
-        shipmentStatus = payload.status;
+        const multipartBody = request.postData() ?? "";
+        const statusMatch = multipartBody.match(
+          /name="status"\r?\n\r?\n([^\r\n]+)/,
+        );
+        shipmentStatus = statusMatch?.[1] ?? shipmentStatus;
       }
       await route.fulfill({
         contentType: "application/json",

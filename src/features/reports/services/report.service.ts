@@ -3,8 +3,6 @@ import { apiClient } from "@/lib/api-client";
 export type StockReportRow = {
   sku: string;
   itemName: string;
-  warehouseId: string;
-  warehouseName: string;
   onHand: number;
   reserved: number;
   expired: number;
@@ -19,8 +17,6 @@ export type LotReportRow = {
   itemName: string;
   lotNumber: string;
   expiryDate: string | null;
-  warehouseId: string;
-  warehouseName: string;
   quantity: number;
   status: LotStatus;
   expiryFlag: LotExpiryFlag;
@@ -46,25 +42,7 @@ export type PerformanceReportRow = {
   movementCount: number;
 };
 
-export type ReportPagination = {
-  type?: "offset";
-  page: number;
-  limit: number;
-  totalItems: number;
-  totalPages: number;
-  hasNext: boolean;
-  hasPrev: boolean;
-};
-
-export type ReportPage<T> = {
-  data: T[];
-  pagination: ReportPagination;
-};
-
 export type StockReportQuery = {
-  page: number;
-  limit: number;
-  warehouseId?: string;
   sku?: string;
 };
 
@@ -75,15 +53,12 @@ export type LotReportQuery = StockReportQuery & {
 export type PerformanceReportQuery = {
   dateFrom: string;
   dateTo: string;
-  warehouseId?: string;
   sku?: string;
 };
 
 type ReportEnvelope<T> = {
   data: T;
-  meta: {
-    pagination?: ReportPagination;
-  };
+  meta: Record<string, unknown>;
 };
 
 function isReportEnvelope<T>(
@@ -106,58 +81,29 @@ function optionalText(value: string | undefined) {
   return trimmed || undefined;
 }
 
-function toReportPage<T>(
-  payload: ReportEnvelope<T[]> | T[],
-  fallback: Pick<ReportPagination, "page" | "limit">,
-): ReportPage<T> {
-  const data = unwrapReportData(payload);
-  const pagination = isReportEnvelope(payload) ? payload.meta.pagination : undefined;
-
-  return {
-    data,
-    pagination: {
-      type: pagination?.type,
-      hasNext: pagination?.hasNext ?? false,
-      hasPrev: pagination?.hasPrev ?? false,
-      limit: pagination?.limit ?? fallback.limit,
-      page: pagination?.page ?? fallback.page,
-      totalItems: pagination?.totalItems ?? data.length,
-      totalPages: pagination?.totalPages ?? 1,
-    },
-  };
-}
-
 export async function getStockReport(input: StockReportQuery) {
-  const response = await apiClient.get<ReportEnvelope<StockReportRow[]> | StockReportRow[]>(
-    "/reports/stock",
-    {
-      params: {
-        limit: input.limit,
-        page: input.page,
-        sku: optionalText(input.sku),
-        warehouseId: input.warehouseId,
-      },
+  const response = await apiClient.get<
+    ReportEnvelope<StockReportRow[]> | StockReportRow[]
+  >("/reports/stock", {
+    params: {
+      sku: optionalText(input.sku),
     },
-  );
+  });
 
-  return toReportPage(response.data, input);
+  return unwrapReportData(response.data);
 }
 
 export async function getLotReport(input: LotReportQuery) {
-  const response = await apiClient.get<ReportEnvelope<LotReportRow[]> | LotReportRow[]>(
-    "/reports/stock/lots",
-    {
-      params: {
-        limit: input.limit,
-        page: input.page,
-        sku: optionalText(input.sku),
-        status: input.status,
-        warehouseId: input.warehouseId,
-      },
+  const response = await apiClient.get<
+    ReportEnvelope<LotReportRow[]> | LotReportRow[]
+  >("/reports/stock/lots", {
+    params: {
+      sku: optionalText(input.sku),
+      status: input.status,
     },
-  );
+  });
 
-  return toReportPage(response.data, input);
+  return unwrapReportData(response.data);
 }
 
 export function toPerformanceApiRange(dateFrom: string, dateTo: string) {
@@ -177,7 +123,6 @@ export async function getPerformanceReport(input: PerformanceReportQuery) {
     params: {
       ...toPerformanceApiRange(input.dateFrom, input.dateTo),
       sku: optionalText(input.sku),
-      warehouseId: input.warehouseId,
     },
   });
 

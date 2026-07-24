@@ -34,7 +34,6 @@ import {
 } from "@/components/ui/table";
 import { StatusBadge } from "@/features/admin-shell/components/operations-ui";
 import type { WarehouseItem } from "@/features/products/services/warehouse-items.service";
-import type { WarehouseStructureWarehouse } from "@/features/warehouse-structure/services/warehouse-structure.service";
 import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
 
 import type { GoodsReceiptNote } from "../services/goods-receipt-note.service";
@@ -64,7 +63,6 @@ export function GoodsReceiptNotesList({
   onCreate,
   onSelect,
   purchaseOrderById,
-  warehouseById,
 }: {
   approveBusyId?: string;
   canApprove: boolean;
@@ -78,7 +76,6 @@ export function GoodsReceiptNotesList({
   onCreate: () => void;
   onSelect: (grn: GoodsReceiptNote) => void;
   purchaseOrderById: Map<string, PurchaseOrder>;
-  warehouseById: Map<string, WarehouseStructureWarehouse>;
 }) {
   return (
     <Card>
@@ -111,7 +108,6 @@ export function GoodsReceiptNotesList({
               <TableRow>
                 <TableHead>Số phiếu nhập</TableHead>
                 <TableHead>Số đơn mua</TableHead>
-                <TableHead>Kho nhận</TableHead>
                 <TableHead>Trạng thái</TableHead>
                 <TableHead>Ngày tạo</TableHead>
                 <TableHead className="w-72 text-right">Thao tác</TableHead>
@@ -122,7 +118,7 @@ export function GoodsReceiptNotesList({
                 <TableRow>
                   <TableCell
                     className="h-24 text-center text-muted-foreground"
-                    colSpan={6}
+                    colSpan={5}
                   >
                     Chưa có phiếu nhập.
                   </TableCell>
@@ -136,10 +132,6 @@ export function GoodsReceiptNotesList({
                     <TableCell>
                       {purchaseOrderById.get(grn.purchaseOrderId)?.poNumber ??
                         grn.purchaseOrderId}
-                    </TableCell>
-                    <TableCell>
-                      {warehouseById.get(grn.warehouseId)?.name ??
-                        grn.warehouseId}
                     </TableCell>
                     <TableCell>
                       <StatusBadge tone={statusTone(grn.status)}>
@@ -214,13 +206,11 @@ export function GoodsReceiptNoteDetailDialog({
   itemById,
   onOpenChange,
   purchaseOrder,
-  warehouse,
 }: {
   grn: GoodsReceiptNote;
   itemById: Map<string, WarehouseItem>;
   onOpenChange: (open: boolean) => void;
   purchaseOrder?: PurchaseOrder;
-  warehouse?: WarehouseStructureWarehouse;
 }) {
   return (
     <Dialog open onOpenChange={onOpenChange}>
@@ -235,7 +225,6 @@ export function GoodsReceiptNoteDetailDialog({
             label="Đơn mua"
             value={purchaseOrder?.poNumber ?? grn.purchaseOrderId}
           />
-          <Info label="Kho nhận" value={warehouse?.name ?? grn.warehouseId} />
           <Info label="Trạng thái" value={statusLabel(grn.status)} />
           <Info label="Ngày tạo" value={formatDate(grn.createdAt)} />
           <Info label="Ngày cập nhật" value={formatDate(grn.updatedAt)} />

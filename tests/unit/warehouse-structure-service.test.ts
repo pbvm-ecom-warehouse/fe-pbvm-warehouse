@@ -4,7 +4,7 @@ import { apiClient } from "@/lib/api-client";
 import {
   createZone,
   deleteRack,
-  listWarehouses,
+  listZones,
   updateShelf,
 } from "@/features/warehouse-structure/services/warehouse-structure.service";
 
@@ -30,16 +30,15 @@ describe("warehouse structure API service", () => {
     mockedPost.mockReset();
   });
 
-  it("lists warehouses from the singular backend endpoint and unwraps envelopes", async () => {
+  it("lists zones from the single-warehouse location endpoint", async () => {
     mockedGet.mockResolvedValueOnce({
       data: {
         data: [
           {
-            address: "123 Test",
+            code: "A",
             createdAt: "2026-07-02T00:00:00.000Z",
-            id: "wh-1",
-            isActive: true,
-            name: "Kho trung tâm",
+            id: "zone-1",
+            name: "Khu A",
             updatedAt: "2026-07-02T00:00:00.000Z",
           },
         ],
@@ -47,23 +46,22 @@ describe("warehouse structure API service", () => {
       },
     });
 
-    await expect(listWarehouses()).resolves.toMatchObject([
-      { id: "wh-1", name: "Kho trung tâm" },
+    await expect(listZones()).resolves.toMatchObject([
+      { id: "zone-1", name: "Khu A" },
     ]);
-    expect(mockedGet).toHaveBeenCalledWith("/warehouse");
+    expect(mockedGet).toHaveBeenCalledWith("/location/zones");
   });
 
-  it("creates zones with the documented warehouseId/code/name payload", async () => {
+  it("creates zones without the removed warehouseId field", async () => {
     mockedPost.mockResolvedValueOnce({
-      data: { id: "zone-1", warehouseId: "wh-1", code: "A", name: "Khu A" },
+      data: { id: "zone-1", code: "A", name: "Khu A" },
     });
 
-    await createZone({ code: "A", name: "Khu A", warehouseId: "wh-1" });
+    await createZone({ code: "A", name: "Khu A" });
 
-    expect(mockedPost).toHaveBeenCalledWith("/warehouse/zones", {
+    expect(mockedPost).toHaveBeenCalledWith("/location/zones", {
       code: "A",
       name: "Khu A",
-      warehouseId: "wh-1",
     });
   });
 
@@ -82,7 +80,7 @@ describe("warehouse structure API service", () => {
       level: 1,
     });
 
-    expect(mockedPatch).toHaveBeenCalledWith("/warehouse/shelves/shelf-1", {
+    expect(mockedPatch).toHaveBeenCalledWith("/location/shelves/shelf-1", {
       code: "A1-T1",
       fillFactor: 0.8,
       innerDepth: 120,
@@ -98,6 +96,6 @@ describe("warehouse structure API service", () => {
 
     await deleteRack("rack-1");
 
-    expect(mockedDelete).toHaveBeenCalledWith("/warehouse/racks/rack-1");
+    expect(mockedDelete).toHaveBeenCalledWith("/location/racks/rack-1");
   });
 });
