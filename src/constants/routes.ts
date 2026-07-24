@@ -43,6 +43,12 @@ export const dashboardRoutes = [
     allowedRoles: getRouteAllowedRoles("/products"),
   },
   {
+    href: "/suppliers",
+    label: "Nhà cung cấp",
+    icon: Factory,
+    allowedRoles: getRouteAllowedRoles("/suppliers"),
+  },
+  {
     href: "/purchase-orders",
     label: "Mua hàng",
     icon: ShoppingCart,
@@ -78,12 +84,7 @@ export const dashboardRoutes = [
     icon: SlidersHorizontal,
     allowedRoles: getRouteAllowedRoles("/adjustments"),
   },
-  {
-    href: "/suppliers",
-    label: "Nhà cung cấp",
-    icon: Factory,
-    allowedRoles: getRouteAllowedRoles("/suppliers"),
-  },
+
   {
     href: "/print-jobs",
     label: "In ly",
