@@ -60,7 +60,11 @@ import {
   getWarehouseLayout,
   listShelfContents,
 } from "@/features/warehouse-layout/services/warehouse-layout.service";
-import { listGoodsReceiptNotes } from "@/features/purchases/services/goods-receipt-note.service";
+import {
+  listGoodsReceiptNotes,
+  type GoodsReceiptNote,
+} from "@/features/purchases/services/goods-receipt-note.service";
+import { listWarehouseItems } from "@/features/products/services/warehouse-items.service";
 import {
   WarehouseArchitectureScene,
   type WarehouseSceneMode,
@@ -142,6 +146,62 @@ function parsePositiveNumber(value: string) {
 function optionalText(value: string) {
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function isMongoObjectId(value: string | null | undefined): boolean {
+  return typeof value === "string" && /^[0-9a-fA-F]{24}$/.test(value.trim());
+}
+
+function resolveItemSku(
+  item: PutawayTaskItem,
+  grn?: GoodsReceiptNote,
+  warehouseItemMap?: Map<string, { name: string; sku: string }>,
+): string {
+  if (item.sku && !isMongoObjectId(item.sku)) {
+    return item.sku;
+  }
+
+  if (grn?.items) {
+    const grnItem = grn.items.find((gi) => gi.itemId === item.itemId);
+    if (grnItem?.sku && !isMongoObjectId(grnItem.sku)) {
+      return grnItem.sku;
+    }
+  }
+
+  const mapped = warehouseItemMap?.get(item.itemId);
+  if (mapped?.sku && !isMongoObjectId(mapped.sku)) {
+    return mapped.sku;
+  }
+
+  if (mapped?.name) {
+    return mapped.name;
+  }
+
+  return isMongoObjectId(item.itemId)
+    ? `SKU-${item.itemId.slice(-6).toUpperCase()}`
+    : item.sku || item.itemId;
+}
+
+function resolveItemLot(
+  item: PutawayTaskItem,
+  grn?: GoodsReceiptNote,
+): string {
+  if (item.lotNumber && !isMongoObjectId(item.lotNumber)) {
+    return item.lotNumber;
+  }
+
+  if (grn?.items) {
+    const grnItem = grn.items.find((gi) => gi.itemId === item.itemId);
+    if (grnItem?.lotNumber && !isMongoObjectId(grnItem.lotNumber)) {
+      return grnItem.lotNumber;
+    }
+  }
+
+  if (item.lotId && !isMongoObjectId(item.lotId)) {
+    return item.lotId;
+  }
+
+  return "Chưa khai";
 }
 
 function warningLabel(warning: PutawaySuggestionWarning | null | undefined) {
@@ -240,6 +300,15 @@ export function WarehouseNavigationClient() {
     queryKey: ["goods-receipt-notes", "map"],
   });
 
+  const grnObjMap = useMemo(() => {
+    const map = new Map<string, GoodsReceiptNote>();
+    (grnsQuery.data?.data ?? []).forEach((grn) => {
+      map.set(grn.id, grn);
+      map.set(grn.grnNumber, grn);
+    });
+    return map;
+  }, [grnsQuery.data]);
+
   const grnMap = useMemo(() => {
     const map = new Map<string, string>();
     (grnsQuery.data?.data ?? []).forEach((grn) => {
@@ -248,6 +317,23 @@ export function WarehouseNavigationClient() {
     });
     return map;
   }, [grnsQuery.data]);
+
+  const warehouseItemsQuery = useQuery({
+    enabled: canUsePutawayApi,
+    queryFn: () => listWarehouseItems({ isActive: "ALL", limit: 100 }),
+    queryKey: ["warehouse-items", "map"],
+  });
+
+  const warehouseItemMap = useMemo(() => {
+    const map = new Map<string, { name: string; sku: string }>();
+    (warehouseItemsQuery.data?.data ?? []).forEach((item) => {
+      map.set(item.id, { name: item.name, sku: item.sku });
+      if (item.sku) {
+        map.set(item.sku, { name: item.name, sku: item.sku });
+      }
+    });
+    return map;
+  }, [warehouseItemsQuery.data]);
 
   const tasks = useMemo(() => tasksQuery.data?.data ?? [], [tasksQuery.data]);
   const selectedTask =
@@ -271,6 +357,11 @@ export function WarehouseNavigationClient() {
     ? Math.max(1, selectedItem.remainingQty ?? selectedItem.quantity)
     : 1;
 
+  const activeGrn = detail?.grnId ? grnObjMap.get(detail.grnId) : undefined;
+  const effectiveSku = selectedItem
+    ? resolveItemSku(selectedItem, activeGrn, warehouseItemMap)
+    : "";
+
   const layoutQuery = useQuery({
     enabled: canUsePutawayApi && Boolean(activeWarehouseId),
     queryFn: () => getWarehouseLayout(activeWarehouseId, "published"),
@@ -283,17 +374,17 @@ export function WarehouseNavigationClient() {
       canUsePutawayApi &&
       Boolean(activeWarehouseId) &&
       Boolean(activeItemId) &&
-      Boolean(selectedItem?.sku),
+      Boolean(effectiveSku),
     queryFn: () =>
       listPutawaySuggestionResult({
         quantity: suggestionQty,
-        sku: selectedItem?.sku ?? "",
+        sku: effectiveSku,
         warehouseId: activeWarehouseId,
       }),
     queryKey: putawayKeys.suggestions({
       itemId: activeItemId,
       quantity: suggestionQty,
-      sku: selectedItem?.sku ?? "",
+      sku: effectiveSku,
       warehouseId: activeWarehouseId,
     }),
     retry: false,
@@ -648,7 +739,9 @@ export function WarehouseNavigationClient() {
           {detail ? (
             <PutawayTaskDetail
               detail={detail}
+              grn={activeGrn}
               grnMap={grnMap}
+              warehouseItemMap={warehouseItemMap}
               selectedItemId={selectedItem?.itemId ?? ""}
               onSelectItem={selectItem}
             />
@@ -686,7 +779,7 @@ export function WarehouseNavigationClient() {
                   Vị trí cất hàng
                 </CardTitle>
                 <CardDescription>
-                  {selectedItem.sku || selectedItem.itemId}
+                  {effectiveSku}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -884,12 +977,16 @@ function PutawayTaskTable({
 
 function PutawayTaskDetail({
   detail,
+  grn,
   grnMap,
+  warehouseItemMap,
   onSelectItem,
   selectedItemId,
 }: {
   detail: PutawayTask;
+  grn?: GoodsReceiptNote;
   grnMap: Map<string, string>;
+  warehouseItemMap: Map<string, { name: string; sku: string }>;
   onSelectItem: (item: PutawayTaskItem) => void;
   selectedItemId: string;
 }) {
@@ -931,12 +1028,12 @@ function PutawayTaskDetail({
                   onClick={() => onSelectItem(item)}
                 >
                   <TableCell className="font-mono font-semibold">
-                    {item.sku || item.itemId}
+                    {resolveItemSku(item, grn, warehouseItemMap)}
                   </TableCell>
                   <TableCell>{item.quantity}</TableCell>
                   <TableCell>{item.remainingQty ?? item.quantity}</TableCell>
                   <TableCell>
-                    {item.lotNumber ?? item.lotId ?? "Chưa khai"}
+                    {resolveItemLot(item, grn)}
                   </TableCell>
                 </TableRow>
               ))
