@@ -60,6 +60,7 @@ import {
   getWarehouseLayout,
   listShelfContents,
 } from "@/features/warehouse-layout/services/warehouse-layout.service";
+import { listGoodsReceiptNotes } from "@/features/purchases/services/goods-receipt-note.service";
 import {
   WarehouseArchitectureScene,
   type WarehouseSceneMode,
@@ -232,6 +233,21 @@ export function WarehouseNavigationClient() {
       }),
     queryKey: putawayKeys.list({ page, status: statusFilter }),
   });
+
+  const grnsQuery = useQuery({
+    enabled: canUsePutawayApi,
+    queryFn: () => listGoodsReceiptNotes({ limit: 100 }),
+    queryKey: ["goods-receipt-notes", "map"],
+  });
+
+  const grnMap = useMemo(() => {
+    const map = new Map<string, string>();
+    (grnsQuery.data?.data ?? []).forEach((grn) => {
+      map.set(grn.id, grn.grnNumber);
+      map.set(grn.grnNumber, grn.grnNumber);
+    });
+    return map;
+  }, [grnsQuery.data]);
 
   const tasks = useMemo(() => tasksQuery.data?.data ?? [], [tasksQuery.data]);
   const selectedTask =
@@ -538,7 +554,12 @@ export function WarehouseNavigationClient() {
 
       {tasksQuery.error ? <ErrorBanner error={tasksQuery.error} /> : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <div
+        className={cn(
+          "grid gap-4",
+          selectedItem && "xl:grid-cols-[minmax(0,1fr)_420px]",
+        )}
+      >
         <div className="space-y-4">
           <Card>
             <CardHeader className="border-b bg-muted/20">
@@ -588,9 +609,10 @@ export function WarehouseNavigationClient() {
               </form>
 
               {tasksQuery.isLoading ? (
-                <TableSkeleton columns={5} />
+                <TableSkeleton columns={4} />
               ) : (
                 <PutawayTaskTable
+                  grnMap={grnMap}
                   selectedId={activeTaskId}
                   tasks={tasks}
                   onSelect={selectTask}
@@ -626,6 +648,7 @@ export function WarehouseNavigationClient() {
           {detail ? (
             <PutawayTaskDetail
               detail={detail}
+              grnMap={grnMap}
               selectedItemId={selectedItem?.itemId ?? ""}
               onSelectItem={selectItem}
             />
@@ -654,68 +677,66 @@ export function WarehouseNavigationClient() {
           ) : null}
         </div>
 
-        <aside className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <MapPinned className="size-4 text-primary" />
-                Vị trí cất hàng
-              </CardTitle>
-              <CardDescription>
-                {selectedItem?.sku ?? "Chọn dòng hàng để xem vị trí"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {!selectedItem ? (
-                <EmptyState title="Chọn dòng hàng để xem vị trí" />
-              ) : suggestionsQuery.isLoading ? (
-                <TableSkeleton columns={2} rows={3} />
-              ) : null}
+        {selectedItem ? (
+          <aside className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <MapPinned className="size-4 text-primary" />
+                  Vị trí cất hàng
+                </CardTitle>
+                <CardDescription>
+                  {selectedItem.sku || selectedItem.itemId}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {suggestionsQuery.isLoading ? (
+                  <TableSkeleton columns={2} rows={3} />
+                ) : null}
 
-              {suggestionsQuery.error ? (
-                <ErrorBanner error={suggestionsQuery.error} />
-              ) : null}
-              {warning ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                  {warning}
+                {suggestionsQuery.error ? (
+                  <ErrorBanner error={suggestionsQuery.error} />
+                ) : null}
+                {warning ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                    {warning}
+                  </div>
+                ) : null}
+                {apiSuggestions.length === 0 && suggestionsQuery.isSuccess ? (
+                  <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                    Chưa có vị trí phù hợp cho mặt hàng và số lượng này.
+                  </div>
+                ) : null}
+                {shouldShowShelfFallback ? (
+                  <ShelfCodeFallback
+                    shelfCode={fallbackShelfCode}
+                    text="Kho chưa có sơ đồ cho vị trí này. Nhân viên dùng mã vị trí để tìm kệ và quét xác nhận."
+                  />
+                ) : null}
+                <div className="grid gap-2">
+                  {apiSuggestions.map((suggestion) => (
+                    <button
+                      className={cn(
+                        "flex items-center justify-between gap-3 rounded-lg border border-border/70 p-3 text-left text-sm transition hover:bg-accent/60",
+                        selectedShelfCode === suggestion.shelfCode &&
+                          "border-primary bg-primary/5",
+                      )}
+                      key={suggestion.shelfCode}
+                      onClick={() => selectSuggestion(suggestion)}
+                      type="button"
+                    >
+                      <span className="font-mono font-semibold">
+                        {suggestion.shelfCode}
+                      </span>
+                      <Badge variant="outline">
+                        {suggestion.capacity.toLocaleString("vi-VN")} còn trống
+                      </Badge>
+                    </button>
+                  ))}
                 </div>
-              ) : null}
-              {apiSuggestions.length === 0 && suggestionsQuery.isSuccess ? (
-                <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                  Chưa có vị trí phù hợp cho mặt hàng và số lượng này.
-                </div>
-              ) : null}
-              {shouldShowShelfFallback ? (
-                <ShelfCodeFallback
-                  shelfCode={fallbackShelfCode}
-                  text="Kho chưa có sơ đồ cho vị trí này. Nhân viên dùng mã vị trí để tìm kệ và quét xác nhận."
-                />
-              ) : null}
-              <div className="grid gap-2">
-                {apiSuggestions.map((suggestion) => (
-                  <button
-                    className={cn(
-                      "flex items-center justify-between gap-3 rounded-lg border border-border/70 p-3 text-left text-sm transition hover:bg-accent/60",
-                      selectedShelfCode === suggestion.shelfCode &&
-                        "border-primary bg-primary/5",
-                    )}
-                    key={suggestion.shelfCode}
-                    onClick={() => selectSuggestion(suggestion)}
-                    type="button"
-                  >
-                    <span className="font-mono font-semibold">
-                      {suggestion.shelfCode}
-                    </span>
-                    <Badge variant="outline">
-                      {suggestion.capacity.toLocaleString("vi-VN")} còn trống
-                    </Badge>
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          {selectedItem ? (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -785,18 +806,20 @@ export function WarehouseNavigationClient() {
                 </form>
               </CardContent>
             </Card>
-          ) : null}
-        </aside>
+          </aside>
+        ) : null}
       </div>
     </div>
   );
 }
 
 function PutawayTaskTable({
+  grnMap,
   onSelect,
   selectedId,
   tasks,
 }: {
+  grnMap: Map<string, string>;
   onSelect: (task: PutawayTask) => void;
   selectedId: string;
   tasks: PutawayTask[];
@@ -805,9 +828,7 @@ function PutawayTaskTable({
     <Table scrollable>
       <TableHeader>
         <TableRow>
-          <TableHead>Mã phiếu</TableHead>
           <TableHead>Mã phiếu nhập</TableHead>
-          <TableHead>Kho</TableHead>
           <TableHead>Trạng thái</TableHead>
           <TableHead>Số dòng</TableHead>
           <TableHead className="text-right">Thao tác</TableHead>
@@ -815,43 +836,46 @@ function PutawayTaskTable({
       </TableHeader>
       <TableBody>
         {tasks.length === 0 ? (
-          <EmptyRow colSpan={6} label="Chưa có phiếu cất hàng." />
+          <EmptyRow colSpan={4} label="Chưa có phiếu cất hàng." />
         ) : (
-          tasks.map((task) => (
-            <TableRow
-              className={cn(
-                "cursor-pointer",
-                selectedId === task.id && "bg-primary/5",
-              )}
-              key={task.id}
-              onClick={() => onSelect(task)}
-            >
-              <TableCell className="font-mono font-semibold">
-                {task.id}
-              </TableCell>
-              <TableCell>{task.grnId}</TableCell>
-              <TableCell>{task.warehouseId}</TableCell>
-              <TableCell>
-                <StatusBadge tone={statusTone(task.status)}>
-                  {statusLabel(task.status)}
-                </StatusBadge>
-              </TableCell>
-              <TableCell>{task.items.length}</TableCell>
-              <TableCell className="text-right">
-                <Button
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onSelect(task);
-                  }}
-                >
-                  <Eye data-icon="inline-start" /> Xem chi tiết
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))
+          tasks.map((task) => {
+            const grnDisplay =
+              grnMap.get(task.grnId) ?? task.grnNumber ?? task.grnId;
+
+            return (
+              <TableRow
+                className={cn(
+                  "cursor-pointer hover:bg-accent/60 transition-colors",
+                  selectedId === task.id && "bg-primary/5 font-medium",
+                )}
+                key={task.id}
+                onClick={() => onSelect(task)}
+              >
+                <TableCell className="font-mono font-semibold text-primary">
+                  {grnDisplay}
+                </TableCell>
+                <TableCell>
+                  <StatusBadge tone={statusTone(task.status)}>
+                    {statusLabel(task.status)}
+                  </StatusBadge>
+                </TableCell>
+                <TableCell>{task.items.length}</TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelect(task);
+                    }}
+                  >
+                    <Eye data-icon="inline-start" /> Xem chi tiết
+                  </Button>
+                </TableCell>
+              </TableRow>
+            );
+          })
         )}
       </TableBody>
     </Table>
@@ -860,13 +884,18 @@ function PutawayTaskTable({
 
 function PutawayTaskDetail({
   detail,
+  grnMap,
   onSelectItem,
   selectedItemId,
 }: {
   detail: PutawayTask;
+  grnMap: Map<string, string>;
   onSelectItem: (item: PutawayTaskItem) => void;
   selectedItemId: string;
 }) {
+  const grnDisplay =
+    grnMap.get(detail.grnId) ?? detail.grnNumber ?? detail.grnId;
+
   return (
     <Card>
       <CardHeader className="border-b bg-muted/20">
@@ -875,7 +904,7 @@ function PutawayTaskDetail({
           Dòng cần cất hàng
         </CardTitle>
         <CardDescription>
-          Phiếu nhập {detail.grnId} · Kho {detail.warehouseId}
+          Phiếu nhập <span className="font-mono font-semibold text-foreground">{grnDisplay}</span> · Nhấp vào một dòng hàng để xem gợi ý vị trí cất
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-4">
@@ -895,14 +924,14 @@ function PutawayTaskDetail({
               detail.items.map((item) => (
                 <TableRow
                   className={cn(
-                    "cursor-pointer",
-                    selectedItemId === item.itemId && "bg-primary/5",
+                    "cursor-pointer hover:bg-accent/60 transition-colors",
+                    selectedItemId === item.itemId && "bg-primary/10 border-l-4 border-l-primary font-medium",
                   )}
                   key={`${item.itemId}-${item.lotId ?? "none"}`}
                   onClick={() => onSelectItem(item)}
                 >
                   <TableCell className="font-mono font-semibold">
-                    {item.sku}
+                    {item.sku || item.itemId}
                   </TableCell>
                   <TableCell>{item.quantity}</TableCell>
                   <TableCell>{item.remainingQty ?? item.quantity}</TableCell>
