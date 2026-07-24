@@ -183,12 +183,6 @@ function formatDate(value?: string | null) {
   return new Intl.DateTimeFormat("vi-VN").format(date);
 }
 
-function joinSupplierParts(code?: string | null, name?: string | null) {
-  return [code, name]
-    .map((value) => value?.trim())
-    .filter((value): value is string => Boolean(value))
-    .join(" · ");
-}
 
 function getPurchaseOrderSupplierLabel(
   purchaseOrder: PurchaseOrder,
