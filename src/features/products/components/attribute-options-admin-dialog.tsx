@@ -92,10 +92,33 @@ export function AttributeOptionsAdminPanel() {
     })),
   });
 
+const ITEM_TYPE_ATTRIBUTE_KEYS: Record<
+  CreatableWarehouseItemType,
+  AttributeKey[]
+> = {
+  CUP_BLANK: ["CUP_STYLE", "MATERIAL", "CAPACITY", "COLOR"],
+  MATERIAL: ["MATERIAL_CATEGORY", "MATERIAL_TYPE", "FLAVOR", "SPEC"],
+  PACKAGING: [
+    "PACKAGING_CATEGORY",
+    "PACKAGING_STYLE",
+    "COMPATIBILITY",
+    "DIAMETER",
+    "LENGTH",
+    "SIZE",
+    "MATERIAL",
+    "COLOR",
+  ],
+};
+
+const CATEGORY_KEYS: Set<AttributeKey> = new Set([
+  "MATERIAL_CATEGORY",
+  "PACKAGING_CATEGORY",
+]);
+
   const keysByType = useMemo(() => {
     const result = new Map<CreatableWarehouseItemType, Set<AttributeKey>>();
     CREATABLE_WAREHOUSE_ITEM_TYPES.forEach((type) => {
-      result.set(type, new Set<AttributeKey>());
+      result.set(type, new Set<AttributeKey>(ITEM_TYPE_ATTRIBUTE_KEYS[type]));
     });
     rootQueries.forEach((query, index) => {
       const type = CREATABLE_WAREHOUSE_ITEM_TYPES[index];
@@ -301,71 +324,83 @@ export function AttributeOptionsAdminPanel() {
           >
             {itemTypeField}
             {attributeGroupField}
-            <div className="space-y-2">
-              <Label htmlFor="attribute-option-name">Tên giá trị</Label>
-              <Input
-                id="attribute-option-name"
-                value={name}
-                onBlur={() => {
-                  if (
-                    name.trim() &&
-                    !code.trim() &&
-                    !suggestMutation.isPending
-                  ) {
-                    suggestMutation.mutate();
-                  }
-                }}
-                onChange={(event) => {
-                  setName(event.target.value);
-                  setCode("");
-                }}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="attribute-option-code">Mã SKU</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="attribute-option-code"
-                  className="font-mono uppercase"
-                  maxLength={6}
-                  value={code}
-                  onChange={(event) =>
-                    setCode(event.target.value.toUpperCase())
-                  }
-                />
-                <Button
-                  aria-label="Gợi ý mã SKU"
-                  disabled={!name.trim() || suggestMutation.isPending}
-                  size="icon"
-                  type="button"
-                  variant="outline"
-                  onClick={() => suggestMutation.mutate()}
-                >
-                  {suggestMutation.isPending ? (
-                    <LoaderCircle className="animate-spin" />
-                  ) : (
-                    <Sparkles />
-                  )}
-                </Button>
+          {CATEGORY_KEYS.has(effectiveSelectedKey as AttributeKey) ? (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-900 md:col-span-3 xl:col-span-3">
+              <div>
+                <span className="font-semibold">Danh mục hệ thống:</span> Danh
+                mục (Category) được quản lý theo cấu hình registry template của
+                BE. Không thể thêm danh mục mới từ giao diện.
               </div>
             </div>
-            <Button
-              className="self-end"
-              disabled={
-                !name.trim() || !code.trim() || createMutation.isPending
-              }
-              type="submit"
-            >
-              {createMutation.isPending ? (
-                <LoaderCircle
-                  className="animate-spin"
-                  data-icon="inline-start"
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="attribute-option-name">Tên giá trị</Label>
+                <Input
+                  id="attribute-option-name"
+                  value={name}
+                  onBlur={() => {
+                    if (
+                      name.trim() &&
+                      !code.trim() &&
+                      !suggestMutation.isPending
+                    ) {
+                      suggestMutation.mutate();
+                    }
+                  }}
+                  onChange={(event) => {
+                    setName(event.target.value);
+                    setCode("");
+                  }}
                 />
-              ) : (
-                <Plus data-icon="inline-start" />
-              )}
-              Thêm giá trị
-            </Button>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="attribute-option-code">Mã SKU</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="attribute-option-code"
+                    className="font-mono uppercase"
+                    maxLength={6}
+                    value={code}
+                    onChange={(event) =>
+                      setCode(event.target.value.toUpperCase())
+                    }
+                  />
+                  <Button
+                    aria-label="Gợi ý mã SKU"
+                    disabled={!name.trim() || suggestMutation.isPending}
+                    size="icon"
+                    type="button"
+                    variant="outline"
+                    onClick={() => suggestMutation.mutate()}
+                  >
+                    {suggestMutation.isPending ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : (
+                      <Sparkles />
+                    )}
+                  </Button>
+                </div>
+              </div>
+              <Button
+                className="self-end"
+                disabled={
+                  !name.trim() || !code.trim() || createMutation.isPending
+                }
+                type="submit"
+              >
+                {createMutation.isPending ? (
+                  <LoaderCircle
+                    className="animate-spin"
+                    data-icon="inline-start"
+                  />
+                ) : (
+                  <Plus data-icon="inline-start" />
+                )}
+                Thêm giá trị
+              </Button>
+            </>
+          )}
           </form>
 
           <div className="grid gap-3 md:grid-cols-[minmax(280px,1fr)_220px]">

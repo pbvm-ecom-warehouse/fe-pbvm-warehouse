@@ -19,6 +19,7 @@ export type PutawayTaskItem = {
 export type PutawayTask = {
   id: string;
   grnId: string;
+  grnNumber?: string;
   warehouseId: string;
   status: PutawayTaskStatus;
   items: PutawayTaskItem[];
