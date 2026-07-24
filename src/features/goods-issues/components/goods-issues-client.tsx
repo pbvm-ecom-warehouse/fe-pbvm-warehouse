@@ -308,7 +308,12 @@ export function GoodsIssuesClient() {
 
       {issuesQuery.error ? <ErrorBanner error={issuesQuery.error} /> : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <div
+        className={cn(
+          "grid gap-4 transition-all",
+          selectedItem ? "xl:grid-cols-[minmax(0,1fr)_420px]" : "grid-cols-1",
+        )}
+      >
         <div className="space-y-4">
           <Card>
             <CardHeader className="border-b bg-muted/20">
@@ -403,63 +408,58 @@ export function GoodsIssuesClient() {
           ) : null}
         </div>
 
-        <aside className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <PackageSearch className="size-4 text-primary" />
-                Vị trí lấy hàng
-              </CardTitle>
-              <CardDescription>
-                {selectedItem
-                  ? selectedWarehouseItem?.name
+        {selectedItem ? (
+          <aside className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <PackageSearch className="size-4 text-primary" />
+                  Vị trí lấy hàng
+                </CardTitle>
+                <CardDescription>
+                  {selectedWarehouseItem?.name
                     ? `${selectedItem.sku} · ${selectedWarehouseItem.name}`
-                    : selectedItem.sku
-                  : "Nhấp vào một dòng hàng để xem gợi ý vị trí lấy hàng"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {suggestionsQuery.isLoading ? (
-                <TableSkeleton columns={2} rows={3} />
-              ) : null}
-              {suggestionsQuery.error ? (
-                <ErrorBanner error={suggestionsQuery.error} />
-              ) : null}
-              {!selectedItem ? (
-                <EmptyState title="Nhấp vào một dòng hàng để xem gợi ý vị trí lấy hàng" />
-              ) : pickSuggestions.length === 0 &&
-                !suggestionsQuery.isLoading ? (
-                <EmptyState title="Chưa có gợi ý vị trí lấy hàng" />
-              ) : null}
-              {pickSuggestions.map((suggestion) => (
-                <button
-                  className={cn(
-                    "grid w-full gap-2 rounded-lg border border-border/70 p-3 text-left text-sm transition hover:bg-accent/60",
-                    selectedShelfCode === suggestion.shelfCode &&
-                      "border-primary bg-primary/5",
-                  )}
-                  key={`${suggestion.shelfId}-${suggestion.lotId ?? "none"}`}
-                  onClick={() => selectSuggestion(suggestion)}
-                  type="button"
-                >
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="font-mono font-semibold">
-                      {suggestion.shelfCode}
+                    : selectedItem.sku}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {suggestionsQuery.isLoading ? (
+                  <TableSkeleton columns={2} rows={3} />
+                ) : null}
+                {suggestionsQuery.error ? (
+                  <ErrorBanner error={suggestionsQuery.error} />
+                ) : null}
+                {pickSuggestions.length === 0 && !suggestionsQuery.isLoading ? (
+                  <EmptyState title="Chưa có gợi ý vị trí lấy hàng" />
+                ) : null}
+                {pickSuggestions.map((suggestion) => (
+                  <button
+                    className={cn(
+                      "grid w-full gap-2 rounded-lg border border-border/70 p-3 text-left text-sm transition hover:bg-accent/60",
+                      selectedShelfCode === suggestion.shelfCode &&
+                        "border-primary bg-primary/5",
+                    )}
+                    key={`${suggestion.shelfId}-${suggestion.lotId ?? "none"}`}
+                    onClick={() => selectSuggestion(suggestion)}
+                    type="button"
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="font-mono font-semibold">
+                        {suggestion.shelfCode}
+                      </span>
+                      <Badge variant="outline">
+                        Khả dụng: {suggestion.quantity.toLocaleString("vi-VN")}
+                      </Badge>
                     </span>
-                    <Badge variant="outline">
-                      {suggestion.quantity.toLocaleString("vi-VN")}
-                    </Badge>
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    Mã lô {suggestion.lotNumber ?? "chưa khai"} · HSD{" "}
-                    {formatDate(suggestion.expiryDate ?? undefined)}
-                  </span>
-                </button>
-              ))}
-            </CardContent>
-          </Card>
+                    <span className="text-xs text-muted-foreground">
+                      Mã lô {suggestion.lotNumber ?? "chưa khai"} · HSD{" "}
+                      {formatDate(suggestion.expiryDate ?? undefined)}
+                    </span>
+                  </button>
+                ))}
+              </CardContent>
+            </Card>
 
-          {selectedItem ? (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -528,8 +528,8 @@ export function GoodsIssuesClient() {
                 </form>
               </CardContent>
             </Card>
-          ) : null}
-        </aside>
+          </aside>
+        ) : null}
       </div>
     </div>
   );
