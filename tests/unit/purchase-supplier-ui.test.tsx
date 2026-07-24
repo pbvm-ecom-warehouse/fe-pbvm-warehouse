@@ -9,6 +9,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PurchaseOrdersClient } from "@/features/purchases/components/purchase-orders-client";
+import { SupplierItemsClient } from "@/features/suppliers/components/supplier-items-client";
 import { SuppliersClient } from "@/features/suppliers/components/suppliers-client";
 
 const sessionRoleState = vi.hoisted(() => ({
@@ -220,6 +221,11 @@ function renderWithQueryClient(component: React.ReactNode) {
 
 describe("purchase and supplier UX", () => {
   beforeEach(() => {
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+      writable: true,
+    });
     vi.clearAllMocks();
     sessionRoleState.roles = ["MANAGER"];
     mockedListSuppliers.mockResolvedValue({
@@ -327,24 +333,24 @@ describe("purchase and supplier UX", () => {
     expect(screen.getByLabelText("Mã NCC")).toHaveValue("ML-01");
   });
 
-  it("shows explicit supplier and supplier-item detail actions", async () => {
-    mockedListSupplierItems.mockResolvedValue([supplierItem]);
-
+  it("shows supplier detail action and link to supplier-item management", async () => {
     renderWithQueryClient(<SuppliersClient />);
 
-    fireEvent.click(
-      await screen.findByRole("button", {
-        name: "Xem chi tiết nhà cung cấp Công ty Minh Long",
-      }),
-    );
     expect(
-      await screen.findByRole("button", {
-        name: "Xem chi tiết mặt hàng NCC item-1",
+      await screen.findByRole("link", {
+        name: "Gán mặt hàng NCC",
       }),
     ).toBeInTheDocument();
+    expect(await screen.findByText("Công ty Minh Long")).toBeVisible();
   });
 
   it("selects supplier items from refreshed warehouse-item options", async () => {
+    mockedListSuppliers.mockResolvedValue({
+      data: [supplier],
+      limit: 100,
+      page: 1,
+      total: 1,
+    });
     mockedListWarehouseItems.mockResolvedValue({
       data: [
         {
@@ -363,29 +369,30 @@ describe("purchase and supplier UX", () => {
       page: 1,
       total: 1,
     });
+    mockedListSupplierItems.mockResolvedValue([]);
     mockedUpsertSupplierItem.mockResolvedValue(supplierItem);
-    renderWithQueryClient(<SuppliersClient />);
+    renderWithQueryClient(<SupplierItemsClient />);
 
     fireEvent.click(
-      await screen.findByRole("button", {
-        name: "Xem chi tiết nhà cung cấp Công ty Minh Long",
+      await screen.findByRole("combobox", { name: "Nhà cung cấp" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("option", {
+        name: /Công ty Minh Long/i,
       }),
     );
-    const dialog = await screen.findByRole("dialog");
     fireEvent.click(
-      await within(dialog).findByRole("combobox", { name: "Mặt hàng kho" }),
+      await screen.findByRole("combobox", { name: "Mặt hàng kho" }),
     );
     fireEvent.click(
       await screen.findByRole("option", {
         name: /SKU-001.*Ly nhựa 500 ml/i,
       }),
     );
-    fireEvent.change(within(dialog).getByLabelText("Giá nhập"), {
+    fireEvent.change(screen.getByLabelText("Giá nhập"), {
       target: { value: "15000" },
     });
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: "Lưu mặt hàng" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Lưu mặt hàng" }));
 
     await waitFor(() =>
       expect(mockedUpsertSupplierItem).toHaveBeenCalledWith(
@@ -405,12 +412,8 @@ describe("purchase and supplier UX", () => {
     await waitFor(() =>
       expect(mockedGetSupplier).toHaveBeenCalledWith("sup-1"),
     );
-    expect(await screen.findByLabelText("Địa chỉ")).toHaveValue(
-      "123 Lê Văn Lương, Quận 7",
-    );
-    expect(
-      screen.getByRole("combobox", { name: "Trạng thái nhà cung cấp" }),
-    ).toHaveTextContent("Ngưng dùng");
+    expect(await screen.findByText("123 Lê Văn Lương, Quận 7")).toBeVisible();
+    expect(screen.getAllByText("Ngưng dùng").at(-1)).toBeVisible();
   });
   it("uses a non-horizontal purchase dialog with visible item labels and server search", async () => {
     renderWithQueryClient(<PurchaseOrdersClient />);
@@ -643,3 +646,6 @@ describe("purchase and supplier UX", () => {
     );
   });
 });
+
+
+
