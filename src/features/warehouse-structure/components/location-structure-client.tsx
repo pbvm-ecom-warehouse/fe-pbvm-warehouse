@@ -128,6 +128,24 @@ export function LocationStructureClient() {
         }
       />
 
+      <LocationBreadcrumb
+        onNavigateRoot={() => {
+          setSelectedZoneId("");
+          setSelectedRackId("");
+        }}
+        onNavigateZone={() => setSelectedRackId("")}
+        rackName={
+          view === "shelf"
+            ? racks.find((rack) => rack.id === activeRackId)?.name
+            : undefined
+        }
+        zoneName={
+          view !== "zone"
+            ? zones.find((zone) => zone.id === activeZoneId)?.name
+            : undefined
+        }
+      />
+
       <div className="grid min-h-0 gap-4 xl:grid-cols-3">
         <LocationPanel
           addLabel="Thêm khu vực"
@@ -219,6 +237,50 @@ export function LocationStructureClient() {
         }}
       />
     </div>
+  );
+}
+
+function LocationBreadcrumb({
+  onNavigateRoot,
+  onNavigateZone,
+  rackName,
+  zoneName,
+}: {
+  onNavigateRoot: () => void;
+  onNavigateZone: () => void;
+  rackName?: string;
+  zoneName?: string;
+}) {
+  return (
+    <nav className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+      {zoneName ? (
+        <button
+          className="font-medium text-foreground underline-offset-2 hover:underline"
+          onClick={onNavigateRoot}
+          type="button"
+        >
+          Kho tổng
+        </button>
+      ) : (
+        <span className="font-medium text-foreground">Kho tổng</span>
+      )}
+      {zoneName ? <span>/</span> : null}
+      {zoneName && rackName ? (
+        <button
+          className="font-medium text-foreground underline-offset-2 hover:underline"
+          onClick={onNavigateZone}
+          type="button"
+        >
+          {zoneName}
+        </button>
+      ) : zoneName ? (
+        <span className="font-medium text-foreground">{zoneName}</span>
+      ) : null}
+      {zoneName && rackName ? <span>/</span> : null}
+      {rackName ? (
+        <span className="font-medium text-foreground">{rackName}</span>
+      ) : null}
+    </nav>
   );
 }
 

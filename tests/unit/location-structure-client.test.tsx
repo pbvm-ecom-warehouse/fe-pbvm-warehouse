@@ -67,3 +67,49 @@ describe("LocationStructureClient view derivation", () => {
     await waitFor(() => expect(mockedListRacks).toHaveBeenCalledWith("zone-1"));
   });
 });
+
+describe("LocationStructureClient breadcrumb", () => {
+  beforeEach(() => {
+    mockedListZones.mockReset();
+    mockedListRacks.mockReset();
+    mockedListShelves.mockReset();
+  });
+
+  it("shows breadcrumb and navigates back to zone list on root click", async () => {
+    mockedListZones.mockResolvedValue([
+      { id: "zone-1", code: "A", name: "Khu A", createdAt: "", updatedAt: "" },
+    ]);
+    mockedListRacks.mockResolvedValue([
+      {
+        id: "rack-1",
+        zoneId: "zone-1",
+        code: "R1",
+        name: "Kệ 1",
+        createdAt: "",
+        updatedAt: "",
+      },
+    ]);
+
+    renderLocations();
+
+    // Initially, only zones are shown, so there's one "Khu A" in the table
+    const zoneTableRow = await screen.findByText("Khu A");
+    fireEvent.click(zoneTableRow);
+
+    // After clicking, racks should be visible
+    expect(await screen.findByText("Kệ 1")).toBeInTheDocument();
+
+    // Breadcrumb should now be visible with "Kho tổng" button
+    expect(
+      screen.getByRole("button", { name: "Kho tổng" }),
+    ).toBeInTheDocument();
+
+    // Click the "Kho tổng" button to navigate back to zone list
+    fireEvent.click(screen.getByRole("button", { name: "Kho tổng" }));
+
+    // Zone table should still be visible
+    expect(await screen.findByText("Khu A")).toBeInTheDocument();
+    // Racks should no longer be fetched (still only once from initial zone click)
+    expect(mockedListRacks).toHaveBeenCalledTimes(1);
+  });
+});
