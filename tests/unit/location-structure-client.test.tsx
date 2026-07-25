@@ -277,3 +277,49 @@ describe("LocationStructureClient shelf type column", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("LocationStructureClient create navigates into the new item", () => {
+  beforeEach(() => {
+    mockedListZones.mockReset();
+    mockedListRacks.mockReset();
+    mockedListShelves.mockReset();
+    vi.mocked(service.createZone).mockReset();
+  });
+
+  it("switches to the rack view for a newly created zone", async () => {
+    mockedListZones.mockResolvedValueOnce([]);
+    mockedListZones.mockResolvedValue([
+      {
+        id: "zone-new",
+        code: "B",
+        name: "Khu B",
+        createdAt: "",
+        updatedAt: "",
+      },
+    ]);
+    mockedListRacks.mockResolvedValue([]);
+    vi.mocked(service.createZone).mockResolvedValue({
+      id: "zone-new",
+      code: "B",
+      name: "Khu B",
+      createdAt: "",
+      updatedAt: "",
+    });
+
+    renderLocations();
+    fireEvent.click(await screen.findByRole("button", { name: "Thêm khu vực" }));
+    fireEvent.change(screen.getByLabelText("Mã"), {
+      target: { value: "B" },
+    });
+    fireEvent.change(screen.getByLabelText("Tên"), {
+      target: { value: "Khu B" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Lưu" }));
+
+    await waitFor(() => expect(service.createZone).toHaveBeenCalled());
+    expect(
+      await screen.findByRole("button", { name: "Thêm kệ" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Khu B")).toBeInTheDocument();
+  });
+});
