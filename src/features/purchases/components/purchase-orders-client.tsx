@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, type ReactNode, useMemo, useState } from "react";
+import { FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import {
   useMutation,
   useQueries,
@@ -243,13 +243,21 @@ function buildGoodsReceiptForms(
   return (
     purchaseOrder?.items?.map((item) => {
       const warehouseItem = warehouseItemById.get(item.itemId);
+      const remainingQty = (item as unknown as { remainingQty?: number }).remainingQty;
+      const actualQtyNumber =
+        remainingQty !== undefined && remainingQty > 0
+          ? remainingQty
+          : item.expectedQty;
 
       return {
-        actualQty: String(item.expectedQty),
+        actualQty: String(actualQtyNumber),
         expiryDate: "",
         isPerishable: warehouseItem?.isPerishable ?? false,
         itemId: item.itemId,
-        itemName: warehouseItem?.name ?? item.sku,
+        itemName:
+          (item as unknown as { itemName?: string }).itemName ??
+          warehouseItem?.name ??
+          item.sku,
         lotNumber: "",
         note: "",
         sku: item.sku,
@@ -606,12 +614,30 @@ export function PurchaseOrdersClient({
   }
 
   function openGrnDialog() {
-    const purchaseOrder = purchaseOrders[0];
+    const purchaseOrder = receivingPurchaseOrders[0] ?? purchaseOrders[0];
     setGrnPurchaseOrderId(purchaseOrder?.id ?? "");
     setGrnItemForms(buildGoodsReceiptForms(purchaseOrder, warehouseItemById));
     setGrnImages([]);
     setGrnDialogOpen(true);
   }
+
+  useEffect(() => {
+    if (grnDialogOpen && receivingPurchaseOrders.length > 0) {
+      const exists = receivingPurchaseOrders.some(
+        (po) => po.id === grnPurchaseOrderId,
+      );
+      if (!exists) {
+        const defaultPo = receivingPurchaseOrders[0];
+        setGrnPurchaseOrderId(defaultPo.id);
+        setGrnItemForms(buildGoodsReceiptForms(defaultPo, warehouseItemById));
+      }
+    }
+  }, [
+    grnDialogOpen,
+    grnPurchaseOrderId,
+    receivingPurchaseOrders,
+    warehouseItemById,
+  ]);
 
   function handleGrnPurchaseOrderChange(purchaseOrderId: string) {
     const purchaseOrder = receivingPurchaseOrders.find(
@@ -835,7 +861,14 @@ export function PurchaseOrdersClient({
               confirmGrnMutation.mutate(goodsReceiptNoteId)
             }
             onCreate={openGrnDialog}
-            purchaseOrderById={new Map(purchaseOrders.map((po) => [po.id, po]))}
+            purchaseOrderById={
+              useMemo(() => {
+                const map = new Map<string, PurchaseOrder>();
+                receivingPurchaseOrders.forEach((po) => map.set(po.id, po));
+                purchaseOrders.forEach((po) => map.set(po.id, po));
+                return map;
+              }, [purchaseOrders, receivingPurchaseOrders])
+            }
             onSelect={setSelectedGoodsReceiptNote}
           />
         </TabsContent>
@@ -1019,17 +1052,30 @@ export function PurchaseOrdersClient({
           <form className="space-y-4" onSubmit={handleCreateGrn}>
             <SelectField
               disabled={
-                !canCreateGoodsReceiptNote || createGrnMutation.isPending
+                !canCreateGoodsReceiptNote ||
+                createGrnMutation.isPending ||
+                receivingPurchaseOrdersQuery.isLoading ||
+                receivingPurchaseOrders.length === 0
               }
               label="Đơn mua"
               value={grnPurchaseOrderId}
               onChange={handleGrnPurchaseOrderChange}
             >
-              {receivingPurchaseOrders.map((purchaseOrder) => (
-                <SelectItem key={purchaseOrder.id} value={purchaseOrder.id}>
-                  {getPurchaseOrderSelectLabel(purchaseOrder, supplierById)}
+              {receivingPurchaseOrdersQuery.isLoading ? (
+                <SelectItem disabled value="_loading">
+                  Đang tải danh sách đơn mua...
                 </SelectItem>
-              ))}
+              ) : receivingPurchaseOrders.length === 0 ? (
+                <SelectItem disabled value="_empty">
+                  Chưa có đơn mua nào chờ nhập
+                </SelectItem>
+              ) : (
+                receivingPurchaseOrders.map((purchaseOrder) => (
+                  <SelectItem key={purchaseOrder.id} value={purchaseOrder.id}>
+                    {getPurchaseOrderSelectLabel(purchaseOrder, supplierById)}
+                  </SelectItem>
+                ))
+              )}
             </SelectField>
             {grnPurchaseOrder ? (
               <div className="grid gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm sm:grid-cols-4">

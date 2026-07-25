@@ -61,6 +61,7 @@ describe("WMS RBAC helpers", () => {
     expect(receiverRoutes).not.toContain("/staff");
     expect(printerRoutes).not.toContain("/staff");
     expect(printerRoutes).not.toContain("/transfers");
+    expect(printerRoutes).not.toContain("/products");
     expect(printerRoutes).toContain("/print-jobs");
     expect(shipperRoutes).toContain("/shipping");
     expect(shipperRoutes).not.toContain("/print-jobs");
