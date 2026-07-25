@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, type ReactNode, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LoaderCircle, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -214,10 +214,22 @@ export function LocationStructureClient() {
         >
           <SimpleTable
             empty="Chưa có tầng kệ"
-            headers={["Mã", "Tầng"]}
+            headers={["Mã", "Tầng", "Loại"]}
             rows={shelves.map((shelf) => ({
               id: shelf.id,
-              cells: [shelf.code, String(shelf.level)],
+              cells: [
+                shelf.code,
+                String(shelf.level),
+                shelf.isStaging ? (
+                  <StatusBadge key={`${shelf.id}-type`} tone="warning">
+                    Khu tạm
+                  </StatusBadge>
+                ) : (
+                  <StatusBadge key={`${shelf.id}-type`} tone="neutral">
+                    Thường
+                  </StatusBadge>
+                ),
+              ],
               onDelete: () => setDeleteTarget({ kind: "shelf", value: shelf }),
               onEdit: () => setEditor({ kind: "shelf", value: shelf }),
               onSelect: () => undefined,
@@ -370,7 +382,7 @@ function LocationPanel({
 type Row = {
   id: string;
   active?: boolean;
-  cells: string[];
+  cells: ReactNode[];
   onDelete: () => void;
   onEdit: () => void;
   onSelect: () => void;

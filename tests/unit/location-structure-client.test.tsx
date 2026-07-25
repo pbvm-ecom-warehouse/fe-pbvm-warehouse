@@ -222,3 +222,58 @@ describe("LocationStructureClient single-panel drill-down", () => {
     expect(screen.getByRole("button", { name: "Thêm tầng kệ" })).toBeInTheDocument();
   });
 });
+
+describe("LocationStructureClient shelf type column", () => {
+  beforeEach(() => {
+    mockedListZones.mockReset();
+    mockedListRacks.mockReset();
+    mockedListShelves.mockReset();
+  });
+
+  it("shows a staging badge for staging shelves and a plain badge otherwise", async () => {
+    mockedListZones.mockResolvedValue([
+      { id: "zone-1", code: "A", name: "Khu A", createdAt: "", updatedAt: "" },
+    ]);
+    mockedListRacks.mockResolvedValue([
+      {
+        id: "rack-1",
+        zoneId: "zone-1",
+        code: "R1",
+        name: "Kệ 1",
+        createdAt: "",
+        updatedAt: "",
+      },
+    ]);
+    mockedListShelves.mockResolvedValue([
+      {
+        id: "shelf-1",
+        rackId: "rack-1",
+        code: "S1",
+        level: 1,
+        isStaging: true,
+        createdAt: "",
+        updatedAt: "",
+      },
+      {
+        id: "shelf-2",
+        rackId: "rack-1",
+        code: "S2",
+        level: 2,
+        isStaging: false,
+        createdAt: "",
+        updatedAt: "",
+      },
+    ]);
+
+    renderLocations();
+    fireEvent.click(await screen.findByText("Khu A"));
+    fireEvent.click(await screen.findByText("Kệ 1"));
+
+    await screen.findByText("S1");
+    expect(screen.getByText("Khu tạm")).toBeInTheDocument();
+    expect(screen.getByText("Thường")).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "Loại" }),
+    ).toBeInTheDocument();
+  });
+});
