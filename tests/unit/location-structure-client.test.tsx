@@ -26,9 +26,8 @@ vi.mock("sonner", () => ({
   toast: { error: vi.fn(), success: vi.fn() },
 }));
 
-const service = await import(
-  "@/features/warehouse-structure/services/warehouse-structure.service"
-);
+const service =
+  await import("@/features/warehouse-structure/services/warehouse-structure.service");
 const mockedListZones = vi.mocked(service.listZones);
 const mockedListRacks = vi.mocked(service.listRacks);
 const mockedListShelves = vi.mocked(service.listShelves);
@@ -206,7 +205,9 @@ describe("LocationStructureClient single-panel drill-down", () => {
 
     expect(await screen.findByText("Khu A")).toBeInTheDocument();
     expect(screen.queryByText("Kệ 1")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Thêm khu vực" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Thêm khu vực" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Khu A"));
 
@@ -219,7 +220,9 @@ describe("LocationStructureClient single-panel drill-down", () => {
     fireEvent.click(screen.getByText("Kệ 1"));
 
     expect(await screen.findByText("S1")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Thêm tầng kệ" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Thêm tầng kệ" }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -307,7 +310,9 @@ describe("LocationStructureClient create navigates into the new item", () => {
     });
 
     renderLocations();
-    fireEvent.click(await screen.findByRole("button", { name: "Thêm khu vực" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Thêm khu vực" }),
+    );
     fireEvent.change(screen.getByLabelText("Mã"), {
       target: { value: "B" },
     });

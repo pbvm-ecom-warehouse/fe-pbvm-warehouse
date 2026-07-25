@@ -150,9 +150,7 @@ export function LocationStructureClient() {
       <LocationStatBadges
         rackCount={racks.length}
         shelfCount={shelves.length}
-        stagingShelfCount={
-          shelves.filter((shelf) => shelf.isStaging).length
-        }
+        stagingShelfCount={shelves.filter((shelf) => shelf.isStaging).length}
         view={view}
         zoneCount={zones.length}
       />
