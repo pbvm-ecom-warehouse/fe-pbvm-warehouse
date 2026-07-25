@@ -28,6 +28,7 @@ import {
 import {
   EmptyState,
   PageHeader,
+  StatusBadge,
   TablePanel,
   TableSkeleton,
 } from "@/features/admin-shell/components/operations-ui";
@@ -144,6 +145,16 @@ export function LocationStructureClient() {
             ? zones.find((zone) => zone.id === activeZoneId)?.name
             : undefined
         }
+      />
+
+      <LocationStatBadges
+        rackCount={racks.length}
+        shelfCount={shelves.length}
+        stagingShelfCount={
+          shelves.filter((shelf) => shelf.isStaging).length
+        }
+        view={view}
+        zoneCount={zones.length}
       />
 
       <div className="grid min-h-0 gap-4 xl:grid-cols-3">
@@ -281,6 +292,45 @@ function LocationBreadcrumb({
         <span className="font-medium text-foreground">{rackName}</span>
       ) : null}
     </nav>
+  );
+}
+
+function LocationStatBadges({
+  rackCount,
+  shelfCount,
+  stagingShelfCount,
+  view,
+  zoneCount,
+}: {
+  rackCount: number;
+  shelfCount: number;
+  stagingShelfCount: number;
+  view: "zone" | "rack" | "shelf";
+  zoneCount: number;
+}) {
+  if (view === "zone") {
+    return (
+      <div className="flex flex-wrap gap-2">
+        <StatusBadge tone="info">{zoneCount} khu vực</StatusBadge>
+      </div>
+    );
+  }
+
+  if (view === "rack") {
+    return (
+      <div className="flex flex-wrap gap-2">
+        <StatusBadge tone="info">{rackCount} kệ</StatusBadge>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <StatusBadge tone="info">{shelfCount} tầng kệ</StatusBadge>
+      {stagingShelfCount > 0 ? (
+        <StatusBadge tone="warning">{stagingShelfCount} khu tạm</StatusBadge>
+      ) : null}
+    </div>
   );
 }
 

@@ -113,3 +113,58 @@ describe("LocationStructureClient breadcrumb", () => {
     expect(mockedListRacks).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("LocationStructureClient stat badges", () => {
+  beforeEach(() => {
+    mockedListZones.mockReset();
+    mockedListRacks.mockReset();
+    mockedListShelves.mockReset();
+  });
+
+  it("shows zone count at root and shelf/staging counts at shelf view", async () => {
+    mockedListZones.mockResolvedValue([
+      { id: "zone-1", code: "A", name: "Khu A", createdAt: "", updatedAt: "" },
+    ]);
+    mockedListRacks.mockResolvedValue([
+      {
+        id: "rack-1",
+        zoneId: "zone-1",
+        code: "R1",
+        name: "Kệ 1",
+        createdAt: "",
+        updatedAt: "",
+      },
+    ]);
+    mockedListShelves.mockResolvedValue([
+      {
+        id: "shelf-1",
+        rackId: "rack-1",
+        code: "S1",
+        level: 1,
+        isStaging: true,
+        createdAt: "",
+        updatedAt: "",
+      },
+      {
+        id: "shelf-2",
+        rackId: "rack-1",
+        code: "S2",
+        level: 2,
+        isStaging: false,
+        createdAt: "",
+        updatedAt: "",
+      },
+    ]);
+
+    renderLocations();
+
+    expect(await screen.findByText("1 khu vực")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Khu A"));
+    expect(await screen.findByText("1 kệ")).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByText("Kệ 1"));
+    expect(await screen.findByText("2 tầng kệ")).toBeInTheDocument();
+    expect(screen.getByText("1 khu tạm")).toBeInTheDocument();
+  });
+});
