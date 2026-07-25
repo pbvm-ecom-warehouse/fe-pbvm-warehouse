@@ -157,7 +157,7 @@ export function LocationStructureClient() {
         zoneCount={zones.length}
       />
 
-      <div className="grid min-h-0 gap-4 xl:grid-cols-3">
+      {view === "zone" ? (
         <LocationPanel
           addLabel="Thêm khu vực"
           count={zones.length}
@@ -170,7 +170,6 @@ export function LocationStructureClient() {
             headers={["Mã", "Tên"]}
             rows={zones.map((zone) => ({
               id: zone.id,
-              active: zone.id === activeZoneId,
               cells: [zone.code, zone.name],
               onDelete: () => setDeleteTarget({ kind: "zone", value: zone }),
               onEdit: () => setEditor({ kind: "zone", value: zone }),
@@ -181,21 +180,21 @@ export function LocationStructureClient() {
             }))}
           />
         </LocationPanel>
+      ) : null}
 
+      {view === "rack" ? (
         <LocationPanel
           addLabel="Thêm kệ"
           count={racks.length}
-          disabled={!activeZoneId}
           loading={racksQuery.isLoading}
           title="Kệ"
           onAdd={() => setEditor({ kind: "rack" })}
         >
           <SimpleTable
-            empty={activeZoneId ? "Chưa có kệ" : "Chọn khu vực trước"}
+            empty="Chưa có kệ"
             headers={["Mã", "Tên"]}
             rows={racks.map((rack) => ({
               id: rack.id,
-              active: rack.id === activeRackId,
               cells: [rack.code, rack.name],
               onDelete: () => setDeleteTarget({ kind: "rack", value: rack }),
               onEdit: () => setEditor({ kind: "rack", value: rack }),
@@ -203,17 +202,18 @@ export function LocationStructureClient() {
             }))}
           />
         </LocationPanel>
+      ) : null}
 
+      {view === "shelf" ? (
         <LocationPanel
           addLabel="Thêm tầng kệ"
           count={shelves.length}
-          disabled={!activeRackId}
           loading={shelvesQuery.isLoading}
           title="Tầng kệ"
           onAdd={() => setEditor({ kind: "shelf" })}
         >
           <SimpleTable
-            empty={activeRackId ? "Chưa có tầng kệ" : "Chọn kệ trước"}
+            empty="Chưa có tầng kệ"
             headers={["Mã", "Tầng"]}
             rows={shelves.map((shelf) => ({
               id: shelf.id,
@@ -224,7 +224,7 @@ export function LocationStructureClient() {
             }))}
           />
         </LocationPanel>
-      </div>
+      ) : null}
 
       <LocationEditor
         key={editor ? `${editor.kind}-${editor.value?.id ?? "new"}` : "closed"}

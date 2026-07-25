@@ -168,3 +168,57 @@ describe("LocationStructureClient stat badges", () => {
     expect(screen.getByText("1 khu tạm")).toBeInTheDocument();
   });
 });
+
+describe("LocationStructureClient single-panel drill-down", () => {
+  beforeEach(() => {
+    mockedListZones.mockReset();
+    mockedListRacks.mockReset();
+    mockedListShelves.mockReset();
+  });
+
+  it("shows only one table at a time as the user drills down", async () => {
+    mockedListZones.mockResolvedValue([
+      { id: "zone-1", code: "A", name: "Khu A", createdAt: "", updatedAt: "" },
+    ]);
+    mockedListRacks.mockResolvedValue([
+      {
+        id: "rack-1",
+        zoneId: "zone-1",
+        code: "R1",
+        name: "Kệ 1",
+        createdAt: "",
+        updatedAt: "",
+      },
+    ]);
+    mockedListShelves.mockResolvedValue([
+      {
+        id: "shelf-1",
+        rackId: "rack-1",
+        code: "S1",
+        level: 1,
+        isStaging: true,
+        createdAt: "",
+        updatedAt: "",
+      },
+    ]);
+
+    renderLocations();
+
+    expect(await screen.findByText("Khu A")).toBeInTheDocument();
+    expect(screen.queryByText("Kệ 1")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Thêm khu vực" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Khu A"));
+
+    expect(await screen.findByText("Kệ 1")).toBeInTheDocument();
+    // "Khu A" now only appears once, in the breadcrumb — the zone table
+    // (and its row) is gone, replaced by the rack table.
+    expect(screen.getAllByText("Khu A")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Thêm kệ" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Kệ 1"));
+
+    expect(await screen.findByText("S1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Thêm tầng kệ" })).toBeInTheDocument();
+  });
+});
