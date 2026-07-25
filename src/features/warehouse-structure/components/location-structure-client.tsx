@@ -81,7 +81,7 @@ export function LocationStructureClient() {
   const zones = useMemo(() => zonesQuery.data ?? [], [zonesQuery.data]);
   const activeZoneId = zones.some((zone) => zone.id === selectedZoneId)
     ? selectedZoneId
-    : (zones[0]?.id ?? "");
+    : "";
 
   const racksQuery = useQuery({
     enabled: Boolean(activeZoneId),
@@ -91,7 +91,13 @@ export function LocationStructureClient() {
   const racks = useMemo(() => racksQuery.data ?? [], [racksQuery.data]);
   const activeRackId = racks.some((rack) => rack.id === selectedRackId)
     ? selectedRackId
-    : (racks[0]?.id ?? "");
+    : "";
+
+  const view: "zone" | "rack" | "shelf" = activeRackId
+    ? "shelf"
+    : activeZoneId
+      ? "rack"
+      : "zone";
 
   const shelvesQuery = useQuery({
     enabled: Boolean(activeRackId),
