@@ -36,7 +36,7 @@ export function WmsLogo({
               wordmarkSizes[size],
             )}
           >
-            WMS
+            StockMate
           </div>
           {subtitle ? (
             <div className="mt-1 truncate text-xs font-medium text-muted-foreground">

@@ -976,13 +976,13 @@ export function PurchaseOrdersClient({
           size="5xl"
           className="max-h-[90dvh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-0"
         >
-          <DialogHeader className="border-b px-6 py-4 pr-12">
+          <DialogHeader className="sr-only">
             <DialogTitle>Chi tiết đơn mua</DialogTitle>
             <DialogDescription>
               {detail?.poNumber ?? "Đang tải đơn mua..."}
             </DialogDescription>
           </DialogHeader>
-          <div className="min-h-0 space-y-5 overflow-y-auto px-6 py-4">
+          <div className="min-h-0 overflow-y-auto">
             {detail ? (
               <PurchaseOrderDetail
                 detail={detail}
@@ -1353,6 +1353,10 @@ function PurchaseOrderItemFields({
   );
 }
 
+function formatCurrency(value: number) {
+  return `${value.toLocaleString("vi-VN")} đ`;
+}
+
 function PurchaseOrderDetail({
   detail,
   loading,
@@ -1365,60 +1369,143 @@ function PurchaseOrderDetail({
   warehouseItemById: Map<string, WarehouseItem>;
 }) {
   const items = detail.items ?? [];
+  const totalQty = items.reduce((sum, item) => sum + item.expectedQty, 0);
+  const totalAmount = items.reduce(
+    (sum, item) => sum + item.expectedQty * (item.unitPrice ?? 0),
+    0,
+  );
 
   return (
-    <Card>
-      <CardHeader className="border-b bg-muted/20">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Eye className="size-4 text-primary" />
-          {detail.poNumber}
-          {loading ? <LoaderCircle className="size-4 animate-spin" /> : null}
-        </CardTitle>
-        <CardDescription>{supplierLabel}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4 pt-4">
-        <div className="grid gap-3 md:grid-cols-4">
-          <InfoBox label="Trạng thái" value={statusLabel(detail.status)} />
-          <InfoBox label="Ngày tạo" value={formatDate(detail.orderDate)} />
-          <InfoBox
-            label="Ngày dự kiến"
-            value={formatDate(detail.expectedDate)}
-          />
-          <InfoBox label="Số dòng" value={items.length.toString()} />
+    <div data-testid="purchase-order-invoice">
+      {/* Invoice header */}
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b bg-muted/30 px-6 py-5 pr-14 sm:px-8 sm:py-6 sm:pr-16">
+        <div className="flex items-center gap-3">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <ShoppingCart className="size-5" />
+          </div>
+          <div>
+            <div className="text-lg font-bold tracking-tight">
+              ĐƠN ĐẶT HÀNG
+            </div>
+            <div className="font-mono text-sm text-muted-foreground">
+              {detail.poNumber}
+            </div>
+          </div>
         </div>
+        <div className="flex flex-col items-end gap-1.5">
+          <StatusBadge tone={statusTone(detail.status)}>
+            {statusLabel(detail.status)}
+          </StatusBadge>
+          {loading ? (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <LoaderCircle className="size-3 animate-spin" />
+              Đang cập nhật
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="space-y-6 px-6 py-6 sm:px-8">
+        {/* Parties + dates, invoice-style two-column block */}
+        <div className="grid gap-6 sm:grid-cols-2">
+          <div className="space-y-1">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Nhà cung cấp
+            </div>
+            <div className="text-sm font-semibold">{supplierLabel}</div>
+          </div>
+          <div className="grid grid-cols-2 gap-4 sm:justify-items-end">
+            <div className="space-y-1">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Ngày tạo
+              </div>
+              <div className="text-sm font-medium">
+                {formatDate(detail.orderDate)}
+              </div>
+            </div>
+            <div className="space-y-1 sm:text-right">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Ngày dự kiến
+              </div>
+              <div className="text-sm font-medium">
+                {formatDate(detail.expectedDate)}
+              </div>
+            </div>
+          </div>
+        </div>
+
         {detail.note ? (
-          <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm">
+          <div className="rounded-lg border border-dashed border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">Ghi chú: </span>
             {detail.note}
           </div>
         ) : null}
-        <Table scrollable>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Tên mặt hàng</TableHead>
-              <TableHead>SKU</TableHead>
-              <TableHead>Số lượng</TableHead>
-              <TableHead>Đơn vị</TableHead>
-              <TableHead>Đơn giá</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((item) => (
-              <TableRow key={`${item.itemId}-${item.sku}`}>
-                <TableCell className="font-medium">
-                  {warehouseItemById.get(item.itemId)?.name ?? item.sku}
-                </TableCell>
-                <TableCell>{item.sku}</TableCell>
-                <TableCell>{item.expectedQty}</TableCell>
-                <TableCell>{item.unit}</TableCell>
-                <TableCell>
-                  {(item.unitPrice ?? 0).toLocaleString("vi-VN")}
-                </TableCell>
+
+        {/* Line items — invoice table */}
+        <div className="overflow-hidden rounded-lg border">
+          <Table scrollable>
+            <TableHeader>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="w-10">#</TableHead>
+                <TableHead>Mặt hàng</TableHead>
+                <TableHead>SKU</TableHead>
+                <TableHead className="text-right">SL</TableHead>
+                <TableHead>Đơn vị</TableHead>
+                <TableHead className="text-right">Đơn giá</TableHead>
+                <TableHead className="text-right">Thành tiền</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+            </TableHeader>
+            <TableBody>
+              {items.map((item, index) => (
+                <TableRow key={`${item.itemId}-${item.sku}`}>
+                  <TableCell className="text-muted-foreground">
+                    {index + 1}
+                  </TableCell>
+                  <TableCell className="font-medium">
+                    {warehouseItemById.get(item.itemId)?.name ?? item.sku}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {item.sku}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {item.expectedQty}
+                  </TableCell>
+                  <TableCell>{item.unit}</TableCell>
+                  <TableCell className="text-right">
+                    {formatCurrency(item.unitPrice ?? 0)}
+                  </TableCell>
+                  <TableCell className="text-right font-medium">
+                    {formatCurrency(
+                      item.expectedQty * (item.unitPrice ?? 0),
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Totals summary, right-aligned like an invoice footer */}
+        <div className="flex justify-end">
+          <div className="w-full max-w-xs space-y-2 rounded-lg border bg-muted/20 px-4 py-3 text-sm">
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span>Số dòng hàng</span>
+              <span>{items.length}</span>
+            </div>
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span>Tổng số lượng</span>
+              <span>{totalQty}</span>
+            </div>
+            <div className="flex items-center justify-between border-t pt-2 text-base font-bold">
+              <span>Tổng tiền</span>
+              <span className="text-primary">
+                {formatCurrency(totalAmount)}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
