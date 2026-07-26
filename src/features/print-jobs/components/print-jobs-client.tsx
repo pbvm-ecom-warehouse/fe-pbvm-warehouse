@@ -51,7 +51,6 @@ import {
 import { useSessionUser } from "@/hooks/use-session-user";
 
 import {
-  EmptyState,
   PageHeader,
   PermissionNotice,
   StatusBadge,
@@ -158,8 +157,9 @@ export function PrintJobsClient() {
     () => printJobsQuery.data?.data ?? [],
     [printJobsQuery.data?.data],
   );
-  const selectedPrintJob =
-    printJobs.find((job) => job.id === selectedPrintJobId) ?? printJobs[0];
+  const selectedPrintJob = printJobs.find(
+    (job) => job.id === selectedPrintJobId,
+  );
   const activePrintJobId = selectedPrintJob?.id ?? "";
   const total = printJobsQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -169,7 +169,7 @@ export function PrintJobsClient() {
     queryFn: () => getPrintJob(activePrintJobId),
     queryKey: printJobKeys.detail(activePrintJobId),
   });
-  const detail = detailQuery.data ?? selectedPrintJob;
+  const detail = detailQuery.data;
   const selectedItem = selectedItemId
     ? detail?.items.find((item) => item.inputItemId === selectedItemId)
     : undefined;
@@ -294,9 +294,7 @@ export function PrintJobsClient() {
       <div
         className={cn(
           "grid gap-4 transition-all",
-          selectedItem
-            ? "xl:grid-cols-[minmax(0,1fr)_420px]"
-            : "grid-cols-1",
+          selectedItem ? "xl:grid-cols-[minmax(0,1fr)_420px]" : "grid-cols-1",
         )}
       >
         <div className="space-y-4">
@@ -400,9 +398,7 @@ export function PrintJobsClient() {
                   <ClipboardList className="size-4 text-primary" />
                   Dòng in
                 </CardTitle>
-                <CardDescription>
-                  {selectedItem.sku}
-                </CardDescription>
+                <CardDescription>{selectedItem.sku}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <InfoBox
@@ -441,7 +437,10 @@ export function PrintJobsClient() {
                       label="Mã vạch mặt hàng"
                       value={consumeForm.itemBarcode}
                       onChange={(itemBarcode) =>
-                        setConsumeForm((current) => ({ ...current, itemBarcode }))
+                        setConsumeForm((current) => ({
+                          ...current,
+                          itemBarcode,
+                        }))
                       }
                     />
                     <TextField
@@ -503,7 +502,10 @@ export function PrintJobsClient() {
                       label="Mã vị trí"
                       value={completeForm.shelfCode}
                       onChange={(shelfCode) =>
-                        setCompleteForm((current) => ({ ...current, shelfCode }))
+                        setCompleteForm((current) => ({
+                          ...current,
+                          shelfCode,
+                        }))
                       }
                     />
                     <TextField

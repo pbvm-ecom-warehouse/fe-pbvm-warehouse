@@ -235,7 +235,7 @@ export function WarehouseNavigationClient() {
   });
 
   const grnsQuery = useQuery({
-    enabled: canUsePutawayApi,
+    enabled: canUsePutawayApi && Boolean(selectedItemId),
     queryFn: () => listGoodsReceiptNotes({ limit: 100 }),
     queryKey: ["goods-receipt-notes", "map"],
   });
@@ -259,7 +259,7 @@ export function WarehouseNavigationClient() {
   }, [grnsQuery.data]);
 
   const warehouseItemsQuery = useQuery({
-    enabled: canUsePutawayApi,
+    enabled: canUsePutawayApi && Boolean(selectedItemId),
     queryFn: () => listWarehouseItems({ isActive: "ALL", limit: 100 }),
     queryKey: ["warehouse-items", "map"],
   });
@@ -276,8 +276,7 @@ export function WarehouseNavigationClient() {
   }, [warehouseItemsQuery.data]);
 
   const tasks = useMemo(() => tasksQuery.data?.data ?? [], [tasksQuery.data]);
-  const selectedTask =
-    tasks.find((task) => task.id === selectedTaskId) ?? tasks[0];
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId);
   const activeTaskId = selectedTask?.id ?? "";
   const total = tasksQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));

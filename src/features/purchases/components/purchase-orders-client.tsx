@@ -182,14 +182,17 @@ function formatDate(value?: string | null) {
   return new Intl.DateTimeFormat("vi-VN").format(date);
 }
 
-
 // BE luôn gắn sẵn `supplier`/`supplierName` trong response (attachDisplayInfo) — không cần
 // tra thêm getSupplier() theo supplierId ở FE nữa.
 function getPurchaseOrderSupplierLabel(
   purchaseOrder: PurchaseOrder | ReceivingPurchaseOrder,
 ) {
   if ("supplier" in purchaseOrder) {
-    return purchaseOrder.supplier?.name ?? purchaseOrder.supplierName ?? "Chưa xác định";
+    return (
+      purchaseOrder.supplier?.name ??
+      purchaseOrder.supplierName ??
+      "Chưa xác định"
+    );
   }
   return purchaseOrder.supplierName ?? "Chưa xác định";
 }
@@ -347,15 +350,16 @@ export function PurchaseOrdersClient({
     }),
   });
 
-  // Chỉ cần khi ở tab "Phiếu nhập" (chọn PO trong dialog tạo GRN) — không tải song song
-  // ngay từ đầu khi user đang xem tab "Đơn mua".
+  // Chỉ tải danh sách PO có thể nhận sau khi người dùng mở dialog tạo GRN.
   const receivingPurchaseOrdersQuery = useQuery({
-    enabled: canReadGoodsReceiptNotes && activeTab === "goods-receipts",
+    enabled: canCreateGoodsReceiptNote && grnDialogOpen,
     queryFn: () => listReceivingPurchaseOrders({ limit: 100, page: 1 }),
     queryKey: ["purchase-orders", "receiving"],
   });
   const suppliersQuery = useQuery({
-    enabled: canCreatePurchaseOrder || canApproveGoodsReceiptNote,
+    enabled:
+      (canReadPurchaseOrders && activeTab === "purchase-orders") ||
+      (canCreatePurchaseOrder && dialogOpen),
     queryFn: () => listSuppliers({ limit: 100, page: 1, status: "ACTIVE" }),
     queryKey: purchaseKeys.suppliers,
   });
@@ -433,7 +437,7 @@ export function PurchaseOrdersClient({
     (purchaseOrder) => purchaseOrder.id === grnPurchaseOrderId,
   );
   const allGrnsQuery = useQuery({
-    enabled: canReadGoodsReceiptNotes,
+    enabled: canReadGoodsReceiptNotes && activeTab === "goods-receipts",
     queryFn: () => listGoodsReceiptNotes({ limit: 100, page: 1 }),
     queryKey: purchaseKeys.allGrns,
   });
@@ -585,6 +589,9 @@ export function PurchaseOrdersClient({
     setGrnDialogOpen(true);
   }
 
+  // receivingPurchaseOrders duoc nap bat dong bo sau khi mo dialog; khi danh sach tra ve ma
+  // selection hien tai khong con hop le thi can tu dong bo sang PO dau tien hop le. Day la
+  // sync tu external query cache vao local form state, nen chap nhan setState trong effect.
   useEffect(() => {
     if (grnDialogOpen && receivingPurchaseOrders.length > 0) {
       const exists = receivingPurchaseOrders.some(
@@ -592,6 +599,7 @@ export function PurchaseOrdersClient({
       );
       if (!exists) {
         const defaultPo = receivingPurchaseOrders[0];
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setGrnPurchaseOrderId(defaultPo.id);
         setGrnItemForms(
           buildGoodsReceiptForms(defaultPo, isPerishableByItemId),
@@ -616,7 +624,8 @@ export function PurchaseOrdersClient({
     setGrnItemForms((current) =>
       current.map((item) => ({
         ...item,
-        isPerishable: isPerishableByItemId.get(item.itemId) ?? item.isPerishable,
+        isPerishable:
+          isPerishableByItemId.get(item.itemId) ?? item.isPerishable,
       })),
     );
   }, [grnDialogOpen, isPerishableByItemId]);
@@ -1381,9 +1390,7 @@ function PurchaseOrderDetail({
             <ShoppingCart className="size-5" />
           </div>
           <div>
-            <div className="text-lg font-bold tracking-tight">
-              ĐƠN ĐẶT HÀNG
-            </div>
+            <div className="text-lg font-bold tracking-tight">ĐƠN ĐẶT HÀNG</div>
             <div className="font-mono text-sm text-muted-foreground">
               {detail.poNumber}
             </div>
@@ -1472,9 +1479,7 @@ function PurchaseOrderDetail({
                     {formatCurrency(item.unitPrice ?? 0)}
                   </TableCell>
                   <TableCell className="text-right font-medium">
-                    {formatCurrency(
-                      item.expectedQty * (item.unitPrice ?? 0),
-                    )}
+                    {formatCurrency(item.expectedQty * (item.unitPrice ?? 0))}
                   </TableCell>
                 </TableRow>
               ))}

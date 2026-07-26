@@ -200,7 +200,7 @@ export function GoodsReturnsClient() {
   const detail = detailQuery.data ?? selectedReturn;
 
   const stockItemsQuery = useQuery({
-    enabled: canMutate,
+    enabled: canMutate && createOpen,
     queryFn: () => listWarehouseItems({ isActive: true, limit: 100, page: 1 }),
     queryKey: ["goods-returns", "stock-items"],
   });
@@ -370,9 +370,7 @@ export function GoodsReturnsClient() {
       <div
         className={cn(
           "grid gap-4 transition-all",
-          selectedReturn
-            ? "xl:grid-cols-[minmax(0,1fr)_420px]"
-            : "grid-cols-1",
+          selectedReturn ? "xl:grid-cols-[minmax(0,1fr)_420px]" : "grid-cols-1",
         )}
       >
         <div className="space-y-4">
@@ -630,7 +628,10 @@ export function GoodsReturnsClient() {
                 id="create-return-note"
                 value={createForm.note}
                 onChange={(event) =>
-                  setCreateForm((form) => ({ ...form, note: event.target.value }))
+                  setCreateForm((form) => ({
+                    ...form,
+                    note: event.target.value,
+                  }))
                 }
               />
             </div>
@@ -640,7 +641,10 @@ export function GoodsReturnsClient() {
               type="submit"
             >
               {createMutation.isPending ? (
-                <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
               ) : (
                 <Plus data-icon="inline-start" />
               )}
@@ -795,89 +799,6 @@ function GoodsReturnDetail({
             )}
           </TableBody>
         </Table>
-      </CardContent>
-    </Card>
-  );
-}
-
-function CreateGoodsReturnCard({
-  busy,
-  form,
-  items,
-  loadingItems,
-  onChange,
-  onSubmit,
-}: {
-  busy: boolean;
-  form: typeof defaultCreateForm;
-  items: WarehouseItem[];
-  loadingItems: boolean;
-  onChange: (form: typeof defaultCreateForm) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Plus className="size-4 text-primary" />
-          Tạo phiếu hoàn
-        </CardTitle>
-        <CardDescription>Ghi nhận hàng trả trực tiếp tại kho.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form className="space-y-3" onSubmit={onSubmit}>
-          <TextField
-            id="goods-return-order"
-            label="Mã đơn hàng"
-            required={false}
-            value={form.orderId}
-            onChange={(orderId) => onChange({ ...form, orderId })}
-          />
-          <div className="space-y-2">
-            <Label>Mặt hàng hoàn</Label>
-            <Select
-              disabled={loadingItems}
-              value={form.itemId}
-              onValueChange={(itemId) => onChange({ ...form, itemId })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Chọn mặt hàng" />
-              </SelectTrigger>
-              <SelectContent>
-                {items.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {itemLabel(item)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <TextField
-            id="goods-return-quantity"
-            label="Số lượng"
-            type="number"
-            value={form.quantity}
-            onChange={(quantity) => onChange({ ...form, quantity })}
-          />
-          <div className="space-y-2">
-            <Label htmlFor="goods-return-note">Ghi chú</Label>
-            <Textarea
-              id="goods-return-note"
-              value={form.note}
-              onChange={(event) =>
-                onChange({ ...form, note: event.target.value })
-              }
-            />
-          </div>
-          <Button className="w-full" disabled={busy} type="submit">
-            {busy ? (
-              <LoaderCircle className="animate-spin" data-icon="inline-start" />
-            ) : (
-              <Plus data-icon="inline-start" />
-            )}
-            Tạo phiếu
-          </Button>
-        </form>
       </CardContent>
     </Card>
   );
