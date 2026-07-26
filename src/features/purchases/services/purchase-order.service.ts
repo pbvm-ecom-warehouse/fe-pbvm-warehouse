@@ -15,6 +15,7 @@ export type PurchaseOrderStatus = (typeof PURCHASE_ORDER_STATUSES)[number];
 export type PurchaseOrderItem = {
   itemId: string;
   sku: string;
+  itemName?: string;
   expectedQty: number;
   unit: string;
   unitPrice: number;
@@ -56,11 +57,18 @@ export type PurchaseOrderListResult = {
   limit: number;
 };
 
+export type CreatePurchaseOrderItemInput = {
+  itemId: string;
+  expectedQty: number;
+  unit: string;
+  unitPrice?: number;
+};
+
 export type CreatePurchaseOrderInput = {
   supplierId: string;
   expectedDate?: string;
   note?: string;
-  items: PurchaseOrderItem[];
+  items: CreatePurchaseOrderItemInput[];
 };
 
 type PurchaseOrderListPayload = {
@@ -137,9 +145,22 @@ export async function getPurchaseOrder(purchaseOrderId: string) {
 }
 
 export async function createPurchaseOrder(input: CreatePurchaseOrderInput) {
+  // BE dùng ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }) — sku KHÔNG
+  // được gửi trong từng item, BE tự denormalize từ WarehouseItem theo itemId.
+  const payload = {
+    supplierId: input.supplierId,
+    expectedDate: input.expectedDate,
+    note: input.note,
+    items: input.items.map((item) => ({
+      itemId: item.itemId,
+      expectedQty: item.expectedQty,
+      unit: item.unit,
+      unitPrice: item.unitPrice,
+    })),
+  };
   const response = await apiClient.post<
     ApiEnvelope<PurchaseOrder> | PurchaseOrder
-  >("/purchase-orders", input);
+  >("/purchase-orders", payload);
 
   return unwrapApiData(response.data);
 }

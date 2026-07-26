@@ -179,6 +179,7 @@ const purchaseOrder = {
     {
       expectedQty: 10,
       itemId: "item-1",
+      itemName: "Ly nhựa 500 ml",
       sku: "SKU-001",
       unit: "cái",
       unitPrice: 15000,
@@ -186,6 +187,13 @@ const purchaseOrder = {
   ],
   orderDate: "2026-07-23T00:00:00.000Z",
   poNumber: "PO-001",
+  // BE gắn sẵn supplier summary (attachDisplayInfo) — FE không cần tra thêm getSupplier().
+  supplier: {
+    id: "sup-1",
+    code: "NCC-001",
+    name: "Công ty Minh Long",
+    status: "ACTIVE",
+  },
   status: "DRAFT" as const,
   supplierId: "sup-1",
   updatedAt: "2026-07-23T00:00:00.000Z",
@@ -200,11 +208,14 @@ const goodsReceiptNote = {
     {
       actualQty: 10,
       itemId: "item-1",
+      itemName: "Ly nhựa 500 ml",
       sku: "SKU-001",
       unit: "cái",
     },
   ],
   purchaseOrderId: "po-1",
+  purchaseOrderNumber: "PO-001",
+  supplierName: "Công ty Minh Long",
   status: "CONFIRMED" as const,
   updatedAt: "2026-07-23T00:00:00.000Z",
 };
@@ -572,13 +583,18 @@ describe("purchase and supplier UX", () => {
     ).toBeVisible();
     expect(screen.getByText("Đơn vị", { selector: "label" })).toBeVisible();
     expect(screen.getByText("Mã lô", { selector: "label" })).toBeVisible();
-    expect(screen.getByLabelText("Mã lô phiếu nhập dòng 1")).toBeRequired();
+    // isPerishable chỉ tra được sau khi getWarehouseItem (query riêng, enabled khi dialog mở)
+    // resolve xong — chờ input trở thành required thay vì assert ngay lập tức.
+    await waitFor(() =>
+      expect(screen.getByLabelText("Mã lô phiếu nhập dòng 1")).toBeRequired(),
+    );
     expect(
       screen.getByText("Hạn sử dụng", { selector: "label" }),
     ).toBeVisible();
     expect(screen.getByText("Ghi chú", { selector: "label" })).toBeVisible();
   });
-  it("resolves a missing PO supplier before falling back to supplier id", async () => {
+
+  it("BE luôn trả sẵn supplier trong PO response — không cần fallback getSupplier theo supplierId", async () => {
     mockedListSuppliers.mockResolvedValue({
       data: [],
       limit: 100,
@@ -588,11 +604,9 @@ describe("purchase and supplier UX", () => {
 
     renderWithQueryClient(<PurchaseOrdersClient />);
 
-    await waitFor(() =>
-      expect(mockedGetSupplier).toHaveBeenCalledWith("sup-1"),
-    );
     expect(await screen.findByText(/Công ty Minh Long/)).toBeInTheDocument();
     expect(screen.queryByText("sup-1")).not.toBeInTheDocument();
+    expect(mockedGetSupplier).not.toHaveBeenCalled();
   });
 
   it("allows receivers to create and confirm GRNs without purchase-order creation or approval", async () => {

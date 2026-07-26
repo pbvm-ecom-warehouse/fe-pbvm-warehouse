@@ -15,6 +15,7 @@ export type GoodsReceiptNoteStatus =
 export type GoodsReceiptNoteItem = {
   itemId: string;
   sku: string;
+  itemName?: string;
   actualQty: number;
   unit: string;
   lotNumber?: string | null;
@@ -42,11 +43,20 @@ export type QueryGoodsReceiptNotesInput = {
   limit?: number;
 };
 
+export type CreateGoodsReceiptNoteItemInput = {
+  itemId: string;
+  actualQty: number;
+  unit?: string;
+  lotNumber?: string;
+  expiryDate?: string;
+  note?: string;
+};
+
 export type CreateGoodsReceiptNoteInput = {
   purchaseOrderId: string;
   purchaseOrderNumber?: string;
   supplierName?: string;
-  items: GoodsReceiptNoteItem[];
+  items?: CreateGoodsReceiptNoteItemInput[];
 };
 
 function optionalText(value: string | undefined) {
@@ -90,9 +100,24 @@ export async function getGoodsReceiptNote(goodsReceiptNoteId: string) {
 export async function createGoodsReceiptNote(
   input: CreateGoodsReceiptNoteInput,
 ) {
+  // BE dùng ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }) — chỉ gửi
+  // đúng field CreateGoodsReceiptNoteDto chấp nhận. purchaseOrderNumber/supplierName chỉ
+  // dùng hiển thị ở FE. sku KHÔNG được gửi trong từng item — BE tự denormalize từ PO
+  // theo itemId, gửi thừa sẽ bị 400.
+  const payload = {
+    purchaseOrderId: input.purchaseOrderId,
+    items: input.items?.map((item) => ({
+      itemId: item.itemId,
+      actualQty: item.actualQty,
+      unit: item.unit,
+      lotNumber: item.lotNumber,
+      expiryDate: item.expiryDate,
+      note: item.note,
+    })),
+  };
   const response = await apiClient.post<
     ApiEnvelope<GoodsReceiptNote> | GoodsReceiptNote
-  >("/goods-receipt-notes", input);
+  >("/goods-receipt-notes", payload);
 
   return unwrapApiData(response.data);
 }

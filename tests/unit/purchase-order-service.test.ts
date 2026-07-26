@@ -98,19 +98,23 @@ describe("purchase order API service", () => {
     expect(mockedGet).toHaveBeenCalledWith("/purchase-orders/po-1");
   });
 
-  it("creates purchase orders with the documented body shape", async () => {
+  it("creates purchase orders with the documented body shape (no sku — BE denormalizes from itemId)", async () => {
     mockedPost.mockResolvedValueOnce({ data: purchaseOrder });
+
+    const items = [
+      { expectedQty: 10, itemId: "item-1", unit: "cái", unitPrice: 15000 },
+    ];
 
     await createPurchaseOrder({
       expectedDate: "2026-07-10",
-      items: purchaseOrder.items,
+      items,
       note: "Đặt hàng test",
       supplierId: "sup-1",
     });
 
     expect(mockedPost).toHaveBeenCalledWith("/purchase-orders", {
       expectedDate: "2026-07-10",
-      items: purchaseOrder.items,
+      items,
       note: "Đặt hàng test",
       supplierId: "sup-1",
     });

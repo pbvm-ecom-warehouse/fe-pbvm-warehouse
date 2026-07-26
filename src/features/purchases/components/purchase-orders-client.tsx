@@ -70,10 +70,8 @@ import { cn } from "@/lib/utils";
 import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
 import { useSessionUser } from "@/hooks/use-session-user";
 import {
-  getSupplier,
   listSupplierItemsBySupplier,
   listSuppliers,
-  type Supplier,
   type SupplierItem,
 } from "@/features/suppliers/services/supplier.service";
 import { WarehouseItemCombobox } from "@/features/products/components/warehouse-item-combobox";
@@ -88,9 +86,10 @@ import {
   listPurchaseOrders,
   listReceivingPurchaseOrders,
   PURCHASE_ORDER_STATUSES,
+  type CreatePurchaseOrderItemInput,
   type PurchaseOrder,
-  type PurchaseOrderItem,
   type PurchaseOrderStatus,
+  type ReceivingPurchaseOrder,
 } from "../services/purchase-order.service";
 import {
   approveGoodsReceiptNote,
@@ -98,8 +97,8 @@ import {
   createGoodsReceiptNote,
   listGoodsReceiptNotes,
   uploadGoodsReceiptNoteImage,
+  type CreateGoodsReceiptNoteItemInput,
   type GoodsReceiptNote,
-  type GoodsReceiptNoteItem,
 } from "../services/goods-receipt-note.service";
 
 import {
@@ -184,86 +183,77 @@ function formatDate(value?: string | null) {
 }
 
 
+// BE luôn gắn sẵn `supplier`/`supplierName` trong response (attachDisplayInfo) — không cần
+// tra thêm getSupplier() theo supplierId ở FE nữa.
 function getPurchaseOrderSupplierLabel(
-  purchaseOrder: PurchaseOrder,
-  supplierById: Map<string, Supplier>,
+  purchaseOrder: PurchaseOrder | ReceivingPurchaseOrder,
 ) {
-  return (
-    purchaseOrder.supplier?.name ??
-    purchaseOrder.supplierName ??
-    supplierById.get(purchaseOrder.supplierId)?.name ??
-    "Chưa xác định"
-  );
+  if ("supplier" in purchaseOrder) {
+    return purchaseOrder.supplier?.name ?? purchaseOrder.supplierName ?? "Chưa xác định";
+  }
+  return purchaseOrder.supplierName ?? "Chưa xác định";
 }
 
-function getPurchaseOrderSelectLabel(
-  purchaseOrder: PurchaseOrder,
-  supplierById: Map<string, Supplier>,
-) {
+function getPurchaseOrderSelectLabel(purchaseOrder: ReceivingPurchaseOrder) {
   return [
     purchaseOrder.poNumber,
-    getPurchaseOrderSupplierLabel(purchaseOrder, supplierById),
+    getPurchaseOrderSupplierLabel(purchaseOrder),
   ].join(" · ");
 }
 
 function toPurchaseOrderItems(
   forms: PurchaseOrderItemForm[],
-): PurchaseOrderItem[] {
+): CreatePurchaseOrderItemInput[] {
+  // BE tự denormalize sku từ WarehouseItem theo itemId — không gửi sku lên
+  // (ValidationPipe whitelist:true, forbidNonWhitelisted:true sẽ 400 nếu gửi thừa field).
   return forms
+    .filter((form) => form.itemId.trim() && form.sku.trim())
     .map((form) => ({
       expectedQty: parsePositiveNumber(form.expectedQty, 0),
       itemId: form.itemId.trim(),
-      sku: form.sku.trim(),
       unit: form.unit.trim() || "cái",
       unitPrice: parsePositiveNumber(form.unitPrice, 0),
     }))
-    .filter((item) => item.itemId && item.sku && item.expectedQty > 0);
+    .filter((item) => item.expectedQty > 0);
 }
 
 function toGoodsReceiptItems(
   forms: GoodsReceiptItemForm[],
-): GoodsReceiptNoteItem[] {
+): CreateGoodsReceiptNoteItemInput[] {
+  // Tương tự PO — BE tự lấy sku từ PO item theo itemId, không gửi sku lên.
   return forms
+    .filter((form) => form.itemId.trim() && form.sku.trim())
     .map((form) => ({
       actualQty: parsePositiveNumber(form.actualQty, 0),
       expiryDate: optionalText(form.expiryDate),
       itemId: form.itemId.trim(),
       lotNumber: optionalText(form.lotNumber),
       note: optionalText(form.note),
-      sku: form.sku.trim(),
       unit: form.unit.trim() || "cái",
     }))
-    .filter((item) => item.itemId && item.sku && item.actualQty > 0);
+    .filter((item) => item.actualQty > 0);
 }
 
 function buildGoodsReceiptForms(
-  purchaseOrder: PurchaseOrder | undefined,
-  warehouseItemById: Map<string, WarehouseItem>,
+  purchaseOrder: ReceivingPurchaseOrder | undefined,
+  isPerishableByItemId: Map<string, boolean>,
 ): GoodsReceiptItemForm[] {
+  // itemName/sku/remainingQty đã có sẵn trong ReceivingPurchaseOrderItem (BE trả) — chỉ còn
+  // isPerishable là field cần tra riêng (WarehouseItem đầy đủ), dùng để bắt buộc mã lô/hạn dùng.
   return (
-    purchaseOrder?.items?.map((item) => {
-      const warehouseItem = warehouseItemById.get(item.itemId);
-      const remainingQty = (item as unknown as { remainingQty?: number }).remainingQty;
-      const actualQtyNumber =
-        remainingQty !== undefined && remainingQty > 0
-          ? remainingQty
-          : item.expectedQty;
-
-      return {
-        actualQty: String(actualQtyNumber),
-        expiryDate: "",
-        isPerishable: warehouseItem?.isPerishable ?? false,
-        itemId: item.itemId,
-        itemName:
-          (item as unknown as { itemName?: string }).itemName ??
-          warehouseItem?.name ??
-          item.sku,
-        lotNumber: "",
-        note: "",
-        sku: item.sku,
-        unit: item.unit,
-      };
-    }) ?? []
+    purchaseOrder?.items?.map((item) => ({
+      actualQty: String(
+        item.remainingQty > 0 ? item.remainingQty : item.expectedQty,
+      ),
+      expiryDate: "",
+      isPerishable: isPerishableByItemId.get(item.itemId) ?? false,
+      itemId: item.itemId,
+      itemName: item.itemName,
+      lotNumber: "",
+      note: "",
+      sku: item.sku,
+      unit: item.unit,
+    })) ?? []
   );
 }
 
@@ -357,8 +347,10 @@ export function PurchaseOrdersClient({
     }),
   });
 
+  // Chỉ cần khi ở tab "Phiếu nhập" (chọn PO trong dialog tạo GRN) — không tải song song
+  // ngay từ đầu khi user đang xem tab "Đơn mua".
   const receivingPurchaseOrdersQuery = useQuery({
-    enabled: canReadGoodsReceiptNotes,
+    enabled: canReadGoodsReceiptNotes && activeTab === "goods-receipts",
     queryFn: () => listReceivingPurchaseOrders({ limit: 100, page: 1 }),
     queryKey: ["purchase-orders", "receiving"],
   });
@@ -415,17 +407,8 @@ export function PurchaseOrdersClient({
     () => purchaseOrdersQuery.data?.data ?? [],
     [purchaseOrdersQuery.data?.data],
   );
-  const receivingPurchaseOrders = useMemo<PurchaseOrder[]>(
-    () =>
-      (receivingPurchaseOrdersQuery.data?.data ?? []).map((po) => ({
-        ...po,
-        supplierId: "",
-        status: "CONFIRMED" as const,
-        orderDate: "",
-        createdAt: "",
-        updatedAt: "",
-        items: (po.items ?? []).map((item) => ({ ...item, unitPrice: 0 })),
-      })),
+  const receivingPurchaseOrders = useMemo<ReceivingPurchaseOrder[]>(
+    () => receivingPurchaseOrdersQuery.data?.data ?? [],
     [receivingPurchaseOrdersQuery.data?.data],
   );
   const suppliers = useMemo(
@@ -458,62 +441,41 @@ export function PurchaseOrdersClient({
     () => allGrnsQuery.data?.data ?? [],
     [allGrnsQuery.data?.data],
   );
-  const warehouseItemIds = Array.from(
-    new Set([
-      ...purchaseOrders.flatMap((po) =>
-        (po.items ?? []).map((item) => item.itemId),
+  // isPerishable không có sẵn trong ReceivingPurchaseOrderItem (chỉ WarehouseItem đầy đủ mới
+  // có) — tra riêng, CHỈ cho item của PO đang chọn để tạo GRN (không phải toàn bộ PO/GRN đang
+  // hiển thị), giảm mạnh số lượng call so với trước.
+  const grnCandidateItemIds = Array.from(
+    new Set(
+      receivingPurchaseOrders.flatMap((po) =>
+        po.items.map((item) => item.itemId),
       ),
-      ...allGoodsReceiptNotes.flatMap((grn) =>
-        grn.items.map((item) => item.itemId),
-      ),
-    ]),
+    ),
   );
-  const warehouseItemQueries = useQueries({
-    queries: warehouseItemIds.map((itemId) => ({
-      enabled: canReadPurchaseOrders || canReadGoodsReceiptNotes,
+  const grnCandidateItemQueries = useQueries({
+    queries: grnCandidateItemIds.map((itemId) => ({
+      enabled: canCreateGoodsReceiptNote && grnDialogOpen,
       queryFn: () => getWarehouseItem(itemId),
       queryKey: ["stock-items", "detail", itemId],
     })),
   });
-  const warehouseItemById = useMemo(() => {
-    const entries = warehouseItemQueries
+  // useQueries trả mảng object MỚI mỗi render dù data không đổi — dùng chuỗi khóa ổn định
+  // (id:isPerishable) làm dependency thay vì mảng query, tránh useMemo/effect phụ thuộc nó
+  // chạy lại vô hạn (Map mới mỗi render → effect luôn thấy "đổi" → setState vô tận).
+  const isPerishableCacheKey = grnCandidateItemQueries
+    .map((q) => (q.data ? `${q.data.id}:${q.data.isPerishable}` : ""))
+    .join("|");
+  const isPerishableByItemId = useMemo(() => {
+    const entries = grnCandidateItemQueries
       .map((query) => query.data)
       .filter((item): item is WarehouseItem => Boolean(item))
-      .map((item) => [item.id, item] as const);
+      .map((item) => [item.id, item.isPerishable] as const);
 
     return new Map(entries);
-  }, [warehouseItemQueries]);
-  const supplierIdsMissingFromList = useMemo(() => {
-    const listedIds = new Set(suppliers.map((supplier) => supplier.id));
-    return Array.from(
-      new Set(
-        purchaseOrders
-          .map((purchaseOrder) => purchaseOrder.supplierId)
-          .filter((supplierId) => supplierId && !listedIds.has(supplierId)),
-      ),
-    );
-  }, [purchaseOrders, suppliers]);
-
-  const missingSupplierQueries = useQueries({
-    queries: supplierIdsMissingFromList.map((supplierId) => ({
-      enabled: canReadPurchaseOrders,
-      queryFn: () => getSupplier(supplierId),
-      queryKey: purchaseKeys.supplierDetail(supplierId),
-    })),
-  });
-
-  const supplierById = useMemo(() => {
-    const map = new Map(suppliers.map((supplier) => [supplier.id, supplier]));
-    missingSupplierQueries.forEach((query) => {
-      if (query.data) {
-        map.set(query.data.id, query.data);
-      }
-    });
-    return map;
-  }, [missingSupplierQueries, suppliers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPerishableCacheKey]);
 
   const grnPurchaseOrderSupplierLabel = grnPurchaseOrder
-    ? getPurchaseOrderSupplierLabel(grnPurchaseOrder, supplierById)
+    ? getPurchaseOrderSupplierLabel(grnPurchaseOrder)
     : "";
 
   const createMutation = useMutation({
@@ -614,9 +576,11 @@ export function PurchaseOrdersClient({
   }
 
   function openGrnDialog() {
-    const purchaseOrder = receivingPurchaseOrders[0] ?? purchaseOrders[0];
+    const purchaseOrder = receivingPurchaseOrders[0];
     setGrnPurchaseOrderId(purchaseOrder?.id ?? "");
-    setGrnItemForms(buildGoodsReceiptForms(purchaseOrder, warehouseItemById));
+    setGrnItemForms(
+      buildGoodsReceiptForms(purchaseOrder, isPerishableByItemId),
+    );
     setGrnImages([]);
     setGrnDialogOpen(true);
   }
@@ -629,22 +593,42 @@ export function PurchaseOrdersClient({
       if (!exists) {
         const defaultPo = receivingPurchaseOrders[0];
         setGrnPurchaseOrderId(defaultPo.id);
-        setGrnItemForms(buildGoodsReceiptForms(defaultPo, warehouseItemById));
+        setGrnItemForms(
+          buildGoodsReceiptForms(defaultPo, isPerishableByItemId),
+        );
       }
     }
   }, [
     grnDialogOpen,
     grnPurchaseOrderId,
     receivingPurchaseOrders,
-    warehouseItemById,
+    isPerishableByItemId,
   ]);
+
+  // getWarehouseItem (isPerishableByItemId) chỉ bắt đầu SAU khi dialog mở (enabled: grnDialogOpen)
+  // nên form ban đầu luôn có isPerishable=false — vá lại field này khi query resolve xong,
+  // KHÔNG rebuild toàn bộ form (tránh xóa lotNumber/expiryDate/note user đã gõ tay). Đây là
+  // effect hợp lệ theo React docs (subscribe cập nhật từ external cache/query, không phải state
+  // suy diễn thuần) — cùng pattern với effect phía trên, chấp nhận cảnh báo set-state-in-effect.
+  useEffect(() => {
+    if (!grnDialogOpen || isPerishableByItemId.size === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setGrnItemForms((current) =>
+      current.map((item) => ({
+        ...item,
+        isPerishable: isPerishableByItemId.get(item.itemId) ?? item.isPerishable,
+      })),
+    );
+  }, [grnDialogOpen, isPerishableByItemId]);
 
   function handleGrnPurchaseOrderChange(purchaseOrderId: string) {
     const purchaseOrder = receivingPurchaseOrders.find(
       (candidate) => candidate.id === purchaseOrderId,
     );
     setGrnPurchaseOrderId(purchaseOrderId);
-    setGrnItemForms(buildGoodsReceiptForms(purchaseOrder, warehouseItemById));
+    setGrnItemForms(
+      buildGoodsReceiptForms(purchaseOrder, isPerishableByItemId),
+    );
   }
 
   function updateItemForm(index: number, next: PurchaseOrderItemForm) {
@@ -800,7 +784,6 @@ export function PurchaseOrdersClient({
                   <PurchaseOrderTable
                     purchaseOrders={purchaseOrders}
                     selectedId={activePurchaseOrderId}
-                    supplierById={supplierById}
                     onSelect={(purchaseOrder) => {
                       setSelectedPurchaseOrderId(purchaseOrder.id);
                       setPurchaseDetailOpen(true);
@@ -861,14 +844,6 @@ export function PurchaseOrdersClient({
               confirmGrnMutation.mutate(goodsReceiptNoteId)
             }
             onCreate={openGrnDialog}
-            purchaseOrderById={
-              useMemo(() => {
-                const map = new Map<string, PurchaseOrder>();
-                receivingPurchaseOrders.forEach((po) => map.set(po.id, po));
-                purchaseOrders.forEach((po) => map.set(po.id, po));
-                return map;
-              }, [purchaseOrders, receivingPurchaseOrders])
-            }
             onSelect={setSelectedGoodsReceiptNote}
           />
         </TabsContent>
@@ -1020,11 +995,7 @@ export function PurchaseOrdersClient({
               <PurchaseOrderDetail
                 detail={detail}
                 loading={detailQuery.isFetching}
-                supplierLabel={getPurchaseOrderSupplierLabel(
-                  detail,
-                  supplierById,
-                )}
-                warehouseItemById={warehouseItemById}
+                supplierLabel={getPurchaseOrderSupplierLabel(detail)}
               />
             ) : null}
           </div>
@@ -1072,7 +1043,7 @@ export function PurchaseOrdersClient({
               ) : (
                 receivingPurchaseOrders.map((purchaseOrder) => (
                   <SelectItem key={purchaseOrder.id} value={purchaseOrder.id}>
-                    {getPurchaseOrderSelectLabel(purchaseOrder, supplierById)}
+                    {getPurchaseOrderSelectLabel(purchaseOrder)}
                   </SelectItem>
                 ))
               )}
@@ -1159,27 +1130,11 @@ export function PurchaseOrdersClient({
       {selectedGoodsReceiptNote ? (
         <GoodsReceiptNoteDetailDialog
           grn={selectedGoodsReceiptNote}
-          itemById={warehouseItemById}
           onOpenChange={(open) => {
             if (!open) {
               setSelectedGoodsReceiptNote(undefined);
             }
           }}
-          purchaseOrder={purchaseOrders.find(
-            (po) => po.id === selectedGoodsReceiptNote.purchaseOrderId,
-          )}
-          supplierLabel={
-            purchaseOrders.find(
-              (po) => po.id === selectedGoodsReceiptNote.purchaseOrderId,
-            )
-              ? getPurchaseOrderSupplierLabel(
-                  purchaseOrders.find(
-                    (po) => po.id === selectedGoodsReceiptNote.purchaseOrderId,
-                  )!,
-                  supplierById,
-                )
-              : undefined
-          }
         />
       ) : null}
     </div>
@@ -1216,12 +1171,10 @@ function PurchaseOrderTable({
   onSelect,
   purchaseOrders,
   selectedId,
-  supplierById,
 }: {
   onSelect: (purchaseOrder: PurchaseOrder) => void;
   purchaseOrders: PurchaseOrder[];
   selectedId: string;
-  supplierById: Map<string, Supplier>;
 }) {
   return (
     <Table scrollable>
@@ -1251,7 +1204,7 @@ function PurchaseOrderTable({
                 {purchaseOrder.poNumber}
               </TableCell>
               <TableCell>
-                {getPurchaseOrderSupplierLabel(purchaseOrder, supplierById)}
+                {getPurchaseOrderSupplierLabel(purchaseOrder)}
               </TableCell>
               <TableCell>
                 <StatusBadge tone={statusTone(purchaseOrder.status)}>
@@ -1407,12 +1360,10 @@ function PurchaseOrderDetail({
   detail,
   loading,
   supplierLabel,
-  warehouseItemById,
 }: {
   detail: PurchaseOrder;
   loading: boolean;
   supplierLabel: string;
-  warehouseItemById: Map<string, WarehouseItem>;
 }) {
   const items = detail.items ?? [];
   const totalQty = items.reduce((sum, item) => sum + item.expectedQty, 0);
@@ -1508,7 +1459,7 @@ function PurchaseOrderDetail({
                     {index + 1}
                   </TableCell>
                   <TableCell className="font-medium">
-                    {warehouseItemById.get(item.itemId)?.name ?? item.sku}
+                    {item.itemName ?? item.sku}
                   </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">
                     {item.sku}

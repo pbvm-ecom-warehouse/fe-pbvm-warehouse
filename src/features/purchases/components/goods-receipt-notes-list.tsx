@@ -33,11 +33,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { StatusBadge } from "@/features/admin-shell/components/operations-ui";
-import type { WarehouseItem } from "@/features/products/services/warehouse-items.service";
 import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
 
 import type { GoodsReceiptNote } from "../services/goods-receipt-note.service";
-import type { PurchaseOrder } from "../services/purchase-order.service";
 import { GoodsReceiptPutawayPanel } from "./goods-receipt-putaway-panel";
 
 function formatDate(value?: string | null) {
@@ -63,7 +61,6 @@ export function GoodsReceiptNotesList({
   onConfirm,
   onCreate,
   onSelect,
-  purchaseOrderById,
 }: {
   approveBusyId?: string;
   canApprove: boolean;
@@ -76,7 +73,6 @@ export function GoodsReceiptNotesList({
   onConfirm: (grnId: string) => void;
   onCreate: () => void;
   onSelect: (grn: GoodsReceiptNote) => void;
-  purchaseOrderById: Map<string, PurchaseOrder>;
 }) {
   return (
     <Card>
@@ -131,8 +127,7 @@ export function GoodsReceiptNotesList({
                       {grn.grnNumber}
                     </TableCell>
                     <TableCell>
-                      {purchaseOrderById.get(grn.purchaseOrderId)?.poNumber ??
-                        grn.purchaseOrderId}
+                      {grn.purchaseOrderNumber ?? grn.purchaseOrderId}
                     </TableCell>
                     <TableCell>
                       <StatusBadge tone={statusTone(grn.status)}>
@@ -204,16 +199,10 @@ export function GoodsReceiptNotesList({
 
 export function GoodsReceiptNoteDetailDialog({
   grn,
-  itemById,
   onOpenChange,
-  purchaseOrder,
-  supplierLabel,
 }: {
   grn: GoodsReceiptNote;
-  itemById: Map<string, WarehouseItem>;
   onOpenChange: (open: boolean) => void;
-  purchaseOrder?: PurchaseOrder;
-  supplierLabel?: string;
 }) {
   return (
     <Dialog open onOpenChange={onOpenChange}>
@@ -226,16 +215,9 @@ export function GoodsReceiptNoteDetailDialog({
         <div className="grid gap-3 text-sm sm:grid-cols-3">
           <Info
             label="Đơn mua"
-            value={
-              grn.purchaseOrderNumber ??
-              purchaseOrder?.poNumber ??
-              grn.purchaseOrderId
-            }
+            value={grn.purchaseOrderNumber ?? grn.purchaseOrderId}
           />
-          <Info
-            label="NCC"
-            value={grn.supplierName ?? supplierLabel ?? "Chưa xác định"}
-          />
+          <Info label="NCC" value={grn.supplierName ?? "Chưa xác định"} />
           <Info label="Trạng thái" value={statusLabel(grn.status)} />
           <Info label="Ngày tạo" value={formatDate(grn.createdAt)} />
           <Info label="Ngày cập nhật" value={formatDate(grn.updatedAt)} />
@@ -257,7 +239,7 @@ export function GoodsReceiptNoteDetailDialog({
             {grn.items.map((item) => (
               <TableRow key={`${item.itemId}-${item.sku}-${item.lotNumber}`}>
                 <TableCell className="font-medium">
-                  {itemById.get(item.itemId)?.name ?? item.sku}
+                  {item.itemName ?? item.sku}
                 </TableCell>
                 <TableCell>{item.sku}</TableCell>
                 <TableCell>{item.actualQty}</TableCell>
@@ -273,7 +255,7 @@ export function GoodsReceiptNoteDetailDialog({
         <div className="space-y-2">
           <h3 className="text-sm font-semibold">
             Ảnh minh chứng{" "}
-            {purchaseOrder ? `cho ${purchaseOrder.poNumber}` : "nhận hàng"}
+            {grn.purchaseOrderNumber ? `cho ${grn.purchaseOrderNumber}` : "nhận hàng"}
           </h3>
           <EvidenceImageGallery
             emptyLabel="Chưa có ảnh minh chứng"

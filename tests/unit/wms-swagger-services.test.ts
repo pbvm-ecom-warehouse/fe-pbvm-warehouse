@@ -464,8 +464,19 @@ describe("Swagger-backed WMS services", () => {
         status: "DRAFT",
       },
     });
+    // sku KHÔNG được gửi lên — BE tự denormalize từ PO theo itemId (ValidationPipe
+    // whitelist:true, forbidNonWhitelisted:true sẽ 400 nếu item còn field sku).
     expect(mockedPost).toHaveBeenCalledWith("/goods-receipt-notes", {
-      items: grn.items,
+      items: [
+        {
+          actualQty: 10,
+          itemId: "item-1",
+          unit: "cái",
+          lotNumber: undefined,
+          expiryDate: undefined,
+          note: undefined,
+        },
+      ],
       purchaseOrderId: "po-1",
     });
     expect(mockedPost).toHaveBeenCalledWith(
