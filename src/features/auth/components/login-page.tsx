@@ -1,13 +1,12 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, LoaderCircle, LogIn, ShieldCheck } from "lucide-react";
+import { LoaderCircle, LogIn, ShieldCheck } from "lucide-react";
 import { isAxiosError } from "axios";
 import { toast } from "sonner";
 
 import { WmsLogo } from "@/components/brand/wms-logo";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,10 +19,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSessionUser } from "@/hooks/use-session-user";
 import { getApiErrorMessage } from "@/lib/api-contract";
-import { ROLE_LABELS } from "@/lib/rbac";
 import { useAuthStore } from "@/stores/auth-store";
 
-import { changePassword, login, logout } from "../services/auth.service";
+import { changePassword, login } from "../services/auth.service";
 import { changePasswordSchema } from "../schemas/change-password.schema";
 import { loginSchema } from "../schemas/login.schema";
 
@@ -47,8 +45,6 @@ export function LoginPageClient() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [needsPasswordChange, setNeedsPasswordChange] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const currentRoles = useMemo(() => user?.roles ?? [], [user?.roles]);
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -136,19 +132,21 @@ export function LoginPageClient() {
     }
   }
 
-  async function handleLogout() {
-    setErrorMessage(null);
-    await logout();
-    router.refresh();
-  }
+  useEffect(() => {
+    if (user && !needsPasswordChange) {
+      router.replace("/dashboard");
+    }
+  }, [needsPasswordChange, router, user]);
 
-  if (!hasHydrated) {
+  if (!hasHydrated || (user && !needsPasswordChange)) {
     return (
       <main className="grid min-h-screen place-items-center bg-background px-4 py-10">
         <Card className="w-full max-w-md">
           <CardContent className="flex items-center justify-center gap-3 py-12 text-sm text-muted-foreground">
             <LoaderCircle className="size-4 animate-spin" />
-            Đang khởi tạo phiên WMS...
+            {!hasHydrated
+              ? "Đang khởi tạo phiên WMS..."
+              : "Đang chuyển vào WMS..."}
           </CardContent>
         </Card>
       </main>
@@ -226,57 +224,6 @@ export function LoginPageClient() {
                 Cập nhật mật khẩu
               </Button>
             </form>
-          </CardContent>
-        </Card>
-      </main>
-    );
-  }
-
-  if (user) {
-    return (
-      <main className="grid min-h-screen place-items-center bg-background px-4 py-10">
-        <Card className="w-full max-w-xl">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-2xl">
-              <ShieldCheck className="size-5 text-primary" />
-              Phiên WMS hiện tại
-            </CardTitle>
-            <CardDescription>
-              Bạn đã có phiên đăng nhập. Có thể vào trang tổng quan hoặc đăng
-              xuất để đổi tài khoản.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="rounded-lg border border-border/70 bg-muted/25 p-4">
-              <div className="text-sm font-semibold">{user.name}</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                Kho trung tâm · Đơn vị: {user.tenantId}
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {currentRoles.map((role) => (
-                  <Badge key={role} variant="outline">
-                    {ROLE_LABELS[role]}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button
-                className="sm:flex-1"
-                onClick={() => router.replace("/dashboard")}
-              >
-                <ArrowRight data-icon="inline-start" />
-                Vào trang tổng quan
-              </Button>
-              <Button
-                className="sm:flex-1"
-                onClick={handleLogout}
-                variant="outline"
-              >
-                Đăng xuất
-              </Button>
-            </div>
           </CardContent>
         </Card>
       </main>

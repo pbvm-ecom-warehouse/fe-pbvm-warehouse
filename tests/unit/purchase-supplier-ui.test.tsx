@@ -572,7 +572,7 @@ describe("purchase and supplier UX", () => {
 
     expect(screen.getByText("Đơn mua", { selector: "label" })).toBeVisible();
     expect(
-      screen.getByText("Tên mặt hàng", { selector: "label" }),
+      await screen.findByText("Tên mặt hàng", { selector: "label" }),
     ).toBeVisible();
     expect(screen.getByLabelText("Tên mặt hàng phiếu nhập dòng 1")).toHaveValue(
       "Ly nhựa 500 ml",
@@ -663,7 +663,7 @@ describe("purchase and supplier UX", () => {
     expect((await screen.findAllByText("Số đơn mua")).length).toBeGreaterThan(
       0,
     );
-    expect(screen.getAllByText("PO-001").length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("PO-001")).length).toBeGreaterThan(0);
     expect(screen.getByText("NCC")).toBeInTheDocument();
     expect(screen.getAllByText(/Công ty Minh Long/).length).toBeGreaterThan(0);
     expect(screen.getByText("Ảnh minh chứng cho PO-001")).toBeInTheDocument();

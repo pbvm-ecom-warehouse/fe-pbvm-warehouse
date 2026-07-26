@@ -78,4 +78,23 @@ describe("login page", () => {
     expect(await screen.findByText("Đổi mật khẩu tạm")).toBeInTheDocument();
     expect(screen.getByLabelText("Mật khẩu hiện tại")).toHaveValue("");
   });
+
+  it("redirects straight to dashboard when a valid session already exists", () => {
+    useAuthStore.setState({
+      hasHydrated: true,
+      user: {
+        id: "admin-1",
+        name: "Seed Admin",
+        roles: ["ADMIN"],
+        tenantId: "demo-tenant",
+        type: "user",
+      },
+    });
+
+    render(<LoginPageClient />);
+
+    expect(screen.getByText("Đang chuyển vào WMS...")).toBeInTheDocument();
+    expect(screen.queryByText("Phiên WMS hiện tại")).not.toBeInTheDocument();
+    expect(router.replace).toHaveBeenCalledWith("/dashboard");
+  });
 });

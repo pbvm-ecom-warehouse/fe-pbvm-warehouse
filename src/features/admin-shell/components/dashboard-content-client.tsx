@@ -28,6 +28,7 @@ import { listWarehouseItems } from "@/features/products/services/warehouse-items
 import { listPutawayTasks } from "@/features/warehouse-navigation/services/putaway-task.service";
 import {
   getDefaultRoleFocus,
+  hasAnyRole,
   ROLE_DESCRIPTIONS,
   ROLE_LABELS,
   type WmsRole,
@@ -216,28 +217,52 @@ export function DashboardContentClient() {
       ? selectedRole
       : getDefaultRoleFocus(userRoles);
 
+  const canViewProducts = hasAnyRole(userRoles, ["ADMIN", "MANAGER"]);
+  const canViewPurchaseOrders = hasAnyRole(userRoles, ["ADMIN", "MANAGER"]);
+  const canViewReceiving = hasAnyRole(userRoles, [
+    "ADMIN",
+    "MANAGER",
+    "RECEIVER",
+  ]);
+  const canViewGoodsIssues = hasAnyRole(userRoles, [
+    "ADMIN",
+    "MANAGER",
+    "PICKER",
+  ]);
+  const canViewPrintJobs = hasAnyRole(userRoles, [
+    "ADMIN",
+    "MANAGER",
+    "PRINTER",
+  ]);
+
   const productsQuery = useQuery({
+    enabled: canViewProducts,
     queryFn: () => listWarehouseItems({ isActive: "ALL", limit: 100, page: 1 }),
     queryKey: ["dashboard", "stock-items"],
   });
   const purchaseOrdersQuery = useQuery({
+    enabled: canViewPurchaseOrders,
     queryFn: () => listPurchaseOrders({ limit: 100, page: 1, status: "ALL" }),
     queryKey: ["dashboard", "purchase-orders"],
   });
   const grnsQuery = useQuery({
+    enabled: canViewReceiving,
     queryFn: () =>
       listGoodsReceiptNotes({ limit: 100, page: 1, status: "ALL" }),
     queryKey: ["dashboard", "goods-receipt-notes"],
   });
   const putawayTasksQuery = useQuery({
+    enabled: canViewReceiving,
     queryFn: () => listPutawayTasks({ limit: 100, page: 1, status: "ALL" }),
     queryKey: ["dashboard", "putaway-tasks"],
   });
   const goodsIssuesQuery = useQuery({
+    enabled: canViewGoodsIssues,
     queryFn: () => listGoodsIssues({ limit: 100, page: 1, status: "ALL" }),
     queryKey: ["dashboard", "goods-issues"],
   });
   const printJobsQuery = useQuery({
+    enabled: canViewPrintJobs,
     queryFn: () => listPrintJobs({ limit: 100, page: 1, status: "ALL" }),
     queryKey: ["dashboard", "print-jobs"],
   });
@@ -479,4 +504,3 @@ function WorkQueueCard({
     </Link>
   );
 }
-

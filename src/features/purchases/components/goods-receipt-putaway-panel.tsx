@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Barcode, LoaderCircle, MapPinned, Save } from "lucide-react";
+import { LoaderCircle, MapPinned, Save } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -60,7 +60,7 @@ export function GoodsReceiptPutawayPanel({ grn }: { grn: GoodsReceiptNote }) {
       (tasksQuery.data?.data ?? []).flatMap((task) =>
         task.items
           .filter((line) => (line.remainingQty ?? line.quantity) > 0)
-          .map((line, index) => {
+          .map((line) => {
             const grnItem = grn.items.find(
               (item) => item.itemId === line.itemId,
             );

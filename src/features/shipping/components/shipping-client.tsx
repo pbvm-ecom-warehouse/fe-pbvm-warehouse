@@ -8,6 +8,7 @@ import {
   LoaderCircle,
   Pencil,
   RefreshCw,
+  RotateCcw,
   Route,
   Truck,
 } from "lucide-react";
@@ -45,6 +46,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
   EmptyState,
   EntityDrawer,
@@ -57,6 +59,8 @@ import { useSessionUser } from "@/hooks/use-session-user";
 import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
+import { createGoodsReturn } from "@/features/goods-returns/services/goods-return.service";
+import { listWarehouseItems } from "@/features/products/services/warehouse-items.service";
 
 import {
   assignShipmentCarrier,
@@ -108,6 +112,12 @@ const defaultCarrierForm = {
   status: "ACTIVE" as CarrierStatus,
 };
 
+const defaultReturnForm = {
+  itemId: "",
+  note: "",
+  quantity: "1",
+};
+
 function statusTone(status: ShipmentStatus | CarrierStatus) {
   if (status === "DELIVERED" || status === "ACTIVE") return "success" as const;
   if (status === "FAILED" || status === "RETURNED" || status === "INACTIVE") {
@@ -127,6 +137,16 @@ function toContactInfo(phone: string, email: string) {
     ...(phone.trim() ? { phone: phone.trim() } : {}),
   };
   return Object.keys(contactInfo).length ? contactInfo : undefined;
+}
+
+function optionalText(value: string) {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function parsePositiveInteger(value: string) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
 }
 
 function toCarrierForm(carrier?: Carrier) {
@@ -156,10 +176,13 @@ export function ShippingClient() {
   ]);
   const canOperateShipments = hasAnyRole(user?.roles, ["ADMIN", "SHIPPER"]);
   const canManageCarriers = hasAnyRole(user?.roles, ["ADMIN", "MANAGER"]);
+  const canCreateGoodsReturn = hasAnyRole(user?.roles, ["ADMIN", "RECEIVER"]);
+  const [activeTab, setActiveTab] = useState("shipments");
   const [selectedShipmentId, setSelectedShipmentId] = useState("");
   const [assignOpen, setAssignOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [carrierOpen, setCarrierOpen] = useState(false);
+  const [returnOpen, setReturnOpen] = useState(false);
   const [editingCarrier, setEditingCarrier] = useState<Carrier | null>(null);
   const [detailCarrier, setDetailCarrier] = useState<Carrier | null>(null);
   const [assignForm, setAssignForm] = useState({
@@ -173,6 +196,7 @@ export function ShippingClient() {
   });
   const [statusImages, setStatusImages] = useState<File[]>([]);
   const [carrierForm, setCarrierForm] = useState(defaultCarrierForm);
+  const [returnForm, setReturnForm] = useState(defaultReturnForm);
 
   const shipmentsQuery = useQuery({
     enabled: canViewShipping,
@@ -180,9 +204,14 @@ export function ShippingClient() {
     queryKey: ["shipping", "shipments"],
   });
   const carriersQuery = useQuery({
-    enabled: canViewShipping,
+    enabled: canViewShipping && (activeTab === "carriers" || assignOpen),
     queryFn: () => listCarriers({ limit: PAGE_SIZE, page: 1 }),
     queryKey: ["shipping", "carriers"],
+  });
+  const returnItemsQuery = useQuery({
+    enabled: canCreateGoodsReturn && returnOpen,
+    queryFn: () => listWarehouseItems({ isActive: true, limit: 100, page: 1 }),
+    queryKey: ["shipping", "return-items"],
   });
   const shipments = useMemo(
     () => shipmentsQuery.data?.data ?? [],
@@ -199,6 +228,7 @@ export function ShippingClient() {
     () => carriers.filter((carrier) => carrier.status === "ACTIVE"),
     [carriers],
   );
+  const returnItems = returnItemsQuery.data?.data ?? [];
   const nextStatuses = selectedShipment
     ? nextShipmentStatuses[selectedShipment.shipmentStatus]
     : [];
@@ -234,6 +264,27 @@ export function ShippingClient() {
       toast.success("Đã cập nhật trạng thái giao hàng");
     },
   });
+  const returnMutation = useMutation({
+    mutationFn: () =>
+      createGoodsReturn({
+        items: [
+          {
+            itemId: returnForm.itemId,
+            quantity: parsePositiveInteger(returnForm.quantity),
+          },
+        ],
+        note: optionalText(returnForm.note),
+        orderId: optionalText(selectedShipment?.orderId ?? ""),
+      }),
+    onError: (error) => toast.error(formatError(error)),
+    onSuccess: () => {
+      setReturnOpen(false);
+      setReturnForm(defaultReturnForm);
+      void queryClient.invalidateQueries({ queryKey: ["goods-returns"] });
+      toast.success("Đã tạo phiếu hoàn hàng");
+    },
+  });
+
   const carrierMutation = useMutation({
     mutationFn: () => {
       const contactInfo = toContactInfo(carrierForm.phone, carrierForm.email);
@@ -275,6 +326,19 @@ export function ShippingClient() {
     setAssignOpen(true);
   }
 
+  function openReturnDialog() {
+    setReturnForm({
+      itemId: "",
+      note: selectedShipment?.failReason
+        ? `Hoàn từ vận đơn ${selectedShipment.id}: ${selectedShipment.failReason}`
+        : selectedShipment
+          ? `Hoàn từ vận đơn ${selectedShipment.id}`
+          : "",
+      quantity: "1",
+    });
+    setReturnOpen(true);
+  }
+
   function openStatusDialog() {
     setStatusForm({
       failReason: "",
@@ -303,6 +367,15 @@ export function ShippingClient() {
     event.preventDefault();
     if (!statusForm.status) return;
     statusMutation.mutate();
+  }
+
+  function handleReturnCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedShipment || !returnForm.itemId) {
+      toast.error("Cần chọn mặt hàng hoàn.");
+      return;
+    }
+    returnMutation.mutate();
   }
 
   function handleCarrierSave(event: FormEvent<HTMLFormElement>) {
@@ -344,7 +417,7 @@ export function ShippingClient() {
         </PermissionNotice>
       ) : null}
 
-      <Tabs defaultValue="shipments">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="h-9 rounded-lg border bg-card p-1">
           <TabsTrigger className="px-3" value="shipments">
             <Route data-icon="inline-start" />
@@ -375,7 +448,9 @@ export function ShippingClient() {
               <ShipmentPanel
                 canAdvance={nextStatuses.length > 0}
                 canOperate={canOperateShipments}
+                canCreateReturn={canCreateGoodsReturn}
                 onAssign={openAssignDialog}
+                onCreateReturn={openReturnDialog}
                 onUpdateStatus={openStatusDialog}
                 shipment={selectedShipment}
               />
@@ -593,6 +668,89 @@ export function ShippingClient() {
         </DialogContent>
       </Dialog>
 
+      <Dialog onOpenChange={setReturnOpen} open={returnOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Tạo phiếu hoàn hàng</DialogTitle>
+            <DialogDescription>
+              {selectedShipment
+                ? `Đơn ${selectedShipment.orderId} · chọn mặt hàng cần nhập hoàn.`
+                : "Chọn mặt hàng cần nhập hoàn."}
+            </DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={handleReturnCreate}>
+            <div className="space-y-2">
+              <Label>Mặt hàng hoàn</Label>
+              <Select
+                onValueChange={(itemId) =>
+                  setReturnForm((form) => ({ ...form, itemId }))
+                }
+                value={returnForm.itemId}
+              >
+                <SelectTrigger aria-label="Mặt hàng hoàn">
+                  <SelectValue placeholder="Chọn mặt hàng" />
+                </SelectTrigger>
+                <SelectContent>
+                  {returnItems.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.sku} · {item.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="shipment-return-quantity">Số lượng hoàn</Label>
+              <Input
+                id="shipment-return-quantity"
+                min={1}
+                onChange={(event) =>
+                  setReturnForm((form) => ({
+                    ...form,
+                    quantity: event.target.value,
+                  }))
+                }
+                type="number"
+                value={returnForm.quantity}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="shipment-return-note">Ghi chú</Label>
+              <Textarea
+                id="shipment-return-note"
+                onChange={(event) =>
+                  setReturnForm((form) => ({
+                    ...form,
+                    note: event.target.value,
+                  }))
+                }
+                value={returnForm.note}
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                disabled={
+                  returnMutation.isPending ||
+                  returnItemsQuery.isLoading ||
+                  !returnForm.itemId
+                }
+                type="submit"
+              >
+                {returnMutation.isPending ? (
+                  <LoaderCircle
+                    className="animate-spin"
+                    data-icon="inline-start"
+                  />
+                ) : (
+                  <RotateCcw data-icon="inline-start" />
+                )}
+                Tạo phiếu hoàn
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <Dialog onOpenChange={setCarrierOpen} open={carrierOpen}>
         <DialogContent size="md">
           <DialogHeader>
@@ -786,14 +944,18 @@ function ShipmentTable({
 }
 function ShipmentPanel({
   canAdvance,
+  canCreateReturn,
   canOperate,
   onAssign,
+  onCreateReturn,
   onUpdateStatus,
   shipment,
 }: {
   canAdvance: boolean;
+  canCreateReturn: boolean;
   canOperate: boolean;
   onAssign: () => void;
+  onCreateReturn: () => void;
   onUpdateStatus: () => void;
   shipment: Shipment | undefined;
 }) {
@@ -857,20 +1019,31 @@ function ShipmentPanel({
             ))}
           </div>
         ) : null}
-        {canOperate ? (
+        {canOperate || canCreateReturn ? (
           <div className="grid gap-2 border-t pt-4">
-            <Button onClick={onAssign} type="button" variant="outline">
-              <Truck data-icon="inline-start" />
-              Gán hãng và mã vận đơn
-            </Button>
-            <Button
-              disabled={!canAdvance}
-              onClick={onUpdateStatus}
-              type="button"
-            >
-              <Route data-icon="inline-start" />
-              Cập nhật trạng thái
-            </Button>
+            {canOperate ? (
+              <>
+                <Button onClick={onAssign} type="button" variant="outline">
+                  <Truck data-icon="inline-start" />
+                  Gán hãng và mã vận đơn
+                </Button>
+                <Button
+                  disabled={!canAdvance}
+                  onClick={onUpdateStatus}
+                  type="button"
+                >
+                  <Route data-icon="inline-start" />
+                  Cập nhật trạng thái
+                </Button>
+              </>
+            ) : null}
+            {canCreateReturn &&
+            ["FAILED", "RETURNING"].includes(shipment.shipmentStatus) ? (
+              <Button onClick={onCreateReturn} type="button" variant="outline">
+                <RotateCcw data-icon="inline-start" />
+                Tạo phiếu hoàn
+              </Button>
+            ) : null}
           </div>
         ) : (
           <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">

@@ -256,6 +256,11 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
   const canCreate = hasAnyRole(user?.roles, ["ADMIN", "MANAGER"]);
   const canCount = hasAnyRole(user?.roles, ["ADMIN", "COUNTER"]);
   const canApprove = hasAnyRole(user?.roles, ["ADMIN", "MANAGER"]);
+  const canCreateScrap = hasAnyRole(user?.roles, [
+    "ADMIN",
+    "COUNTER",
+    "RECEIVER",
+  ]);
   const [statusFilter, setStatusFilter] = useState<StockCountStatus | "ALL">(
     "ALL",
   );
@@ -267,6 +272,9 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
   const [countForm, setCountForm] = useState(defaultCountForm);
   const [countImages, setCountImages] = useState<File[]>([]);
   const [approveReason, setApproveReason] = useState("");
+  const [scrapTarget, setScrapTarget] = useState<StockCountItem | null>(null);
+  const [scrapForm, setScrapForm] = useState(defaultScrapForm);
+  const [scrapImages, setScrapImages] = useState<File[]>([]);
 
   const listQuery = useQuery({
     enabled: canUseApi,
@@ -288,15 +296,14 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
   );
   const total = listQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const activeId = selectedId || stockCounts[0]?.id || "";
+  const activeId = selectedId;
 
   const detailQuery = useQuery({
     enabled: canUseApi && Boolean(activeId),
     queryFn: () => getStockCount(activeId),
     queryKey: stockCountKeys.detail(activeId),
   });
-  const detail =
-    detailQuery.data ?? stockCounts.find((item) => item.id === activeId);
+  const detail = detailQuery.data;
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -343,6 +350,31 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
     },
   });
 
+  const scrapMutation = useMutation({
+    mutationFn: () =>
+      createScrapNote({
+        itemImages: [scrapImages],
+        items: [
+          {
+            itemId: requiredText(scrapForm.itemId),
+            lotId: optionalText(scrapForm.lotId),
+            quantity: parsePositiveNumber(scrapForm.quantity),
+            reason: requiredText(scrapForm.reason),
+            shelfId: requiredText(scrapForm.shelfId),
+          },
+        ],
+        note: optionalText(scrapForm.note),
+      }),
+    onError: (error) => toast.error(formatError(error)),
+    onSuccess: () => {
+      setScrapTarget(null);
+      setScrapForm(defaultScrapForm);
+      setScrapImages([]);
+      void queryClient.invalidateQueries({ queryKey: ["scrap-notes"] });
+      toast.success("Đã tạo phiếu hủy");
+    },
+  });
+
   const approveMutation = useMutation({
     mutationFn: (stockCountId: string) =>
       approveStockCount(stockCountId, { reason: optionalText(approveReason) }),
@@ -374,6 +406,36 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
       reason: item.reason ?? "",
       shelfId: item.shelfId,
     });
+  }
+
+  function openScrapDialog(item: StockCountItem) {
+    const shortage =
+      typeof item.delta === "number" && item.delta < 0
+        ? Math.abs(item.delta)
+        : 1;
+    setScrapTarget(item);
+    setScrapImages([]);
+    setScrapForm({
+      itemId: item.itemId,
+      lotId: item.lotId ?? "",
+      note: activeId ? `Tạo từ phiếu kiểm ${activeId}` : "",
+      quantity: String(shortage),
+      reason: "",
+      shelfId: item.shelfId,
+    });
+  }
+
+  function handleScrapCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (
+      !scrapForm.itemId.trim() ||
+      !scrapForm.shelfId.trim() ||
+      !scrapForm.reason.trim()
+    ) {
+      toast.error("Cần nhập mặt hàng, vị trí và lý do hủy.");
+      return;
+    }
+    scrapMutation.mutate();
   }
 
   function handleCount(event: FormEvent<HTMLFormElement>) {
@@ -515,10 +577,104 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
           onApprove={() => approveMutation.mutate(detail.id)}
           onApproveReasonChange={setApproveReason}
           onCount={openCountDialog}
+          canCreateScrap={canCreateScrap}
+          onCreateScrap={openScrapDialog}
         />
       ) : (
         <EmptyState title="Chọn phiếu kiểm để xem chi tiết" />
       )}
+
+      <Dialog
+        open={Boolean(scrapTarget)}
+        onOpenChange={(open) => !open && setScrapTarget(null)}
+      >
+        <DialogContent size="lg" className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Tạo phiếu hủy hàng</DialogTitle>
+            <DialogDescription>
+              {scrapTarget?.sku ?? "Dòng kiểm"} · dữ liệu đã lấy từ phiếu kiểm.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={handleScrapCreate}>
+            <div className="grid gap-3 md:grid-cols-2">
+              <TextField
+                id="stock-count-scrap-item"
+                label="Mã mặt hàng"
+                value={scrapForm.itemId}
+                onChange={(itemId) =>
+                  setScrapForm((current) => ({ ...current, itemId }))
+                }
+              />
+              <TextField
+                id="stock-count-scrap-shelf"
+                label="Mã vị trí"
+                value={scrapForm.shelfId}
+                onChange={(shelfId) =>
+                  setScrapForm((current) => ({ ...current, shelfId }))
+                }
+              />
+              <TextField
+                id="stock-count-scrap-lot"
+                label="Mã lô"
+                required={false}
+                value={scrapForm.lotId}
+                onChange={(lotId) =>
+                  setScrapForm((current) => ({ ...current, lotId }))
+                }
+              />
+              <TextField
+                id="stock-count-scrap-qty"
+                label="Số lượng hủy"
+                type="number"
+                value={scrapForm.quantity}
+                onChange={(quantity) =>
+                  setScrapForm((current) => ({ ...current, quantity }))
+                }
+              />
+            </div>
+            <TextAreaField
+              id="stock-count-scrap-reason"
+              label="Lý do hủy"
+              value={scrapForm.reason}
+              onChange={(reason) =>
+                setScrapForm((current) => ({ ...current, reason }))
+              }
+            />
+            <TextAreaField
+              id="stock-count-scrap-note"
+              label="Ghi chú phiếu"
+              required={false}
+              value={scrapForm.note}
+              onChange={(note) =>
+                setScrapForm((current) => ({ ...current, note }))
+              }
+            />
+            <EvidenceImagePicker
+              files={scrapImages}
+              id="stock-count-scrap-images"
+              onChange={setScrapImages}
+            />
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="outline">
+                  Hủy
+                </Button>
+              </DialogClose>
+              <Button disabled={scrapMutation.isPending} type="submit">
+                {scrapMutation.isPending ? (
+                  <LoaderCircle
+                    className="animate-spin"
+                    data-icon="inline-start"
+                  />
+                ) : (
+                  <Trash2 data-icon="inline-start" />
+                )}
+                Tạo phiếu hủy
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={Boolean(countTarget)}
@@ -669,19 +825,23 @@ function StockCountDetail({
   approveReason,
   canApprove,
   canCount,
+  canCreateScrap,
   detail,
   onApprove,
   onApproveReasonChange,
   onCount,
+  onCreateScrap,
 }: {
   approveBusy: boolean;
   approveReason: string;
   canApprove: boolean;
   canCount: boolean;
+  canCreateScrap: boolean;
   detail: StockCount;
   onApprove: () => void;
   onApproveReasonChange: (value: string) => void;
   onCount: (item: StockCountItem) => void;
+  onCreateScrap: (item: StockCountItem) => void;
 }) {
   return (
     <Card>
@@ -733,7 +893,7 @@ function StockCountDetail({
                       />
                     </TableCell>
                     <TableCell>
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-2">
                         <Button
                           disabled={!canCount || detail.status === "APPROVED"}
                           onClick={() => onCount(item)}
@@ -743,6 +903,18 @@ function StockCountDetail({
                         >
                           <ClipboardList data-icon="inline-start" />
                           Nhập đếm
+                        </Button>
+                        <Button
+                          disabled={
+                            !canCreateScrap || detail.status === "APPROVED"
+                          }
+                          onClick={() => onCreateScrap(item)}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          <Trash2 data-icon="inline-start" />
+                          Tạo phiếu hủy
                         </Button>
                       </div>
                     </TableCell>
@@ -822,15 +994,14 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
   );
   const total = listQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const activeId = selectedId || scrapNotes[0]?.id || "";
+  const activeId = selectedId;
 
   const detailQuery = useQuery({
     enabled: canUseApi && Boolean(activeId),
     queryFn: () => getScrapNote(activeId),
     queryKey: scrapNoteKeys.detail(activeId),
   });
-  const detail =
-    detailQuery.data ?? scrapNotes.find((item) => item.id === activeId);
+  const detail = detailQuery.data;
 
   const createMutation = useMutation({
     mutationFn: () =>

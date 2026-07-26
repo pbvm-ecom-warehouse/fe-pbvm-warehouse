@@ -89,6 +89,31 @@ describe("dashboard navigation chrome", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("hides product and non-printer operations from PRINTER", () => {
+    mockedUseSessionUser.mockReturnValue(sessionUser(["PRINTER"]));
+
+    render(<SidebarContent />);
+
+    expect(
+      screen.getByRole("link", { name: /Tổng quan/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /In ly/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /Sản phẩm/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /Xuất kho/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /Giao hàng/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /Hàng hoàn/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /Kiểm kê/i }),
+    ).not.toBeInTheDocument();
+  });
   it("opens user menu with profile, password, and logout actions", async () => {
     mockedUseSessionUser.mockReturnValue({
       ...sessionUser(["ADMIN"]),

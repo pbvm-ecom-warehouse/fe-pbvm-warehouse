@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Barcode,
   ClipboardList,
@@ -47,10 +47,7 @@ import {
   StatusBadge,
   TableSkeleton,
 } from "@/features/admin-shell/components/operations-ui";
-import {
-  getWarehouseItem,
-  type WarehouseItem,
-} from "@/features/products/services/warehouse-items.service";
+import { getWarehouseItem } from "@/features/products/services/warehouse-items.service";
 import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
@@ -138,6 +135,7 @@ export function GoodsIssuesClient() {
     "MANAGER",
     "PICKER",
   ]);
+  const canPickGoodsIssue = hasAnyRole(user?.roles, ["ADMIN", "PICKER"]);
   const [statusFilter, setStatusFilter] = useState<GoodsIssueStatus | "ALL">(
     "ALL",
   );
@@ -164,8 +162,7 @@ export function GoodsIssuesClient() {
     () => issuesQuery.data?.data ?? [],
     [issuesQuery.data],
   );
-  const selectedIssue =
-    issues.find((issue) => issue.id === selectedIssueId) ?? issues[0];
+  const selectedIssue = issues.find((issue) => issue.id === selectedIssueId);
   const activeIssueId = selectedIssue?.id ?? "";
   const total = issuesQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -177,32 +174,18 @@ export function GoodsIssuesClient() {
   });
   const detail = detailQuery.data ?? selectedIssue;
 
-  const warehouseItemQueries = useQueries({
-    queries: (detail?.items ?? []).map((item) => ({
-      enabled: canUseGoodsIssueApi && Boolean(item.itemId),
-      queryFn: () => getWarehouseItem(item.itemId),
-      queryKey: ["stock-items", "detail", item.itemId],
-    })),
-  });
-
-  const warehouseItemById = useMemo(() => {
-    const map = new Map<string, WarehouseItem>();
-    warehouseItemQueries.forEach((query) => {
-      if (query.data) map.set(query.data.id, query.data);
-    });
-    return map;
-  }, [warehouseItemQueries]);
-
   const selectedItem = selectedItemId
     ? detail?.items.find((item) => item.itemId === selectedItemId)
     : undefined;
-  const selectedWarehouseItem = selectedItem
-    ? warehouseItemById.get(selectedItem.itemId)
-    : undefined;
   const activeItemId = selectedItem?.itemId ?? "";
+  const selectedWarehouseItemQuery = useQuery({
+    enabled: canPickGoodsIssue && Boolean(activeItemId),
+    queryFn: () => getWarehouseItem(activeItemId),
+    queryKey: ["stock-items", "detail", activeItemId],
+  });
   const suggestionsQuery = useQuery({
     enabled:
-      canUseGoodsIssueApi && Boolean(activeIssueId) && Boolean(activeItemId),
+      canPickGoodsIssue && Boolean(activeIssueId) && Boolean(activeItemId),
     queryFn: () =>
       listGoodsIssuePickSuggestions({
         goodsIssueId: activeIssueId,
@@ -214,6 +197,7 @@ export function GoodsIssuesClient() {
     () => suggestionsQuery.data ?? [],
     [suggestionsQuery.data],
   );
+  const selectedWarehouseItem = selectedWarehouseItemQuery.data;
 
   const confirmMutation = useMutation({
     mutationFn: () =>
@@ -402,13 +386,13 @@ export function GoodsIssuesClient() {
             <GoodsIssueDetail
               detail={detail}
               selectedItemId={activeItemId}
-              warehouseItemById={warehouseItemById}
+              canPick={canPickGoodsIssue}
               onSelectItem={selectItem}
             />
           ) : null}
         </div>
 
-        {selectedItem ? (
+        {selectedItem && canPickGoodsIssue ? (
           <aside className="space-y-4">
             <Card>
               <CardHeader>
@@ -509,7 +493,7 @@ export function GoodsIssuesClient() {
                   <Button
                     className="w-full"
                     disabled={
-                      !canUseGoodsIssueApi ||
+                      !canPickGoodsIssue ||
                       !activeIssueId ||
                       confirmMutation.isPending
                     }
@@ -600,15 +584,15 @@ function GoodsIssueTable({
 }
 
 function GoodsIssueDetail({
+  canPick,
   detail,
   onSelectItem,
   selectedItemId,
-  warehouseItemById,
 }: {
+  canPick: boolean;
   detail: GoodsIssue;
   onSelectItem: (item: GoodsIssueItem) => void;
   selectedItemId: string;
-  warehouseItemById: Map<string, WarehouseItem>;
 }) {
   return (
     <Card>
@@ -619,7 +603,9 @@ function GoodsIssueDetail({
               Mã đơn hàng: {detail.orderId}
             </CardTitle>
             <CardDescription className="mt-1">
-              Nhấp vào một dòng hàng để xem gợi ý vị trí lấy hàng
+              {canPick
+                ? "Nhấp vào một dòng hàng để xem gợi ý vị trí lấy hàng"
+                : "Vai trò hiện tại chỉ xem thông tin phiếu xuất"}
             </CardDescription>
           </div>
           <StatusBadge tone={statusTone(detail.status)}>
@@ -642,7 +628,6 @@ function GoodsIssueDetail({
               <EmptyRow colSpan={4} label="Phiếu xuất chưa có dòng hàng." />
             ) : (
               detail.items.map((item) => {
-                const warehouseItem = warehouseItemById.get(item.itemId);
                 const isSelected = selectedItemId === item.itemId;
 
                 return (
@@ -653,17 +638,14 @@ function GoodsIssueDetail({
                         "border-l-4 border-l-primary bg-primary/10 font-medium",
                     )}
                     key={item.itemId}
-                    onClick={() => onSelectItem(item)}
+                    onClick={() => {
+                      if (canPick) onSelectItem(item);
+                    }}
                   >
                     <TableCell>
                       <div className="font-mono font-semibold text-foreground">
                         {item.sku}
                       </div>
-                      {warehouseItem?.name ? (
-                        <div className="text-xs text-muted-foreground">
-                          {warehouseItem.name}
-                        </div>
-                      ) : null}
                     </TableCell>
                     <TableCell>{item.quantity}</TableCell>
                     <TableCell>
@@ -675,9 +657,7 @@ function GoodsIssueDetail({
                         {item.remainingQty}
                       </Badge>
                     </TableCell>
-                    <TableCell>
-                      {item.unit ?? warehouseItem?.unit ?? "cái"}
-                    </TableCell>
+                    <TableCell>{item.unit ?? "cái"}</TableCell>
                   </TableRow>
                 );
               })
