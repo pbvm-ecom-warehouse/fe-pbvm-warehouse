@@ -44,6 +44,8 @@ type SupplierWire = Omit<
 export type SupplierItem = {
   id: string;
   itemId: string;
+  sku?: string;
+  itemName?: string;
   supplierId: string;
   supplierItemCode?: string;
   purchasePrice: number;
@@ -51,6 +53,20 @@ export type SupplierItem = {
   minOrderQty?: number;
   isActive: boolean;
   updatedAt: string;
+};
+
+export type QuerySupplierItemsInput = {
+  supplierId?: string;
+  itemId?: string;
+  page?: number;
+  limit?: number;
+};
+
+export type SupplierItemListResult = {
+  data: SupplierItem[];
+  total: number;
+  page: number;
+  limit: number;
 };
 
 export type QuerySuppliersInput = {
@@ -226,20 +242,53 @@ export async function upsertSupplierItem(input: CreateSupplierItemInput) {
   return unwrapApiData(response.data);
 }
 
-export async function listSupplierItemsBySupplier(supplierId: string) {
-  const response = await apiClient.get<
-    ApiEnvelope<SupplierItem[]> | SupplierItem[]
-  >(`/supplier/items/by-supplier/${encodeURIComponent(supplierId)}`);
+type SupplierItemListPayload = {
+  data: SupplierItem[];
+  total: number;
+  page: number;
+  limit: number;
+};
 
-  return unwrapApiData(response.data);
+type SupplierItemListEnvelope = ApiEnvelope<
+  SupplierItemListPayload | SupplierItem[]
+>;
+
+function toSupplierItemListResult(
+  payload: SupplierItemListEnvelope | SupplierItemListPayload | SupplierItem[],
+): SupplierItemListResult {
+  const data = unwrapApiData(payload);
+
+  if (Array.isArray(data)) {
+    return { data, limit: data.length, page: 1, total: data.length };
+  }
+
+  return { data: data.data, limit: data.limit, page: data.page, total: data.total };
+}
+
+export async function listSupplierItems(input: QuerySupplierItemsInput = {}) {
+  const response = await apiClient.get<
+    SupplierItemListEnvelope | SupplierItemListPayload | SupplierItem[]
+  >("/supplier/items", {
+    params: {
+      itemId: input.itemId,
+      limit: input.limit,
+      page: input.page,
+      supplierId: input.supplierId,
+    },
+  });
+
+  return toSupplierItemListResult(response.data);
+}
+
+/** Toàn bộ báo giá của 1 NCC — dùng khi PO cần auto-fill giá theo supplier đã chọn. */
+export async function listSupplierItemsBySupplier(supplierId: string) {
+  const result = await listSupplierItems({ limit: 100, supplierId });
+  return result.data;
 }
 
 export async function getSupplierItemByItem(itemId: string) {
-  const response = await apiClient.get<
-    ApiEnvelope<SupplierItem> | SupplierItem
-  >(`/supplier/items/by-item/${encodeURIComponent(itemId)}`);
-
-  return unwrapApiData(response.data);
+  const result = await listSupplierItems({ itemId, limit: 1 });
+  return result.data[0];
 }
 
 export async function getSupplierItem(supplierItemId: string) {

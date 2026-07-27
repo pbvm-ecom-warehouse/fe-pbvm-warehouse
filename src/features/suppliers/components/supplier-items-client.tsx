@@ -9,8 +9,9 @@ import {
   Pencil,
   Plus,
   Save,
+  Search,
   Trash2,
-  Truck,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -40,6 +41,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Table,
@@ -59,19 +61,20 @@ import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { useSessionUser } from "@/hooks/use-session-user";
 import { WarehouseItemCombobox } from "@/features/products/components/warehouse-item-combobox";
-import { getWarehouseItem } from "@/features/products/services/warehouse-items.service";
 import {
   listSuppliers,
+  listSupplierItems,
   upsertSupplierItem,
-  listSupplierItemsBySupplier,
   updateSupplierItem,
   type Supplier,
   type SupplierItem,
 } from "../services/supplier.service";
 
+const PAGE_SIZE = 20;
+
 const supplierItemKeys = {
-  bySupplier: (supplierId: string) =>
-    ["supplier-items", "by-supplier", supplierId] as const,
+  list: (params: { page: number; supplierId: string; itemId: string }) =>
+    ["supplier-items", "list", params] as const,
 };
 
 const defaultItemForm = {
@@ -80,6 +83,7 @@ const defaultItemForm = {
   leadTimeDays: "",
   minOrderQty: "",
   purchasePrice: "",
+  supplierId: "",
   supplierItemCode: "",
 };
 
@@ -104,13 +108,13 @@ function requiredNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function itemPayload(form: typeof defaultItemForm, supplierId: string) {
+function itemPayload(form: typeof defaultItemForm) {
   return {
     itemId: form.itemId.trim(),
     leadTimeDays: optionalNumber(form.leadTimeDays),
     minOrderQty: optionalNumber(form.minOrderQty),
     purchasePrice: requiredNumber(form.purchasePrice),
-    supplierId,
+    supplierId: form.supplierId.trim(),
     supplierItemCode: optionalText(form.supplierItemCode),
   };
 }
@@ -140,10 +144,13 @@ export function SupplierItemsClient() {
   const user = useSessionUser();
   const queryClient = useQueryClient();
   const canManage = hasAnyRole(user?.roles, ["MANAGER"]);
-  const [supplierId, setSupplierId] = useState("");
-  const [itemForm, setItemForm] = useState(defaultItemForm);
-  const [itemEdit, setItemEdit] = useState(defaultItemForm);
+  const [supplierFilter, setSupplierFilter] = useState("");
+  const [itemFilter, setItemFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [createForm, setCreateForm] = useState(defaultItemForm);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<SupplierItem | null>(null);
+  const [itemEdit, setItemEdit] = useState(defaultItemForm);
   const [deleteTarget, setDeleteTarget] = useState<SupplierItem | null>(null);
 
   const suppliersQuery = useQuery({
@@ -155,25 +162,37 @@ export function SupplierItemsClient() {
     () => suppliersQuery.data?.data ?? [],
     [suppliersQuery.data?.data],
   );
-  const selectedSupplier = suppliers.find(
-    (supplier) => supplier.id === supplierId,
-  );
 
   const itemsQuery = useQuery({
-    enabled: canManage && Boolean(supplierId),
-    queryFn: () => listSupplierItemsBySupplier(supplierId),
-    queryKey: supplierItemKeys.bySupplier(supplierId),
+    enabled: canManage,
+    queryFn: () =>
+      listSupplierItems({
+        itemId: itemFilter || undefined,
+        limit: PAGE_SIZE,
+        page,
+        supplierId: supplierFilter || undefined,
+      }),
+    queryKey: supplierItemKeys.list({
+      itemId: itemFilter,
+      page,
+      supplierId: supplierFilter,
+    }),
   });
-  const supplierItems = itemsQuery.data ?? [];
+  const supplierItems = itemsQuery.data?.data ?? [];
+  const total = itemsQuery.data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  function invalidateList() {
+    void queryClient.invalidateQueries({ queryKey: ["supplier-items", "list"] });
+  }
 
   const upsertItemMutation = useMutation({
-    mutationFn: () => upsertSupplierItem(itemPayload(itemForm, supplierId)),
+    mutationFn: () => upsertSupplierItem(itemPayload(createForm)),
     onError: (error) => toast.error(formatError(error)),
     onSuccess: () => {
-      setItemForm(defaultItemForm);
-      void queryClient.invalidateQueries({
-        queryKey: supplierItemKeys.bySupplier(supplierId),
-      });
+      setCreateForm(defaultItemForm);
+      setDialogOpen(false);
+      invalidateList();
       toast.success("Đã lưu mặt hàng NCC");
     },
   });
@@ -190,9 +209,7 @@ export function SupplierItemsClient() {
     onError: (error) => toast.error(formatError(error)),
     onSuccess: () => {
       setEditingItem(null);
-      void queryClient.invalidateQueries({
-        queryKey: supplierItemKeys.bySupplier(supplierId),
-      });
+      invalidateList();
       toast.success("Đã cập nhật mặt hàng NCC");
     },
   });
@@ -203,14 +220,12 @@ export function SupplierItemsClient() {
     onError: (error) => toast.error(formatError(error)),
     onSuccess: () => {
       setDeleteTarget(null);
-      void queryClient.invalidateQueries({
-        queryKey: supplierItemKeys.bySupplier(supplierId),
-      });
+      invalidateList();
       toast.success("Đã xóa mặt hàng NCC");
     },
   });
 
-  function handleUpsertItem(event: FormEvent<HTMLFormElement>) {
+  function handleCreateItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     upsertItemMutation.mutate();
   }
@@ -223,6 +238,7 @@ export function SupplierItemsClient() {
       leadTimeDays: item.leadTimeDays?.toString() ?? "",
       minOrderQty: item.minOrderQty?.toString() ?? "",
       purchasePrice: item.purchasePrice.toString(),
+      supplierId: item.supplierId,
       supplierItemCode: item.supplierItemCode ?? "",
     });
   }
@@ -234,17 +250,154 @@ export function SupplierItemsClient() {
     }
   }
 
+  function handleFilterChange() {
+    setPage(1);
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Gán mặt hàng NCC"
+        title="Mặt hàng nhà cung cấp"
         actions={
-          <Button asChild variant="outline">
-            <Link href="/suppliers">
-              <ArrowLeft data-icon="inline-start" />
-              Quay lại
-            </Link>
-          </Button>
+          <>
+            <Button asChild variant="outline">
+              <Link href="/suppliers">
+                <ArrowLeft data-icon="inline-start" />
+                Quay lại
+              </Link>
+            </Button>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button disabled={!canManage}>
+                  <Plus data-icon="inline-start" />
+                  Thêm mặt hàng NCC
+                </Button>
+              </DialogTrigger>
+              <DialogContent size="lg">
+                <DialogHeader>
+                  <DialogTitle>Thêm mặt hàng NCC</DialogTitle>
+                  <DialogDescription>
+                    Gán mặt hàng kho vào danh mục giá của 1 nhà cung cấp — tạo
+                    mới nếu chưa có, cập nhật nếu đã có.
+                  </DialogDescription>
+                </DialogHeader>
+                <form className="space-y-4" onSubmit={handleCreateItem}>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="create-supplier-id">Nhà cung cấp</Label>
+                      <Select
+                        value={createForm.supplierId}
+                        onValueChange={(value) =>
+                          setCreateForm((current) => ({
+                            ...current,
+                            supplierId: value,
+                          }))
+                        }
+                      >
+                        <SelectTrigger id="create-supplier-id" className="w-full">
+                          <SelectValue placeholder="Chọn nhà cung cấp" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {suppliers.map((supplier) => (
+                            <SelectItem key={supplier.id} value={supplier.id}>
+                              {supplier.code} · {supplier.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="create-item-id">Mặt hàng kho</Label>
+                      <WarehouseItemCombobox
+                        id="create-item-id"
+                        label="Mặt hàng kho"
+                        selectedItemId={createForm.itemId}
+                        onSelect={(item) =>
+                          setCreateForm((current) => ({
+                            ...current,
+                            itemId: item.id,
+                          }))
+                        }
+                      />
+                    </div>
+                    <TextField
+                      id="create-supplier-item-code"
+                      label="Mã hàng NCC"
+                      required={false}
+                      value={createForm.supplierItemCode}
+                      onChange={(value) =>
+                        setCreateForm((current) => ({
+                          ...current,
+                          supplierItemCode: value,
+                        }))
+                      }
+                    />
+                    <TextField
+                      id="create-purchase-price"
+                      label="Giá nhập"
+                      value={createForm.purchasePrice}
+                      onChange={(value) =>
+                        setCreateForm((current) => ({
+                          ...current,
+                          purchasePrice: value,
+                        }))
+                      }
+                    />
+                    <TextField
+                      id="create-lead-time"
+                      label="Thời gian giao (ngày)"
+                      required={false}
+                      value={createForm.leadTimeDays}
+                      onChange={(value) =>
+                        setCreateForm((current) => ({
+                          ...current,
+                          leadTimeDays: value,
+                        }))
+                      }
+                    />
+                    <TextField
+                      id="create-moq"
+                      label="SL đặt tối thiểu"
+                      required={false}
+                      value={createForm.minOrderQty}
+                      onChange={(value) =>
+                        setCreateForm((current) => ({
+                          ...current,
+                          minOrderQty: value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button type="button" variant="outline">
+                        Hủy
+                      </Button>
+                    </DialogClose>
+                    <Button
+                      disabled={
+                        !canManage ||
+                        !createForm.itemId.trim() ||
+                        !createForm.supplierId.trim() ||
+                        upsertItemMutation.isPending
+                      }
+                      type="submit"
+                    >
+                      {upsertItemMutation.isPending ? (
+                        <LoaderCircle
+                          className="animate-spin"
+                          data-icon="inline-start"
+                        />
+                      ) : (
+                        <Save data-icon="inline-start" />
+                      )}
+                      Lưu mặt hàng
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </>
         }
       />
 
@@ -254,137 +407,125 @@ export function SupplierItemsClient() {
         </PermissionNotice>
       ) : null}
 
+      {itemsQuery.error ? <ErrorBanner error={itemsQuery.error} /> : null}
+
       <Card>
         <CardHeader className="border-b bg-muted/20">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Truck className="size-4 text-primary" />
-            Chọn nhà cung cấp
-          </CardTitle>
+          <CardTitle className="text-base">Danh mục giá theo NCC</CardTitle>
           <CardDescription>
-            Chọn NCC để xem và gán danh mục mặt hàng kho tương ứng
+            {total} bản ghi · trang {page}/{totalPages}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-2 pt-4">
-          <Select
-            disabled={!canManage}
-            value={supplierId}
-            onValueChange={setSupplierId}
-          >
-            <SelectTrigger aria-label="Nhà cung cấp" className="w-full md:w-96">
-              <SelectValue placeholder="Chọn nhà cung cấp" />
-            </SelectTrigger>
-            <SelectContent>
-              {suppliers.map((supplier) => (
-                <SupplierOption key={supplier.id} supplier={supplier} />
-              ))}
-            </SelectContent>
-          </Select>
+        <CardContent className="space-y-4 pt-4">
+          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+            <div className="space-y-2">
+              <Label htmlFor="filter-supplier">Nhà cung cấp</Label>
+              <Select
+                value={supplierFilter || "ALL"}
+                onValueChange={(value) => {
+                  handleFilterChange();
+                  setSupplierFilter(value === "ALL" ? "" : value);
+                }}
+              >
+                <SelectTrigger id="filter-supplier" className="w-full">
+                  <SelectValue placeholder="Tất cả NCC" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Tất cả NCC</SelectItem>
+                  {suppliers.map((supplier) => (
+                    <SelectItem key={supplier.id} value={supplier.id}>
+                      {supplier.code} · {supplier.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="filter-item">Mặt hàng kho</Label>
+              <div className="flex gap-2">
+                <div className="min-w-0 flex-1">
+                  <WarehouseItemCombobox
+                    id="filter-item"
+                    label="Mặt hàng kho"
+                    placeholder="Tất cả mặt hàng"
+                    selectedItemId={itemFilter}
+                    onSelect={(item) => {
+                      handleFilterChange();
+                      setItemFilter(item.id);
+                    }}
+                  />
+                </div>
+                {itemFilter ? (
+                  <Button
+                    aria-label="Bỏ lọc mặt hàng"
+                    onClick={() => {
+                      handleFilterChange();
+                      setItemFilter("");
+                    }}
+                    size="icon"
+                    type="button"
+                    variant="outline"
+                  >
+                    <X className="size-4" />
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+            <Button
+              className="self-end"
+              onClick={() => void itemsQuery.refetch()}
+              type="button"
+              variant="outline"
+            >
+              {itemsQuery.isFetching ? (
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
+              ) : (
+                <Search data-icon="inline-start" />
+              )}
+              Tải lại
+            </Button>
+          </div>
+
+          {itemsQuery.isLoading ? (
+            <TableSkeleton columns={6} />
+          ) : (
+            <SupplierItemTable
+              canManage={canManage}
+              items={supplierItems}
+              suppliers={suppliers}
+              onDelete={setDeleteTarget}
+              onEdit={openItemEdit}
+            />
+          )}
+
+          <div className="flex items-center justify-between gap-3">
+            <Button
+              disabled={page <= 1}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              type="button"
+              variant="outline"
+            >
+              Trang trước
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              {page}/{totalPages}
+            </span>
+            <Button
+              disabled={page >= totalPages}
+              onClick={() =>
+                setPage((current) => Math.min(totalPages, current + 1))
+              }
+              type="button"
+              variant="outline"
+            >
+              Trang sau
+            </Button>
+          </div>
         </CardContent>
       </Card>
-
-      {supplierId ? (
-        <Card>
-          <CardHeader className="border-b bg-muted/20">
-            <CardTitle className="text-base">
-              Mặt hàng NCC · {selectedSupplier?.code ?? supplierId}
-            </CardTitle>
-            <CardDescription>Danh mục giá theo mã mặt hàng kho</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-4">
-            {itemsQuery.error ? <ErrorBanner error={itemsQuery.error} /> : null}
-            <form
-              className="grid gap-3 md:grid-cols-3"
-              onSubmit={handleUpsertItem}
-            >
-              <div className="space-y-2">
-                <Label htmlFor="supplier-item-id">Mặt hàng kho</Label>
-                <WarehouseItemCombobox
-                  disabled={!canManage}
-                  id="supplier-item-id"
-                  label="Mặt hàng kho"
-                  selectedItemId={itemForm.itemId}
-                  onSelect={(item) =>
-                    setItemForm((current) => ({
-                      ...current,
-                      itemId: item.id,
-                    }))
-                  }
-                />
-              </div>
-              <TextField
-                id="supplier-item-code"
-                label="Mã hàng NCC"
-                required={false}
-                value={itemForm.supplierItemCode}
-                onChange={(value) =>
-                  setItemForm((current) => ({
-                    ...current,
-                    supplierItemCode: value,
-                  }))
-                }
-              />
-              <TextField
-                id="supplier-item-price"
-                label="Giá nhập"
-                value={itemForm.purchasePrice}
-                onChange={(value) =>
-                  setItemForm((current) => ({
-                    ...current,
-                    purchasePrice: value,
-                  }))
-                }
-              />
-              <TextField
-                id="supplier-item-lead-time"
-                label="Thời gian giao"
-                required={false}
-                value={itemForm.leadTimeDays}
-                onChange={(value) =>
-                  setItemForm((current) => ({
-                    ...current,
-                    leadTimeDays: value,
-                  }))
-                }
-              />
-              <TextField
-                id="supplier-item-moq"
-                label="SL đặt tối thiểu"
-                required={false}
-                value={itemForm.minOrderQty}
-                onChange={(value) =>
-                  setItemForm((current) => ({
-                    ...current,
-                    minOrderQty: value,
-                  }))
-                }
-              />
-              <Button
-                className="self-end"
-                disabled={
-                  !canManage ||
-                  !itemForm.itemId.trim() ||
-                  upsertItemMutation.isPending
-                }
-                type="submit"
-              >
-                <Plus data-icon="inline-start" />
-                Lưu mặt hàng
-              </Button>
-            </form>
-
-            {itemsQuery.isLoading ? (
-              <TableSkeleton columns={5} />
-            ) : (
-              <SupplierItemTable
-                canManage={canManage}
-                items={supplierItems}
-                onDelete={setDeleteTarget}
-                onEdit={openItemEdit}
-              />
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
 
       <SupplierItemEditDialog
         busy={updateItemMutation.isPending}
@@ -433,54 +574,31 @@ export function SupplierItemsClient() {
   );
 }
 
-function SupplierOption({ supplier }: { supplier: Supplier }) {
-  return (
-    <SelectItem value={supplier.id}>
-      {supplier.code} · {supplier.name}
-    </SelectItem>
-  );
-}
-
-function WarehouseItemLabel({ itemId }: { itemId: string }) {
-  const itemQuery = useQuery({
-    queryFn: () => getWarehouseItem(itemId),
-    queryKey: ["stock-items", "detail", itemId],
-  });
-  const item = itemQuery.data;
-
-  if (itemQuery.isLoading) {
-    return <span className="text-muted-foreground">Đang tải...</span>;
-  }
-
-  if (!item) {
-    return <span className="text-muted-foreground">{itemId}</span>;
-  }
-
-  return (
-    <div>
-      <div className="font-mono font-medium">{item.sku}</div>
-      <div className="text-xs text-muted-foreground">{item.name}</div>
-    </div>
-  );
-}
-
 function SupplierItemTable({
   canManage,
   items,
   onDelete,
   onEdit,
+  suppliers,
 }: {
   canManage: boolean;
   items: SupplierItem[];
   onDelete: (item: SupplierItem) => void;
   onEdit: (item: SupplierItem) => void;
+  suppliers: Supplier[];
 }) {
+  const supplierById = useMemo(
+    () => new Map(suppliers.map((supplier) => [supplier.id, supplier])),
+    [suppliers],
+  );
+
   return (
     <div className="overflow-x-auto rounded-lg border border-border/70">
       <Table scrollable>
         <TableHeader>
           <TableRow>
             <TableHead>Mặt hàng kho</TableHead>
+            <TableHead>Nhà cung cấp</TableHead>
             <TableHead>Giá nhập</TableHead>
             <TableHead>Giao hàng / SL tối thiểu</TableHead>
             <TableHead>Trạng thái</TableHead>
@@ -489,54 +607,67 @@ function SupplierItemTable({
         </TableHeader>
         <TableBody>
           {items.length === 0 ? (
-            <EmptyRow colSpan={5} label="Chưa có mặt hàng NCC." />
+            <EmptyRow colSpan={6} label="Chưa có mặt hàng NCC." />
           ) : (
-            items.map((item) => (
-              <TableRow key={item.id}>
-                <TableCell className="font-medium">
-                  <WarehouseItemLabel itemId={item.itemId} />
-                  <div className="text-xs text-muted-foreground">
-                    {item.supplierItemCode ?? "Chưa có mã NCC"}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {item.purchasePrice.toLocaleString("vi-VN")}
-                </TableCell>
-                <TableCell>
-                  {item.leadTimeDays ?? 0} ngày / {item.minOrderQty ?? 0}
-                </TableCell>
-                <TableCell>
-                  <StatusBadge tone={item.isActive ? "success" : "neutral"}>
-                    {item.isActive ? "Đang dùng" : "Ngưng dùng"}
-                  </StatusBadge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      aria-label={`Sửa mặt hàng NCC ${item.itemId}`}
-                      disabled={!canManage}
-                      onClick={() => onEdit(item)}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      <Pencil data-icon="inline-start" />
-                      Sửa
-                    </Button>
-                    <Button
-                      disabled={!canManage || !item.isActive}
-                      onClick={() => onDelete(item)}
-                      size="sm"
-                      type="button"
-                      variant="destructive"
-                    >
-                      <Trash2 data-icon="inline-start" />
-                      Xóa
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))
+            items.map((item) => {
+              const supplier = supplierById.get(item.supplierId);
+              return (
+                <TableRow key={item.id}>
+                  <TableCell className="font-medium">
+                    <div className="font-mono font-medium">
+                      {item.sku ?? item.itemId}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {item.itemName ?? "—"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {item.supplierItemCode ?? "Chưa có mã NCC"}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {supplier
+                      ? `${supplier.code} · ${supplier.name}`
+                      : item.supplierId}
+                  </TableCell>
+                  <TableCell>
+                    {item.purchasePrice.toLocaleString("vi-VN")}
+                  </TableCell>
+                  <TableCell>
+                    {item.leadTimeDays ?? 0} ngày / {item.minOrderQty ?? 0}
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge tone={item.isActive ? "success" : "neutral"}>
+                      {item.isActive ? "Đang dùng" : "Ngưng dùng"}
+                    </StatusBadge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        aria-label={`Sửa mặt hàng NCC ${item.itemId}`}
+                        disabled={!canManage}
+                        onClick={() => onEdit(item)}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        <Pencil data-icon="inline-start" />
+                        Sửa
+                      </Button>
+                      <Button
+                        disabled={!canManage || !item.isActive}
+                        onClick={() => onDelete(item)}
+                        size="sm"
+                        type="button"
+                        variant="destructive"
+                      >
+                        <Trash2 data-icon="inline-start" />
+                        Xóa
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })
           )}
         </TableBody>
       </Table>
