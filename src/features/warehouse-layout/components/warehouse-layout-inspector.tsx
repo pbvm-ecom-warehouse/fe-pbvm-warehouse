@@ -92,6 +92,7 @@ export function WarehouseLayoutInspector({
   onPatch,
   onPatchCanvas,
   onPatchRackTemplate,
+  onPatchShelf,
   onRotate,
   selection,
 }: {
@@ -102,6 +103,7 @@ export function WarehouseLayoutInspector({
   onPatch: (patch: Record<string, unknown>) => void;
   onPatchCanvas: (patch: Record<string, number>) => void;
   onPatchRackTemplate: (patch: Record<string, number>) => void;
+  onPatchShelf: (shelfId: string, patch: Record<string, unknown>) => void;
   onRotate: () => void;
   selection: LayoutSelection;
 }) {
@@ -122,6 +124,12 @@ export function WarehouseLayoutInspector({
       )
     : [];
   const template = layout.rackTemplate;
+  const rackShelves =
+    selection?.kind === "rack" && item && "id" in item
+      ? layout.shelves
+          .filter((shelf) => shelf.rackId === item.id)
+          .sort((left, right) => left.level - right.level)
+      : [];
 
   return (
     <aside className="w-[320px] shrink-0 overflow-y-auto border-l border-slate-200 bg-white">
@@ -267,6 +275,42 @@ export function WarehouseLayoutInspector({
               >
                 Giữa rack
               </Button>
+            </div>
+          ) : null}
+
+          {selection.kind === "rack" ? (
+            <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="text-xs font-semibold text-slate-700">
+                Tầng kệ của rack
+              </div>
+              <p className="text-[11px] leading-4 text-slate-500">
+                Hệ thống chỉ cho phép đúng 1 shelf staging trên toàn kho.
+              </p>
+              {rackShelves.map((shelf) => (
+                <div
+                  className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2"
+                  key={shelf.id}
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-slate-800">
+                      {shelf.code}
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      Tầng {shelf.level}
+                    </div>
+                  </div>
+                  <Button
+                    disabled={!canEdit}
+                    onClick={() =>
+                      onPatchShelf(shelf.id, { isStaging: !shelf.isStaging })
+                    }
+                    size="sm"
+                    variant={shelf.isStaging ? "default" : "outline"}
+                  >
+                    {shelf.isStaging ? "Đang staging" : "Đặt staging"}
+                  </Button>
+                </div>
+              ))}
             </div>
           ) : null}
 
