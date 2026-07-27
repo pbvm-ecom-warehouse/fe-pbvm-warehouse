@@ -169,6 +169,16 @@ function parsePositiveNumber(value: string, fallback: number) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
+function toSafeNumber(value: unknown, fallback = 0) {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function formatDate(value?: string | null) {
   if (!value) {
     return "Chưa có";
@@ -1374,12 +1384,18 @@ function PurchaseOrderDetail({
   loading: boolean;
   supplierLabel: string;
 }) {
-  const items = detail.items ?? [];
+  const items = (detail.items ?? []).map((item) => {
+    const expectedQty = toSafeNumber(item.expectedQty);
+    const unitPrice = toSafeNumber(item.unitPrice);
+    return {
+      ...item,
+      expectedQty,
+      unitPrice,
+      lineTotal: expectedQty * unitPrice,
+    };
+  });
   const totalQty = items.reduce((sum, item) => sum + item.expectedQty, 0);
-  const totalAmount = items.reduce(
-    (sum, item) => sum + item.expectedQty * (item.unitPrice ?? 0),
-    0,
-  );
+  const totalAmount = items.reduce((sum, item) => sum + item.lineTotal, 0);
 
   return (
     <div data-testid="purchase-order-invoice">
@@ -1476,10 +1492,10 @@ function PurchaseOrderDetail({
                   </TableCell>
                   <TableCell>{item.unit}</TableCell>
                   <TableCell className="text-right">
-                    {formatCurrency(item.unitPrice ?? 0)}
+                    {formatCurrency(item.unitPrice)}
                   </TableCell>
                   <TableCell className="text-right font-medium">
-                    {formatCurrency(item.expectedQty * (item.unitPrice ?? 0))}
+                    {formatCurrency(item.lineTotal)}
                   </TableCell>
                 </TableRow>
               ))}
