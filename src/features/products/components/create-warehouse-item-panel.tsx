@@ -1,12 +1,13 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import {
   Check,
   CheckCircle2,
   ChevronsUpDown,
   Copy,
+  ImagePlus,
   LoaderCircle,
   PackagePlus,
   Plus,
@@ -17,7 +18,11 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { EvidenceImagePicker } from "@/components/evidence-images";
+import {
+  EVIDENCE_IMAGE_ACCEPT_ATTRIBUTE,
+  EVIDENCE_IMAGE_MAX_BYTES,
+  validateEvidenceImageFiles,
+} from "@/components/evidence-images";
 import { Barcode } from "@/components/barcode";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -507,7 +512,9 @@ export function CreateWarehouseItemPanel({
             </div>
             <div className="mt-1 flex min-h-7 flex-wrap items-center justify-between gap-2">
               <span className="break-all font-mono text-sm font-semibold">
-                {previewQuery.data?.sku || localSku || "Chọn đủ thuộc tính để xem SKU"}
+                {previewQuery.data?.sku ||
+                  localSku ||
+                  "Chọn đủ thuộc tính để xem SKU"}
               </span>
               {previewQuery.isFetching ||
               (selectionComplete && debouncedIdsKey !== selectedIdsKey) ? (
@@ -562,40 +569,7 @@ export function CreateWarehouseItemPanel({
               onChange={(value) => updateNumeric(setForm, "height", value)}
             />
           </div>
-          <label
-            className="flex w-fit items-center gap-2 text-sm font-medium"
-            htmlFor="create-perishable"
-          >
-            <Checkbox
-              checked={form.isPerishable}
-              id="create-perishable"
-              onCheckedChange={(checked) =>
-                setForm((current) => ({
-                  ...current,
-                  isPerishable: checked === true,
-                  nearExpiryDays:
-                    checked === true ? current.nearExpiryDays : "",
-                }))
-              }
-            />
-            Có hạn sử dụng
-          </label>
-          {form.isPerishable ? (
-            <NumericField
-              id="create-near-expiry"
-              label="Cảnh báo trước hạn (ngày)"
-              value={form.nearExpiryDays}
-              onChange={(value) =>
-                updateNumeric(setForm, "nearExpiryDays", value)
-              }
-            />
-          ) : null}
-          <EvidenceImagePicker
-            files={images}
-            id="create-item-images"
-            label="Ảnh mặt hàng"
-            onChange={setImages}
-          />
+          <ItemImageDropzone files={images} onChange={setImages} />
           <AltUnitsEditor
             value={form.altUnits}
             onChange={(altUnits) =>
@@ -632,6 +606,113 @@ export function CreateWarehouseItemPanel({
   );
 }
 
+function ItemImageDropzone({
+  files,
+  onChange,
+}: {
+  files: File[];
+  onChange: (files: File[]) => void;
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+  const file = files[0];
+
+  function addFiles(fileList: FileList | File[]) {
+    const { accepted, rejected } = validateEvidenceImageFiles(fileList);
+    if (rejected.length)
+      toast.error("Chỉ nhận ảnh JPEG, PNG hoặc WebP, tối đa 5 MB mỗi ảnh.");
+    if (accepted.length) onChange([accepted[0]]);
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="create-item-images">
+        Ảnh mặt hàng <span aria-hidden="true">*</span>
+      </Label>
+      <label
+        className={`relative flex min-h-44 cursor-pointer overflow-hidden rounded-lg border-2 border-dashed px-4 py-5 text-center transition-all ${isDragging ? "border-primary bg-primary/15 ring-4 ring-primary/10" : "border-primary/40 bg-primary/5 hover:bg-primary/10"}`}
+        htmlFor="create-item-images"
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragLeave={(event) => {
+          event.preventDefault();
+          setIsDragging(false);
+        }}
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault();
+          setIsDragging(false);
+          addFiles(event.dataTransfer.files);
+        }}
+      >
+        <input
+          accept={EVIDENCE_IMAGE_ACCEPT_ATTRIBUTE}
+          className="sr-only"
+          id="create-item-images"
+          onChange={(event) => {
+            addFiles(event.target.files ?? []);
+            event.target.value = "";
+          }}
+          type="file"
+        />
+        {file ? (
+          <div className="absolute inset-0">
+            <ItemImagePreview file={file} />
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/45 text-white opacity-0 transition-opacity hover:opacity-100">
+              <ImagePlus className="size-6" />
+              <span className="mt-2 text-sm font-semibold">
+                Thả hoặc bấm để thay ảnh
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex min-h-32 w-full flex-col items-center justify-center">
+            <ImagePlus
+              className={`size-7 ${isDragging ? "scale-110 text-primary" : "text-primary"} transition-transform`}
+            />
+            <span className="mt-2 text-sm font-medium">
+              {isDragging ? "Thả ảnh để chọn" : "Kéo thả ảnh vào đây"}
+            </span>
+            <span className="mt-1 text-xs text-muted-foreground">
+              Hoặc bấm để chọn ảnh. JPEG, PNG hoặc WebP, tối đa{" "}
+              {EVIDENCE_IMAGE_MAX_BYTES / 1024 / 1024} MB.
+            </span>
+          </div>
+        )}
+      </label>
+      {file ? (
+        <p className="text-xs text-emerald-700">
+          Đã chọn ảnh. Ảnh sẽ được tải lên khi tạo mặt hàng.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function ItemImagePreview({ file }: { file: File }) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      setPreviewUrl(typeof reader.result === "string" ? reader.result : null);
+    reader.readAsDataURL(file);
+    return () => reader.abort();
+  }, [file]);
+
+  return previewUrl ? (
+    <img
+      alt={`Xem trước ${file.name}`}
+      className="size-full object-cover"
+      src={previewUrl}
+    />
+  ) : (
+    <div className="flex size-full items-center justify-center bg-muted text-sm text-muted-foreground">
+      Đang tải ảnh...
+    </div>
+  );
+}
 function updateNumeric(
   setForm: React.Dispatch<React.SetStateAction<CreateForm>>,
   field: NumericField,
@@ -762,7 +843,9 @@ function AttributeOptionCombobox({
             type="button"
             variant="outline"
           >
-            <span className={selectedOption ? "truncate" : "text-muted-foreground"}>
+            <span
+              className={selectedOption ? "truncate" : "text-muted-foreground"}
+            >
               {selectedOption
                 ? `${selectedOption.name} (${selectedOption.code})`
                 : placeholder}
@@ -770,7 +853,10 @@ function AttributeOptionCombobox({
             <ChevronsUpDown className="ml-2 shrink-0 text-muted-foreground" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-1">
+        <PopoverContent
+          align="start"
+          className="w-[var(--radix-popover-trigger-width)] p-1"
+        >
           <Command>
             <CommandInput autoFocus placeholder="Tìm tên hoặc mã SKU" />
             <CommandList>
@@ -785,7 +871,9 @@ function AttributeOptionCombobox({
                       setOpen(false);
                     }}
                   >
-                    <span>{option.name} ({option.code})</span>
+                    <span>
+                      {option.name} ({option.code})
+                    </span>
                     {value === option.id ? <Check className="ml-auto" /> : null}
                   </CommandItem>
                 ))}

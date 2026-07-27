@@ -1,11 +1,12 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Eye,
   Pencil,
+  ImageOff,
   LoaderCircle,
   PackageSearch,
   Plus,
@@ -13,11 +14,13 @@ import {
   Save,
   Search,
   Trash2,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Barcode } from "@/components/barcode";
+import { EvidenceImageGallery } from "@/components/evidence-images";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -217,6 +220,7 @@ export function WarehouseItemsClient() {
   const [viewingItem, setViewingItem] = useState<WarehouseItem | null>(null);
   const [editingItem, setEditingItem] = useState<WarehouseItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<WarehouseItem | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
@@ -307,8 +311,8 @@ export function WarehouseItemsClient() {
       <div className="space-y-4">
         {!canManage ? (
           <PermissionNotice>
-            Bạn có thể xem danh sách mặt hàng. Quyền tạo và sửa dành cho quản
-            lý kho.
+            Bạn có thể xem danh sách mặt hàng. Quyền tạo và sửa dành cho quản lý
+            kho.
           </PermissionNotice>
         ) : null}
 
@@ -324,156 +328,178 @@ export function WarehouseItemsClient() {
         ) : null}
 
         <TablePanel
-            count={`${total} bản ghi · trang ${page}/${totalPages}`}
-            title={
-              <span className="flex items-center gap-2">
-                <PackageSearch className="size-4 text-primary" />
-                Mặt hàng kho
-              </span>
-            }
+          count={`${total} bản ghi · trang ${page}/${totalPages}`}
+          title={
+            <span className="flex items-center gap-2">
+              <PackageSearch className="size-4 text-primary" />
+              Mặt hàng kho
+            </span>
+          }
+        >
+          <form
+            className="grid gap-3 md:grid-cols-[1fr_180px_160px_auto]"
+            onSubmit={handleFilter}
           >
-            <form
-              className="grid gap-3 md:grid-cols-[1fr_180px_160px_auto]"
-              onSubmit={handleFilter}
-            >
-              <div className="space-y-2">
-                <Label htmlFor="product-search">Tìm kiếm</Label>
-                <Input
-                  id="product-search"
-                  placeholder="SKU, tên hoặc mã vạch"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </div>
-              <SelectFilter
-                label="Loại"
-                value={typeFilter}
-                onChange={(value) =>
-                  setTypeFilter(value as WarehouseItemType | "ALL")
-                }
-              >
-                <SelectItem value="ALL">Tất cả</SelectItem>
-                {WAREHOUSE_ITEM_TYPES.map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {typeLabel(type)}
-                  </SelectItem>
-                ))}
-              </SelectFilter>
-              <SelectFilter
-                label="Trạng thái"
-                value={String(activeFilter)}
-                onChange={(value) =>
-                  setActiveFilter(value === "ALL" ? "ALL" : value === "true")
-                }
-              >
-                <SelectItem value="ALL">Tất cả</SelectItem>
-                <SelectItem value="true">Đang dùng</SelectItem>
-                <SelectItem value="false">Ngưng dùng</SelectItem>
-              </SelectFilter>
-              <Button className="self-end" type="submit">
-                <Search data-icon="inline-start" />
-                Lọc
-              </Button>
-            </form>
-
-            {itemsQuery.isLoading ? (
-              <TableSkeleton columns={6} />
-            ) : items.length === 0 ? (
-              <EmptyState title="Chưa có mặt hàng" />
-            ) : (
-              <Table scrollable>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>SKU</TableHead>
-                    <TableHead>Tên</TableHead>
-                    <TableHead>Loại</TableHead>
-                    <TableHead>Đơn vị</TableHead>
-                    <TableHead>Trạng thái</TableHead>
-                    <TableHead className="text-right">Thao tác</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {items.map((item) => (
-                    <TableRow
-                      key={item.id}
-                      className="focus-within:bg-primary/5"
-                    >
-                      <TableCell className="font-mono font-semibold">
-                        {item.sku}
-                      </TableCell>
-                      <TableCell>{item.name}</TableCell>
-                      <TableCell>{typeLabel(item.type)}</TableCell>
-                      <TableCell>{item.unit}</TableCell>
-                      <TableCell>
-                        <StatusBadge
-                          tone={item.isActive ? "success" : "neutral"}
-                        >
-                          {item.isActive ? "Đang dùng" : "Ngưng dùng"}
-                        </StatusBadge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="sm"
-                            type="button"
-                            variant="outline"
-                            onClick={() => setViewingItem(item)}
-                          >
-                            <Eye data-icon="inline-start" />
-                            Xem chi tiết
-                          </Button>
-                          <Button
-                            disabled={!canManage}
-                            size="sm"
-                            type="button"
-                            variant="outline"
-                            onClick={() => setEditingItem(item)}
-                          >
-                            <Pencil data-icon="inline-start" />
-                            Sửa
-                          </Button>
-                          <Button
-                            disabled={!canManage || !item.isActive}
-                            size="sm"
-                            type="button"
-                            variant="destructive"
-                            onClick={() => setDeletingItem(item)}
-                          >
-                            <Trash2 data-icon="inline-start" />
-                            Ngưng dùng
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-
-            <div className="flex items-center justify-between gap-3">
-              <Button
-                disabled={page <= 1}
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-                type="button"
-                variant="outline"
-              >
-                Trang trước
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                {page}/{totalPages}
-              </span>
-              <Button
-                disabled={page >= totalPages}
-                onClick={() =>
-                  setPage((current) => Math.min(totalPages, current + 1))
-                }
-                type="button"
-                variant="outline"
-              >
-                Trang sau
-              </Button>
+            <div className="space-y-2">
+              <Label htmlFor="product-search">Tìm kiếm</Label>
+              <Input
+                id="product-search"
+                placeholder="SKU, tên hoặc mã vạch"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
             </div>
-          </TablePanel>
+            <SelectFilter
+              label="Loại"
+              value={typeFilter}
+              onChange={(value) =>
+                setTypeFilter(value as WarehouseItemType | "ALL")
+              }
+            >
+              <SelectItem value="ALL">Tất cả</SelectItem>
+              {WAREHOUSE_ITEM_TYPES.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {typeLabel(type)}
+                </SelectItem>
+              ))}
+            </SelectFilter>
+            <SelectFilter
+              label="Trạng thái"
+              value={String(activeFilter)}
+              onChange={(value) =>
+                setActiveFilter(value === "ALL" ? "ALL" : value === "true")
+              }
+            >
+              <SelectItem value="ALL">Tất cả</SelectItem>
+              <SelectItem value="true">Đang dùng</SelectItem>
+              <SelectItem value="false">Ngưng dùng</SelectItem>
+            </SelectFilter>
+            <Button className="self-end" type="submit">
+              <Search data-icon="inline-start" />
+              Lọc
+            </Button>
+          </form>
+
+          {itemsQuery.isLoading ? (
+            <TableSkeleton columns={7} />
+          ) : items.length === 0 ? (
+            <EmptyState title="Chưa có mặt hàng" />
+          ) : (
+            <Table scrollable>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-16">Ảnh</TableHead>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Tên</TableHead>
+                  <TableHead>Loại</TableHead>
+                  <TableHead>Đơn vị</TableHead>
+                  <TableHead>Trạng thái</TableHead>
+                  <TableHead className="text-right">Thao tác</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((item) => (
+                  <TableRow key={item.id} className="focus-within:bg-primary/5">
+                    <TableCell>
+                      {item.images?.[0] ? (
+                        <button
+                          aria-label={`Xem ảnh ${item.name}`}
+                          className="size-10 overflow-hidden rounded-md border bg-muted"
+                          onClick={() => {
+                            setPreviewImage(item.images![0]);
+                          }}
+                          type="button"
+                        >
+                          <span
+                            className="block size-full bg-cover bg-center"
+                            style={{
+                              backgroundImage: `url("${item.images[0]}")`,
+                            }}
+                          />
+                        </button>
+                      ) : (
+                        <div
+                          aria-label="Chưa có ảnh"
+                          className="flex size-10 items-center justify-center rounded-md border bg-muted/50 text-muted-foreground"
+                        >
+                          <ImageOff className="size-4" />
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-mono font-semibold">
+                      {item.sku}
+                    </TableCell>
+                    <TableCell>{item.name}</TableCell>
+                    <TableCell>{typeLabel(item.type)}</TableCell>
+                    <TableCell>{item.unit}</TableCell>
+                    <TableCell>
+                      <StatusBadge tone={item.isActive ? "success" : "neutral"}>
+                        {item.isActive ? "Đang dùng" : "Ngưng dùng"}
+                      </StatusBadge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                          onClick={() => setViewingItem(item)}
+                        >
+                          <Eye data-icon="inline-start" />
+                          Xem chi tiết
+                        </Button>
+                        <Button
+                          disabled={!canManage}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                          onClick={() => setEditingItem(item)}
+                        >
+                          <Pencil data-icon="inline-start" />
+                          Sửa
+                        </Button>
+                        <Button
+                          disabled={!canManage || !item.isActive}
+                          size="sm"
+                          type="button"
+                          variant="destructive"
+                          onClick={() => setDeletingItem(item)}
+                        >
+                          <Trash2 data-icon="inline-start" />
+                          Ngưng dùng
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+
+          <div className="flex items-center justify-between gap-3">
+            <Button
+              disabled={page <= 1}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              type="button"
+              variant="outline"
+            >
+              Trang trước
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              {page}/{totalPages}
+            </span>
+            <Button
+              disabled={page >= totalPages}
+              onClick={() =>
+                setPage((current) => Math.min(totalPages, current + 1))
+              }
+              type="button"
+              variant="outline"
+            >
+              Trang sau
+            </Button>
+          </div>
+        </TablePanel>
       </div>
 
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
@@ -537,6 +563,13 @@ export function WarehouseItemsClient() {
         />
       ) : null}
 
+      {previewImage ? (
+        <WarehouseItemImageViewer
+          imageUrl={previewImage}
+          onClose={() => setPreviewImage(null)}
+        />
+      ) : null}
+
       <DeleteItemDialog
         busy={deleteMutation.isPending}
         item={deletingItem}
@@ -555,6 +588,82 @@ export function WarehouseItemsClient() {
   );
 }
 
+function WarehouseItemImageViewer({
+  imageUrl,
+  onClose,
+}: {
+  imageUrl: string;
+  onClose: () => void;
+}) {
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [scale, setScale] = useState(1);
+  const dragOrigin = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[60] flex items-center justify-center">
+      <Button
+        aria-label="Đóng xem ảnh"
+        className="pointer-events-auto fixed right-4 top-4 z-[61]"
+        onClick={onClose}
+        size="icon-sm"
+        type="button"
+        variant="secondary"
+      >
+        <X />
+      </Button>
+      <img
+        alt="Ảnh mặt hàng phóng to"
+        className={`pointer-events-auto max-h-[96dvh] max-w-[96vw] select-none object-contain ${scale > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"}`}
+        draggable={false}
+        src={imageUrl}
+        style={{
+          transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+        }}
+        onPointerDown={(event) => {
+          if (scale <= 1) return;
+          dragOrigin.current = {
+            x: event.clientX - offset.x,
+            y: event.clientY - offset.y,
+          };
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          const origin = dragOrigin.current;
+          if (origin)
+            setOffset({
+              x: event.clientX - origin.x,
+              y: event.clientY - origin.y,
+            });
+        }}
+        onPointerUp={() => {
+          dragOrigin.current = null;
+        }}
+        onPointerCancel={() => {
+          dragOrigin.current = null;
+        }}
+        onWheel={(event) => {
+          event.preventDefault();
+          setScale((current) => {
+            const next = Math.min(
+              3,
+              Math.max(0.5, current + (event.deltaY < 0 ? 0.1 : -0.1)),
+            );
+            if (next <= 1) setOffset({ x: 0, y: 0 });
+            return next;
+          });
+        }}
+      />
+    </div>
+  );
+}
 function SelectFilter({
   children,
   label,
@@ -854,6 +963,22 @@ function ItemDetailDialog({
 
           <section
             className="space-y-3 border-t pt-4"
+            aria-labelledby="item-images-title"
+          >
+            <h3
+              id="item-images-title"
+              className="text-sm font-semibold text-foreground"
+            >
+              Ảnh mặt hàng
+            </h3>
+            <EvidenceImageGallery
+              emptyLabel="Chưa có ảnh mặt hàng."
+              images={item.images}
+              label=""
+            />
+          </section>
+          <section
+            className="space-y-3 border-t pt-4"
             aria-labelledby="item-barcode-title"
           >
             <h3
@@ -996,6 +1121,13 @@ function ItemEditDialog({
             </div>
           </div>
 
+          <div className="rounded-lg border bg-muted/20 p-3">
+            <EvidenceImageGallery
+              emptyLabel="Chưa có ảnh mặt hàng."
+              images={item.images}
+              label="Ảnh mặt hàng"
+            />
+          </div>
           <ItemFormFields
             busy={busy}
             canManage={canManage}

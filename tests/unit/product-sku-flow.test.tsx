@@ -105,16 +105,22 @@ describe("product SKU creation", () => {
     renderWithQueryClient(<AttributeOptionsAdminPanel />);
     await waitFor(() => expect(mockedListAttributeOptions).toHaveBeenCalled());
 
-    fireEvent.click(await screen.findByRole("combobox", { name: "Loại mặt hàng" }));
+    fireEvent.click(
+      await screen.findByRole("combobox", { name: "Loại mặt hàng" }),
+    );
     fireEvent.click(await screen.findByRole("option", { name: "Bao bì" }));
 
     await waitFor(() =>
       expect(mockedGetSkuTemplate).toHaveBeenCalledWith("PACKAGING"),
     );
 
-    fireEvent.click(await screen.findByRole("combobox", { name: "Nhóm thuộc tính" }));
+    fireEvent.click(
+      await screen.findByRole("combobox", { name: "Nhóm thuộc tính" }),
+    );
 
-    expect(await screen.findByRole("option", { name: "Nhóm bao bì" })).toBeVisible();
+    expect(
+      await screen.findByRole("option", { name: "Nhóm bao bì" }),
+    ).toBeVisible();
     expect(screen.getByRole("option", { name: "Kích thước" })).toBeVisible();
     expect(screen.getByRole("option", { name: "Màu sắc" })).toBeVisible();
     expect(
@@ -150,9 +156,13 @@ describe("product SKU creation", () => {
     renderWithQueryClient(<AttributeOptionsAdminPanel />);
     await waitFor(() => expect(mockedListAttributeOptions).toHaveBeenCalled());
 
-    fireEvent.click(await screen.findByRole("combobox", { name: "Loại mặt hàng" }));
+    fireEvent.click(
+      await screen.findByRole("combobox", { name: "Loại mặt hàng" }),
+    );
     fireEvent.click(await screen.findByRole("option", { name: "Nguyên liệu" }));
-    fireEvent.click(await screen.findByRole("combobox", { name: "Nhóm thuộc tính" }));
+    fireEvent.click(
+      await screen.findByRole("combobox", { name: "Nhóm thuộc tính" }),
+    );
     fireEvent.click(
       await screen.findByRole("option", { name: "Nhóm nguyên liệu" }),
     );
@@ -322,7 +332,9 @@ describe("product SKU creation", () => {
             ? [spec]
             : [],
     );
-    mockedPreviewWarehouseItemSku.mockResolvedValue({ sku: "MAT-RAW-BEAN-500G" });
+    mockedPreviewWarehouseItemSku.mockResolvedValue({
+      sku: "MAT-RAW-BEAN-500G",
+    });
 
     renderWithQueryClient(
       <CreateWarehouseItemPanel canManage onCreated={vi.fn()} />,
@@ -332,12 +344,22 @@ describe("product SKU creation", () => {
       await screen.findByRole("combobox", { name: "Loại mặt hàng" }),
     );
     fireEvent.click(await screen.findByRole("option", { name: "Nguyên liệu" }));
-    fireEvent.click(await screen.findByRole("combobox", { name: "Nhóm nguyên liệu" }));
-    fireEvent.click(await screen.findByRole("option", { name: "Nguyên liệu thô (RAW)" }));
-    fireEvent.click(await screen.findByRole("combobox", { name: "Loại nguyên liệu" }));
+    fireEvent.click(
+      await screen.findByRole("combobox", { name: "Nhóm nguyên liệu" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("option", { name: "Nguyên liệu thô (RAW)" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("combobox", { name: "Loại nguyên liệu" }),
+    );
     fireEvent.click(await screen.findByRole("option", { name: "Hạt (BEAN)" }));
-    fireEvent.click(await screen.findByRole("combobox", { name: "Quy cách tồn" }));
-    fireEvent.click(await screen.findByRole("option", { name: "Túi 500g (500G)" }));
+    fireEvent.click(
+      await screen.findByRole("combobox", { name: "Quy cách tồn" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("option", { name: "Túi 500g (500G)" }),
+    );
 
     await waitFor(() =>
       expect(mockedPreviewWarehouseItemSku).toHaveBeenCalledWith({
@@ -388,6 +410,26 @@ describe("product SKU creation", () => {
       target: { value: "PET" },
     });
 
-    expect(await screen.findByRole("option", { name: "Nhựa PET (PET)" })).toBeVisible();
+    expect(
+      await screen.findByRole("option", { name: "Nhựa PET (PET)" }),
+    ).toBeVisible();
+  });
+
+  it("requires an item image before the form can be submitted", async () => {
+    mockedGetSkuTemplate.mockResolvedValue({
+      fields: [],
+      itemType: "CUP_BLANK",
+      kind: "template",
+      templateId: "CUP_BLANK",
+    });
+    mockedPreviewWarehouseItemSku.mockResolvedValue({ sku: "CUP-RAW" });
+
+    renderWithQueryClient(
+      <CreateWarehouseItemPanel canManage onCreated={vi.fn()} />,
+    );
+
+    expect(screen.getByText("Kéo thả ảnh vào đây")).toBeVisible();
+    expect(screen.getByLabelText(/Ảnh mặt hàng/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Tạo mặt hàng" })).toBeDisabled();
   });
 });
