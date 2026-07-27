@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { WarehouseLayout } from "@/types/api";
 
-const { baseLayout, fetchWarehouseLayout, saveWarehouseLayout } = vi.hoisted(
+const { baseLayout, fetchWarehouseLayout, resetWarehouseLayout, saveWarehouseLayout } = vi.hoisted(
   () => {
     const layout: WarehouseLayout = {
       id: "single-warehouse-layout",
@@ -28,6 +28,7 @@ const { baseLayout, fetchWarehouseLayout, saveWarehouseLayout } = vi.hoisted(
     return {
       baseLayout: layout,
       fetchWarehouseLayout: vi.fn().mockResolvedValue(layout),
+      resetWarehouseLayout: vi.fn().mockResolvedValue(layout),
       saveWarehouseLayout: vi.fn(),
     };
   },
@@ -37,6 +38,7 @@ vi.mock(
   "@/features/warehouse-layout/services/warehouse-layout.service",
   () => ({
     fetchWarehouseLayout,
+    resetWarehouseLayout,
     saveWarehouseLayout,
   }),
 );
@@ -100,7 +102,9 @@ function renderWithClient() {
 describe("WarehouseMapClient", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal('confirm', vi.fn(() => true));
     fetchWarehouseLayout.mockResolvedValue(structuredClone(baseLayout));
+    resetWarehouseLayout.mockResolvedValue(structuredClone(baseLayout));
     saveWarehouseLayout.mockImplementation(async (request) => ({
       revision: 4,
       idMap: {},
@@ -152,6 +156,15 @@ describe("WarehouseMapClient", () => {
         operations: [expect.objectContaining({ op: "CREATE", entity: "ZONE" })],
       }),
     );
+  });
+
+  it("gọi API reset riêng khi bấm reset sơ đồ", async () => {
+    renderWithClient();
+    await screen.findByText("Bản đồ kho 2D");
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset sơ đồ" }));
+
+    await waitFor(() => expect(resetWarehouseLayout).toHaveBeenCalledTimes(1));
   });
 
   it("xóa phần tử bằng Delete và hỗ trợ phím tắt undo/redo", async () => {

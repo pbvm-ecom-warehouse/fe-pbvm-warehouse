@@ -228,3 +228,11 @@ export async function saveWarehouseLayout(
     layout: mapWarehouseLayoutResponse(data.layout),
   };
 }
+
+export async function resetWarehouseLayout(): Promise<WarehouseLayout> {
+  const response = await apiClient.post<
+    ApiEnvelope<WarehouseLayoutApiResponse> | WarehouseLayoutApiResponse
+  >("/location/layout/reset");
+
+  return mapWarehouseLayoutResponse(unwrapApiData(response.data));
+}

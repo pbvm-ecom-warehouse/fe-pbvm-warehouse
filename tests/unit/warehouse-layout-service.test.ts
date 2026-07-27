@@ -1,13 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/api-client", () => ({
-  apiClient: { get: vi.fn(), patch: vi.fn(), put: vi.fn() },
+  apiClient: { get: vi.fn(), patch: vi.fn(), post: vi.fn(), put: vi.fn() },
 }));
 
 import { apiClient } from "@/lib/api-client";
 import {
   fetchWarehouseLayout,
   mapWarehouseLayoutResponse,
+  resetWarehouseLayout,
   saveWarehouseLayout,
 } from "@/features/warehouse-layout/services/warehouse-layout.service";
 
@@ -129,5 +130,18 @@ describe("saveWarehouseLayout", () => {
     expect(apiClient.patch).toHaveBeenCalledWith("/location/layout", request);
     expect(result.revision).toBe(8);
     expect(result.layout.revision).toBe(8);
+  });
+});
+
+
+describe("resetWarehouseLayout", () => {
+  it("POST reset endpoint và trả layout canonical mới", async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: apiLayout });
+
+    const result = await resetWarehouseLayout();
+
+    expect(apiClient.post).toHaveBeenCalledWith("/location/layout/reset");
+    expect(result.revision).toBe(7);
+    expect(result.canvas).toEqual({ widthM: 40, heightM: 24, gridM: 0.5 });
   });
 });

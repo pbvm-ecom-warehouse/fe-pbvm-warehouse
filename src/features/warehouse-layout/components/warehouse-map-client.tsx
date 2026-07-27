@@ -32,6 +32,7 @@ import type {
 
 import {
   fetchWarehouseLayout,
+  resetWarehouseLayout,
   saveWarehouseLayout,
 } from "../services/warehouse-layout.service";
 import { useWarehouseEditor } from "../hooks/use-warehouse-editor";
@@ -161,6 +162,9 @@ function WarehouseEditor({
     selection && selectionExists(editor.draftLayout, selection)
       ? selection
       : null;
+  const hasStagingShelf = editor.draftLayout.shelves.some(
+    (shelf) => shelf.isStaging,
+  );
 
   const saveMutation = useMutation({
     mutationFn: saveWarehouseLayout,
@@ -190,6 +194,24 @@ function WarehouseEditor({
       toast.error(getApiErrorMessage(error) ?? "Không thể lưu bản đồ kho.");
     },
   });
+
+  const resetMutation = useMutation({
+    mutationFn: resetWarehouseLayout,
+    onSuccess: (layout) => {
+      editor.reset(layout);
+      setSelection(null);
+      setIssues([]);
+      setClientErrors([]);
+      setConflictRevision(null);
+      queryClient.setQueryData(layoutKey, layout);
+      toast.success("Đã reset sơ đồ kho. Hãy tạo lại khu vực, rack và chọn shelf staging mới.");
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error) ?? "Không thể reset sơ đồ kho.");
+    },
+  });
+
+  const busy = saveMutation.isPending || resetMutation.isPending;
 
   function updateElement(
     target: NonNullable<LayoutSelection>,
@@ -371,7 +393,7 @@ function WarehouseEditor({
   }
 
   function deleteSelection() {
-    if (!canEdit || saveMutation.isPending || !activeSelection) return;
+    if (!canEdit || busy || !activeSelection) return;
     const currentSelection = activeSelection;
     const currentLayout = editor.draftLayout;
     if (
@@ -387,6 +409,14 @@ function WarehouseEditor({
           (item) => item.id !== currentSelection.id,
         );
       } else if (currentSelection.kind === "rack") {
+        if (
+          currentLayout.shelves.some(
+            (item) => item.rackId === currentSelection.id && item.isStaging,
+          )
+        ) {
+          toast.error("Rack này đang chứa shelf staging. Hãy chuyển staging sang shelf khác trước.");
+          return layout;
+        }
         layout.racks = layout.racks.filter(
           (item) => item.id !== currentSelection.id,
         );
@@ -455,6 +485,21 @@ function WarehouseEditor({
     setIssues([]);
   }
 
+  function patchShelf(shelfId: string, patch: Record<string, unknown>) {
+    editor.commit((layout) => {
+      layout.shelves = layout.shelves.map((item) => {
+        if (patch.isStaging === true) {
+          return { ...item, isStaging: item.id === shelfId };
+        }
+        if (item.id !== shelfId) return item;
+        return { ...item, ...patch };
+      });
+      return layout;
+    });
+    setIssues([]);
+    setClientErrors([]);
+  }
+
   function save() {
     const errors = validateWarehouseLayoutClient(editor.draftLayout);
     setClientErrors(errors);
@@ -471,17 +516,26 @@ function WarehouseEditor({
   }
 
   function handleUndo() {
-    if (!canEdit || !editor.canUndo || saveMutation.isPending) return;
+    if (!canEdit || !editor.canUndo || busy) return;
     editor.undo();
     setIssues([]);
     setClientErrors([]);
   }
 
   function handleRedo() {
-    if (!canEdit || !editor.canRedo || saveMutation.isPending) return;
+    if (!canEdit || !editor.canRedo || busy) return;
     editor.redo();
     setIssues([]);
     setClientErrors([]);
+  }
+
+  function resetLayoutToEmpty() {
+    if (!canEdit || busy) return;
+    const confirmed = window.confirm(
+      "Reset sẽ xóa toàn bộ zone, rack, shelf, lối đi và cổng hiện có trên server. Chỉ dùng khi bạn muốn dựng lại sơ đồ từ đầu.",
+    );
+    if (!confirmed) return;
+    resetMutation.mutate();
   }
 
   async function reloadCanonical() {
@@ -558,8 +612,17 @@ function WarehouseEditor({
 
         <div className="flex items-center gap-2">
           <Button
+            aria-label="Reset sơ đồ"
+            disabled={!canEdit || busy}
+            onClick={resetLayoutToEmpty}
+            variant="outline"
+          >
+            <RefreshCw data-icon="inline-start" />
+            Reset sơ đồ
+          </Button>
+          <Button
             aria-label="Hoàn tác"
-            disabled={!canEdit || !editor.canUndo || saveMutation.isPending}
+            disabled={!canEdit || !editor.canUndo || busy}
             onClick={handleUndo}
             size="icon"
             variant="outline"
@@ -568,7 +631,7 @@ function WarehouseEditor({
           </Button>
           <Button
             aria-label="Làm lại"
-            disabled={!canEdit || !editor.canRedo || saveMutation.isPending}
+            disabled={!canEdit || !editor.canRedo || busy}
             onClick={handleRedo}
             size="icon"
             variant="outline"
@@ -577,7 +640,7 @@ function WarehouseEditor({
           </Button>
           <Button
             aria-label="Lưu thay đổi"
-            disabled={!canEdit || !editor.isDirty || saveMutation.isPending}
+            disabled={!canEdit || !editor.isDirty || busy}
             onClick={save}
           >
             {saveMutation.isPending ? (
@@ -606,6 +669,12 @@ function WarehouseEditor({
             <RefreshCw data-icon="inline-start" />
             Tải bản mới
           </Button>
+        </div>
+      ) : null}
+
+      {!hasStagingShelf ? (
+        <div className="border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-900">
+          Chưa có shelf staging. Sau khi tạo rack, hãy chọn 1 shelf làm staging trước khi dùng nhập kho.
         </div>
       ) : null}
 
@@ -675,6 +744,7 @@ function WarehouseEditor({
           }
           onPatchCanvas={patchCanvas}
           onPatchRackTemplate={patchRackTemplate}
+          onPatchShelf={patchShelf}
           onRotate={rotateSelection}
           selection={activeSelection}
         />
