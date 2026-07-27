@@ -373,7 +373,7 @@ export function GoodsReturnsClient() {
           selectedReturn ? "xl:grid-cols-[minmax(0,1fr)_420px]" : "grid-cols-1",
         )}
       >
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <TablePanel
             count={`${total} bản ghi`}
             title={

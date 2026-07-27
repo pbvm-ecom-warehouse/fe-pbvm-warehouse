@@ -50,7 +50,7 @@ export const dashboardRoutes = [
   },
   {
     href: "/purchase-orders",
-    label: "Mua hàng",
+    label: "Đặt Nhập hàng",
     icon: ShoppingCart,
     allowedRoles: getRouteAllowedRoles("/purchase-orders"),
   },
