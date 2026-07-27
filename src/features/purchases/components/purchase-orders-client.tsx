@@ -64,6 +64,7 @@ import {
   StatusBadge,
   TableSkeleton,
 } from "@/features/admin-shell/components/operations-ui";
+import { createGoodsReceiptNoteFormSchema } from "@/features/purchases/schemas/goods-receipt-note.schema";
 import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
@@ -580,9 +581,15 @@ export function PurchaseOrdersClient({
   function handleCreateGrn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const items = toGoodsReceiptItems(grnItemForms);
-    if (!grnPurchaseOrderId || items.length === 0) {
-      toast.error("Phiếu nhập cần ít nhất một dòng hàng hợp lệ.");
+    const parsed = createGoodsReceiptNoteFormSchema.safeParse({
+      items: grnItemForms,
+      purchaseOrderId: grnPurchaseOrderId,
+    });
+
+    if (!parsed.success) {
+      toast.error(
+        parsed.error.issues[0]?.message ?? "Thông tin phiếu nhập chưa hợp lệ",
+      );
       return;
     }
 
@@ -1032,117 +1039,154 @@ export function PurchaseOrdersClient({
           }
         }}
       >
-        <DialogContent size="2xl" className="max-h-[90dvh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent
+          size="2xl"
+          className="grid max-h-[90dvh] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0"
+        >
+          <DialogHeader className="gap-1 border-b px-5 py-4">
             <DialogTitle>Tạo phiếu nhập</DialogTitle>
             <DialogDescription>
               Chọn đơn mua rồi nhập số lượng hàng thực nhận.
             </DialogDescription>
           </DialogHeader>
-          <form className="space-y-4" onSubmit={handleCreateGrn}>
-            <SelectField
-              disabled={
-                !canCreateGoodsReceiptNote ||
-                createGrnMutation.isPending ||
-                receivingPurchaseOrdersQuery.isLoading ||
-                receivingPurchaseOrders.length === 0
-              }
-              label="Đơn mua"
-              value={grnPurchaseOrderId}
-              onChange={handleGrnPurchaseOrderChange}
-            >
-              {receivingPurchaseOrdersQuery.isLoading ? (
-                <SelectItem disabled value="_loading">
-                  Đang tải danh sách đơn mua...
-                </SelectItem>
-              ) : receivingPurchaseOrders.length === 0 ? (
-                <SelectItem disabled value="_empty">
-                  Chưa có đơn mua nào chờ nhập
-                </SelectItem>
-              ) : (
-                receivingPurchaseOrders.map((purchaseOrder) => (
-                  <SelectItem key={purchaseOrder.id} value={purchaseOrder.id}>
-                    {getPurchaseOrderSelectLabel(purchaseOrder)}
-                  </SelectItem>
-                ))
-              )}
-            </SelectField>
-            {grnPurchaseOrder ? (
-              <div className="grid gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm sm:grid-cols-4">
-                <InfoBox label="Số đơn mua" value={grnPurchaseOrder.poNumber} />
-                <InfoBox label="NCC" value={grnPurchaseOrderSupplierLabel} />
-                <InfoBox
-                  label="Ngày dự kiến"
-                  value={formatDate(grnPurchaseOrder.expectedDate)}
-                />
-                <InfoBox
-                  label="Số dòng hàng"
-                  value={String(grnPurchaseOrder.items?.length ?? 0)}
-                />
-              </div>
-            ) : null}
-            <div className="grid gap-3">
-              {grnItemForms.length === 0 ? (
-                <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                  Đơn mua chưa có dòng hàng để tạo phiếu nhập.
-                </div>
-              ) : null}
-              {grnItemForms.map((item, index) => (
-                <GoodsReceiptItemFields
-                  index={index}
-                  item={item}
-                  key={`${item.itemId}-${index}`}
-                  onChange={(next) =>
-                    setGrnItemForms((current) =>
-                      current.map((currentItem, itemIndex) =>
-                        itemIndex === index ? next : currentItem,
-                      ),
-                    )
+          <form
+            className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto]"
+            onSubmit={handleCreateGrn}
+          >
+            <div className="min-h-0 space-y-5 overflow-y-auto px-5 py-4">
+              <section className="space-y-3">
+                <SelectField
+                  disabled={
+                    !canCreateGoodsReceiptNote ||
+                    createGrnMutation.isPending ||
+                    receivingPurchaseOrdersQuery.isLoading ||
+                    receivingPurchaseOrders.length === 0
                   }
+                  label="Đơn mua"
+                  value={grnPurchaseOrderId}
+                  onChange={handleGrnPurchaseOrderChange}
+                >
+                  {receivingPurchaseOrdersQuery.isLoading ? (
+                    <SelectItem disabled value="_loading">
+                      Đang tải danh sách đơn mua...
+                    </SelectItem>
+                  ) : receivingPurchaseOrders.length === 0 ? (
+                    <SelectItem disabled value="_empty">
+                      Chưa có đơn mua nào chờ nhập
+                    </SelectItem>
+                  ) : (
+                    receivingPurchaseOrders.map((purchaseOrder) => (
+                      <SelectItem
+                        key={purchaseOrder.id}
+                        value={purchaseOrder.id}
+                      >
+                        {getPurchaseOrderSelectLabel(purchaseOrder)}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectField>
+                {grnPurchaseOrder ? (
+                  <div className="grid gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm sm:grid-cols-[1.1fr_1.4fr_auto_auto]">
+                    <InfoBox
+                      label="Số đơn mua"
+                      value={grnPurchaseOrder.poNumber}
+                    />
+                    <InfoBox
+                      label="NCC"
+                      title={grnPurchaseOrderSupplierLabel}
+                      value={grnPurchaseOrderSupplierLabel}
+                    />
+                    <InfoBox
+                      label="Ngày dự kiến"
+                      nowrap
+                      value={formatDate(grnPurchaseOrder.expectedDate)}
+                    />
+                    <InfoBox
+                      label="Số dòng hàng"
+                      nowrap
+                      value={String(grnPurchaseOrder.items?.length ?? 0)}
+                    />
+                  </div>
+                ) : null}
+              </section>
+
+              <section className="space-y-2">
+                <div className="flex items-baseline justify-between">
+                  <h3 className="text-sm font-semibold">Hàng thực nhận</h3>
+                  {grnItemForms.length > 0 ? (
+                    <span className="text-xs text-muted-foreground">
+                      {grnItemForms.length} dòng hàng
+                    </span>
+                  ) : null}
+                </div>
+                <div className="space-y-3">
+                  {grnItemForms.length === 0 ? (
+                    <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                      Chọn một đơn mua để hiển thị dòng hàng cần nhập.
+                    </div>
+                  ) : null}
+                  {grnItemForms.map((item, index) => (
+                    <GoodsReceiptItemFields
+                      index={index}
+                      item={item}
+                      key={`${item.itemId}-${index}`}
+                      onChange={(next) =>
+                        setGrnItemForms((current) =>
+                          current.map((currentItem, itemIndex) =>
+                            itemIndex === index ? next : currentItem,
+                          ),
+                        )
+                      }
+                    />
+                  ))}
+                </div>
+              </section>
+
+              <section className="space-y-2">
+                <h3 className="text-sm font-semibold">Ảnh minh chứng</h3>
+                <EvidenceImagePicker
+                  disabled={
+                    !canCreateGoodsReceiptNote || createGrnMutation.isPending
+                  }
+                  files={grnImages}
+                  id="goods-receipt-images"
+                  label={
+                    grnPurchaseOrder
+                      ? `Ảnh minh chứng cho ${grnPurchaseOrder.poNumber}`
+                      : "Ảnh minh chứng nhận hàng"
+                  }
+                  onChange={setGrnImages}
                 />
-              ))}
+                {grnPurchaseOrder ? (
+                  <p className="text-xs text-muted-foreground">
+                    Ảnh sẽ được lưu vào phiếu nhập tạo từ{" "}
+                    {grnPurchaseOrder.poNumber} của{" "}
+                    {grnPurchaseOrderSupplierLabel}.
+                  </p>
+                ) : null}
+              </section>
             </div>
-            <div className="space-y-2">
-              <EvidenceImagePicker
+            <DialogFooter className="mx-0 mb-0 rounded-b-xl">
+              <Button
                 disabled={
-                  !canCreateGoodsReceiptNote || createGrnMutation.isPending
+                  !canCreateGoodsReceiptNote ||
+                  !grnPurchaseOrder ||
+                  createGrnMutation.isPending ||
+                  grnItemForms.length === 0
                 }
-                files={grnImages}
-                id="goods-receipt-images"
-                label={
-                  grnPurchaseOrder
-                    ? `Ảnh minh chứng cho ${grnPurchaseOrder.poNumber}`
-                    : "Ảnh minh chứng nhận hàng"
-                }
-                onChange={setGrnImages}
-              />
-              {grnPurchaseOrder ? (
-                <p className="text-xs text-muted-foreground">
-                  Ảnh sẽ được lưu vào phiếu nhập tạo từ{" "}
-                  {grnPurchaseOrder.poNumber} của{" "}
-                  {grnPurchaseOrderSupplierLabel}.
-                </p>
-              ) : null}
-            </div>
-            <Button
-              disabled={
-                !canCreateGoodsReceiptNote ||
-                !grnPurchaseOrder ||
-                createGrnMutation.isPending ||
-                grnItemForms.length === 0
-              }
-              type="submit"
-            >
-              {createGrnMutation.isPending ? (
-                <LoaderCircle
-                  className="animate-spin"
-                  data-icon="inline-start"
-                />
-              ) : (
-                <Save data-icon="inline-start" />
-              )}
-              Tạo phiếu nhập
-            </Button>
+                type="submit"
+              >
+                {createGrnMutation.isPending ? (
+                  <LoaderCircle
+                    className="animate-spin"
+                    data-icon="inline-start"
+                  />
+                ) : (
+                  <Save data-icon="inline-start" />
+                )}
+                Tạo phiếu nhập
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
@@ -1547,92 +1591,117 @@ function GoodsReceiptItemFields({
   const fieldId = `goods-receipt-item-${index}`;
 
   return (
-    <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-12">
-      <div className="min-w-0 space-y-2 lg:col-span-3">
-        <Label htmlFor={`${fieldId}-item`}>Tên mặt hàng</Label>
-        <Input
-          aria-label={`Tên mặt hàng phiếu nhập dòng ${index + 1}`}
-          id={`${fieldId}-item`}
-          readOnly
-          title={item.itemName}
-          value={item.itemName}
-        />
+    <div className="overflow-hidden rounded-lg border border-border/70">
+      <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-2">
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+          {index + 1}
+        </span>
+        <span className="truncate text-sm font-medium" title={item.itemName}>
+          {item.itemName || "Chưa xác định mặt hàng"}
+        </span>
+        <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground">
+          {item.sku}
+        </span>
+        {item.isPerishable ? (
+          <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+            Có hạn sử dụng
+          </span>
+        ) : null}
       </div>
-      <div className="min-w-0 space-y-2 lg:col-span-3">
-        <Label htmlFor={`${fieldId}-sku`}>SKU</Label>
-        <Input
-          aria-label={`SKU phiếu nhập dòng ${index + 1}`}
-          id={`${fieldId}-sku`}
-          readOnly
-          value={item.sku}
-        />
-      </div>
-      <div className="min-w-0 space-y-2 lg:col-span-2">
-        <Label htmlFor={`${fieldId}-quantity`}>Số lượng thực nhập</Label>
-        <Input
-          aria-label={`Số lượng thực nhập dòng ${index + 1}`}
-          id={`${fieldId}-quantity`}
-          min="0"
-          type="number"
-          value={item.actualQty}
-          onChange={(event) =>
-            onChange({ ...item, actualQty: event.target.value })
-          }
-        />
-      </div>
-      <div className="min-w-0 space-y-2 lg:col-span-2">
-        <Label htmlFor={`${fieldId}-unit`}>Đơn vị</Label>
-        <Input
-          aria-label={`Đơn vị phiếu nhập dòng ${index + 1}`}
-          id={`${fieldId}-unit`}
-          value={item.unit}
-          onChange={(event) => onChange({ ...item, unit: event.target.value })}
-        />
-      </div>
-      <div className="min-w-0 space-y-2 lg:col-span-2">
-        <Label htmlFor={`${fieldId}-lot`}>Mã lô</Label>
-        <Input
-          aria-label={`Mã lô phiếu nhập dòng ${index + 1}`}
-          id={`${fieldId}-lot`}
-          placeholder="Nhập mã lô"
-          required={item.isPerishable}
-          value={item.lotNumber}
-          onChange={(event) =>
-            onChange({ ...item, lotNumber: event.target.value })
-          }
-        />
-      </div>
-      <div className="min-w-0 space-y-2 lg:col-span-3">
-        <Label htmlFor={`${fieldId}-expiry`}>Hạn sử dụng</Label>
-        <Input
-          aria-label={`Hạn sử dụng phiếu nhập dòng ${index + 1}`}
-          id={`${fieldId}-expiry`}
-          required={item.isPerishable}
-          type="date"
-          value={item.expiryDate}
-          onChange={(event) =>
-            onChange({ ...item, expiryDate: event.target.value })
-          }
-        />
-      </div>
-      <div className="min-w-0 space-y-2 sm:col-span-2 lg:col-span-9">
-        <Label htmlFor={`${fieldId}-note`}>Ghi chú</Label>
-        <Input
-          aria-label={`Ghi chú phiếu nhập dòng ${index + 1}`}
-          id={`${fieldId}-note`}
-          value={item.note}
-          onChange={(event) => onChange({ ...item, note: event.target.value })}
-        />
+      <div className="grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-12">
+        <div className="min-w-0 space-y-2 lg:col-span-3">
+          <Label htmlFor={`${fieldId}-quantity`}>Số lượng thực nhập</Label>
+          <Input
+            aria-label={`Số lượng thực nhập dòng ${index + 1}`}
+            id={`${fieldId}-quantity`}
+            min="0"
+            type="number"
+            value={item.actualQty}
+            onChange={(event) =>
+              onChange({ ...item, actualQty: event.target.value })
+            }
+          />
+        </div>
+        <div className="min-w-0 space-y-2 lg:col-span-2">
+          <Label htmlFor={`${fieldId}-unit`}>Đơn vị</Label>
+          <Input
+            aria-label={`Đơn vị phiếu nhập dòng ${index + 1}`}
+            id={`${fieldId}-unit`}
+            value={item.unit}
+            onChange={(event) =>
+              onChange({ ...item, unit: event.target.value })
+            }
+          />
+        </div>
+        <div className="min-w-0 space-y-2 lg:col-span-3">
+          <Label htmlFor={`${fieldId}-lot`}>
+            Mã lô{item.isPerishable ? <span className="text-destructive"> *</span> : null}
+          </Label>
+          <Input
+            aria-label={`Mã lô phiếu nhập dòng ${index + 1}`}
+            id={`${fieldId}-lot`}
+            placeholder="Nhập mã lô"
+            required={item.isPerishable}
+            value={item.lotNumber}
+            onChange={(event) =>
+              onChange({ ...item, lotNumber: event.target.value })
+            }
+          />
+        </div>
+        <div className="min-w-0 space-y-2 lg:col-span-4">
+          <Label htmlFor={`${fieldId}-expiry`}>
+            Hạn sử dụng{item.isPerishable ? <span className="text-destructive"> *</span> : null}
+          </Label>
+          <Input
+            aria-label={`Hạn sử dụng phiếu nhập dòng ${index + 1}`}
+            id={`${fieldId}-expiry`}
+            required={item.isPerishable}
+            type="date"
+            value={item.expiryDate}
+            onChange={(event) =>
+              onChange({ ...item, expiryDate: event.target.value })
+            }
+          />
+        </div>
+        <div className="min-w-0 space-y-2 sm:col-span-2 lg:col-span-12">
+          <Label htmlFor={`${fieldId}-note`}>Ghi chú</Label>
+          <Input
+            aria-label={`Ghi chú phiếu nhập dòng ${index + 1}`}
+            id={`${fieldId}-note`}
+            value={item.note}
+            onChange={(event) =>
+              onChange({ ...item, note: event.target.value })
+            }
+          />
+        </div>
       </div>
     </div>
   );
 }
 
-function InfoBox({ label, value }: { label: string; value: string }) {
+function InfoBox({
+  label,
+  nowrap,
+  title,
+  value,
+}: {
+  label: string;
+  nowrap?: boolean;
+  title?: string;
+  value: string;
+}) {
   return (
-    <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
+    <div className="min-w-0 rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-1 text-sm font-semibold">{value}</div>
+      <div
+        className={cn(
+          "mt-1 text-sm font-semibold",
+          nowrap ? "truncate" : "line-clamp-2",
+        )}
+        title={title}
+      >
+        {value}
+      </div>
     </div>
   );
 }
