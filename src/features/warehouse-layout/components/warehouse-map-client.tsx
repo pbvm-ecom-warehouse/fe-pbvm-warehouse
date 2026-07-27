@@ -19,6 +19,13 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { getApiErrorCode, getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { useSessionUser } from "@/hooks/use-session-user";
@@ -164,6 +171,7 @@ function WarehouseEditor({
   const [conflictRevision, setConflictRevision] = useState<number | null>(null);
   const [issues, setIssues] = useState<LayoutValidationIssue[]>([]);
   const [clientErrors, setClientErrors] = useState<string[]>([]);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
 
   const invalidSelectionKeys = useMemo(
     () =>
@@ -549,10 +557,12 @@ function WarehouseEditor({
 
   function resetLayoutToEmpty() {
     if (!canEdit || busy) return;
-    const confirmed = window.confirm(
-      "Reset sẽ xóa toàn bộ zone, rack, shelf, lối đi và cổng hiện có trên server. Chỉ dùng khi bạn muốn dựng lại sơ đồ từ đầu.",
-    );
-    if (!confirmed) return;
+    setResetDialogOpen(true);
+  }
+
+  function confirmResetLayoutToEmpty() {
+    if (!canEdit || busy) return;
+    setResetDialogOpen(false);
     resetMutation.mutate();
   }
 
@@ -602,6 +612,58 @@ function WarehouseEditor({
 
   return (
     <div className="flex h-[calc(100dvh-7.25rem)] min-h-[640px] flex-col overflow-hidden bg-slate-100">
+      <Dialog
+        onOpenChange={(open) => {
+          if (busy) return;
+          setResetDialogOpen(open);
+        }}
+        open={resetDialogOpen}
+      >
+        <DialogContent size="md" className="gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-slate-200 bg-slate-50/80 px-6 py-5">
+            <div className="mb-3 flex size-11 items-center justify-center rounded-2xl bg-amber-100 text-amber-700 shadow-sm">
+              <TriangleAlert className="size-5" />
+            </div>
+            <DialogTitle className="text-left text-lg font-semibold text-slate-950">
+              Reset sơ đồ kho?
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-2 pt-1 text-left text-sm leading-6 text-slate-600">
+                <p>
+                  Thao tác này sẽ xoá toàn bộ khu vực, rack, tầng kệ, lối đi và
+                  cổng đang có trên server.
+                </p>
+                <p>
+                  Chỉ dùng khi bạn muốn dựng lại sơ đồ kho từ đầu. Canvas và mẫu
+                  rack chuẩn vẫn được giữ lại.
+                </p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex items-center justify-end gap-3 px-6 py-4">
+            <Button
+              disabled={busy}
+              onClick={() => setResetDialogOpen(false)}
+              variant="outline"
+            >
+              Huỷ
+            </Button>
+            <Button
+              className="bg-red-600 text-white hover:bg-red-700"
+              disabled={busy}
+              onClick={confirmResetLayoutToEmpty}
+            >
+              {resetMutation.isPending ? (
+                <LoaderCircle className="animate-spin" data-icon="inline-start" />
+              ) : (
+                <RefreshCw data-icon="inline-start" />
+              )}
+              Xoá toàn bộ sơ đồ
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <header className="flex min-h-16 items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
