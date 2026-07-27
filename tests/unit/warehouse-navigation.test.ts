@@ -14,6 +14,89 @@ import {
   selectSuggestedShelf,
 } from "@/features/warehouse-navigation/utils/putaway-navigation";
 import { fallbackWarehouseLayout } from "@/features/warehouse-layout/utils/warehouse-layout";
+import type { WarehouseStructureShelf } from "@/features/warehouse-structure/services/warehouse-structure.service";
+
+function makeShelf(
+  overrides: Partial<WarehouseStructureShelf> & {
+    rackId: string;
+    level: number;
+    code: string;
+  },
+): WarehouseStructureShelf {
+  return {
+    id: `${overrides.rackId}-${overrides.code}`,
+    isStaging: false,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+const fallbackShelvesByRackId = new Map<string, WarehouseStructureShelf[]>([
+  [
+    "rack-a1",
+    [
+      makeShelf({
+        rackId: "rack-a1",
+        level: 1,
+        code: "A1-S01",
+        innerDepth: 150,
+        innerWidth: 333,
+        innerHeight: 34,
+        fillFactor: 0.72,
+      }),
+      makeShelf({
+        rackId: "rack-a1",
+        level: 2,
+        code: "A1-S02",
+        innerDepth: 150,
+        innerWidth: 333,
+        innerHeight: 38,
+        fillFactor: 0.76,
+      }),
+      makeShelf({
+        rackId: "rack-a1",
+        level: 3,
+        code: "A1-S03",
+        innerDepth: 150,
+        innerWidth: 333,
+        innerHeight: 30,
+        fillFactor: 0.68,
+      }),
+    ],
+  ],
+  [
+    "rack-b1",
+    [
+      makeShelf({
+        rackId: "rack-b1",
+        level: 1,
+        code: "B1-S01",
+        innerDepth: 150,
+        innerWidth: 333,
+      }),
+      makeShelf({
+        rackId: "rack-b1",
+        level: 2,
+        code: "B1-S02",
+        innerDepth: 150,
+        innerWidth: 333,
+      }),
+    ],
+  ],
+  [
+    "rack-b2",
+    [
+      makeShelf({
+        rackId: "rack-b2",
+        level: 1,
+        code: "B2-S01",
+        innerDepth: 150,
+        innerWidth: 333,
+      }),
+    ],
+  ],
+]);
 
 describe("warehouse put-away navigation", () => {
   it("returns advisory fallback suggestions with capacity and reason", () => {
@@ -154,7 +237,10 @@ describe("warehouse put-away navigation", () => {
   });
 
   it("maps a published layout into scan-ready shelves", () => {
-    const shelves = layoutToWarehouseShelves(fallbackWarehouseLayout);
+    const shelves = layoutToWarehouseShelves(
+      fallbackWarehouseLayout,
+      fallbackShelvesByRackId,
+    );
     const shelf = shelves.find((item) => item.code === "A1-S02");
 
     expect(shelf).toMatchObject({
@@ -171,6 +257,7 @@ describe("warehouse put-away navigation", () => {
   it("builds visual suggestions from backend shelfCode/capacity payloads", () => {
     const suggestions = buildLayoutPutawaySuggestions({
       layout: fallbackWarehouseLayout,
+      shelvesByRackId: fallbackShelvesByRackId,
       suggestions: [{ capacity: 120, shelfCode: "A1-S02" }],
     });
 
@@ -188,6 +275,7 @@ describe("warehouse put-away navigation", () => {
     const suggestions = buildLayoutShelfSuggestions({
       layout: fallbackWarehouseLayout,
       reason: "Vị trí có hàng để lấy",
+      shelvesByRackId: fallbackShelvesByRackId,
       suggestions: [{ capacity: 12, shelfCode: "A1-S02" }],
     });
 

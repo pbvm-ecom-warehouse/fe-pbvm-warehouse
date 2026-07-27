@@ -1,4 +1,5 @@
 import { buildLayoutRoute } from "@/features/warehouse-layout/utils/warehouse-layout";
+import type { WarehouseStructureShelf } from "@/features/warehouse-structure/services/warehouse-structure.service";
 import type {
   PutawaySuggestion,
   ShelfContentItem,
@@ -414,44 +415,36 @@ export function normalizeShelfBoxPlacement(
   };
 }
 
-function parseShelfLevel(code: string, fallback: number) {
-  const match = code.match(/(?:S|T)(\d+)$/i);
-  const parsed = match ? Number.parseInt(match[1], 10) : Number.NaN;
-
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-export function layoutToWarehouseShelves(layout: WarehouseLayout) {
+export function layoutToWarehouseShelves(
+  layout: WarehouseLayout,
+  shelvesByRackId: Map<string, WarehouseStructureShelf[]>,
+): WarehouseShelf[] {
   const zonesById = new Map(layout.zones.map((zone) => [zone.id, zone]));
-  const layoutKey = layout.id ?? "single-warehouse-layout";
 
   return layout.racks.flatMap((rack): WarehouseShelf[] => {
     const zone = zonesById.get(rack.zoneId);
     const zoneCode = zone?.code ?? rack.zoneId;
     const zoneName = zone?.name ?? zoneCode;
     const levelCount = Math.max(1, rack.levelCount);
+    const shelves = shelvesByRackId.get(rack.id) ?? [];
 
-    return rack.shelfCodes.map((code, index) => {
-      const level = parseShelfLevel(code, index + 1);
-      const visualTop = rack.yM + (levelCount - level) * (rack.depthM + 0.2);
+    return shelves.map((shelf): WarehouseShelf => {
+      const visualTop =
+        rack.yM + (levelCount - shelf.level) * (rack.depthM + 0.2);
 
       return {
-        id: `${layoutKey}-${rack.id}-${code}`,
-        barcode: code,
-        code,
-        fillFactor: undefined,
+        id: shelf.id,
+        barcode: shelf.code,
+        code: shelf.code,
+        fillFactor: shelf.fillFactor ?? undefined,
         height: rack.depthM,
-        innerDepth: Math.round(rack.depthM * 100),
-        innerHeight: undefined,
-        innerWidth: Math.round(
-          (rack.widthM * 100) / Math.max(1, rack.bayCount),
-        ),
-        isStaging: false,
-        level,
+        innerDepth: shelf.innerDepth,
+        innerHeight: shelf.innerHeight,
+        innerWidth: shelf.innerWidth,
+        isStaging: shelf.isStaging,
+        level: shelf.level,
         rackCode: rack.code,
         rackName: rack.name,
-
-
         width: rack.widthM,
         x: rack.xM,
         y: visualTop,
@@ -464,14 +457,17 @@ export function layoutToWarehouseShelves(layout: WarehouseLayout) {
 
 export function buildLayoutPutawaySuggestions({
   layout,
+  shelvesByRackId,
   suggestions,
 }: {
   layout: WarehouseLayout;
+  shelvesByRackId: Map<string, WarehouseStructureShelf[]>;
   suggestions: Array<{ capacity: number; shelfCode: string }>;
 }): PutawaySuggestion[] {
   return buildLayoutShelfSuggestions({
     layout,
     reason: "Gợi ý từ WMS theo sức chứa còn lại",
+    shelvesByRackId,
     suggestions,
   });
 }
@@ -479,14 +475,19 @@ export function buildLayoutPutawaySuggestions({
 export function buildLayoutShelfSuggestions({
   layout,
   reason,
+  shelvesByRackId,
   suggestions,
 }: {
   layout: WarehouseLayout;
   reason: string;
+  shelvesByRackId: Map<string, WarehouseStructureShelf[]>;
   suggestions: Array<{ capacity: number; shelfCode: string }>;
 }): PutawaySuggestion[] {
   const shelvesByCode = new Map(
-    layoutToWarehouseShelves(layout).map((shelf) => [shelf.code, shelf]),
+    layoutToWarehouseShelves(layout, shelvesByRackId).map((shelf) => [
+      shelf.code,
+      shelf,
+    ]),
   );
 
   return suggestions.flatMap((suggestion): PutawaySuggestion[] => {
