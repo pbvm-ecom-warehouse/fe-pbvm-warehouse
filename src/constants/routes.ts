@@ -12,9 +12,21 @@ import {
   SlidersHorizontal,
   Truck,
   UsersRound,
+  Warehouse,
 } from "lucide-react";
 
 import { getRouteAllowedRoles } from "@/lib/rbac";
+
+/** Nhóm route gộp chung trong sidebar dưới 1 mục collapse — key khớp field
+ * `group` của từng route trong dashboardRoutes bên dưới. */
+export const ROUTE_GROUPS = {
+  catalog: {
+    label: "Kho & Danh mục",
+    icon: Warehouse,
+  },
+} as const;
+
+export type RouteGroupKey = keyof typeof ROUTE_GROUPS;
 
 export const dashboardRoutes = [
   {
@@ -34,18 +46,21 @@ export const dashboardRoutes = [
     label: "Kho",
     icon: MapPinned,
     allowedRoles: getRouteAllowedRoles("/locations"),
+    group: "catalog",
   },
   {
     href: "/products",
     label: "Sản phẩm",
     icon: PackageOpen,
     allowedRoles: getRouteAllowedRoles("/products"),
+    group: "catalog",
   },
   {
     href: "/suppliers",
     label: "Nhà cung cấp",
     icon: Factory,
     allowedRoles: getRouteAllowedRoles("/suppliers"),
+    group: "catalog",
   },
   {
     href: "/purchase-orders",

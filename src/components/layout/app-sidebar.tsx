@@ -3,11 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as React from "react";
-import { Building2 } from "lucide-react";
+import { Building2, ChevronDown } from "lucide-react";
 
 import { WmsLogo } from "@/components/brand/wms-logo";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { SheetClose } from "@/components/ui/sheet";
-import { dashboardRoutes } from "@/constants/routes";
+import { dashboardRoutes, ROUTE_GROUPS, type RouteGroupKey } from "@/constants/routes";
 import { useSessionUser } from "@/hooks/use-session-user";
 import { getAllowedRoutes, getDefaultRoleFocus, ROLE_LABELS } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
@@ -47,6 +52,36 @@ function NavLink({
   return link;
 }
 
+type DashboardRoute = (typeof dashboardRoutes)[number];
+
+/** Gom các route liên tiếp có cùng `group` thành 1 khối — giữ nguyên thứ tự
+ * xuất hiện trong dashboardRoutes, route không có `group` đứng riêng lẻ. */
+function groupRoutes(routes: readonly DashboardRoute[]) {
+  const items: (
+    | { kind: "route"; route: DashboardRoute }
+    | { kind: "group"; key: RouteGroupKey; routes: DashboardRoute[] }
+  )[] = [];
+
+  for (const route of routes) {
+    const groupKey = "group" in route ? (route.group as RouteGroupKey) : undefined;
+    const last = items[items.length - 1];
+
+    if (groupKey && last?.kind === "group" && last.key === groupKey) {
+      last.routes.push(route);
+      continue;
+    }
+
+    if (groupKey) {
+      items.push({ kind: "group", key: groupKey, routes: [route] });
+      continue;
+    }
+
+    items.push({ kind: "route", route });
+  }
+
+  return items;
+}
+
 export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
   const pathname = usePathname();
   const user = useSessionUser();
@@ -55,6 +90,7 @@ export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
     dashboardRoutes.filter((route) => route.href !== "/login"),
     user?.roles,
   );
+  const items = React.useMemo(() => groupRoutes(routes), [routes]);
 
   if (!user) {
     return null;
@@ -72,16 +108,18 @@ export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
       />
 
       <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
-        {routes.map((route) => {
-          const active = pathname === route.href;
-          const Icon = route.icon;
+        {items.map((item) => {
+          if (item.kind === "route") {
+            const route = item.route;
+            const active = pathname === route.href;
+            const Icon = route.icon;
 
-          return (
-            <React.Fragment key={route.href}>
+            return (
               <NavLink
                 active={active}
                 closeOnNavigate={closeOnNavigate}
                 href={route.href}
+                key={route.href}
               >
                 <Icon
                   className={cn(
@@ -91,7 +129,57 @@ export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
                 />
                 {route.label}
               </NavLink>
-            </React.Fragment>
+            );
+          }
+
+          const groupMeta = ROUTE_GROUPS[item.key];
+          const GroupIcon = groupMeta.icon;
+          const groupActive = item.routes.some(
+            (route) => pathname === route.href,
+          );
+
+          return (
+            <Collapsible defaultOpen={groupActive} key={item.key}>
+              <CollapsibleTrigger
+                className={cn(
+                  "group/trigger flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-sidebar-foreground/72 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  groupActive &&
+                    "text-sidebar-accent-foreground",
+                )}
+              >
+                <GroupIcon
+                  className={cn(
+                    "size-4 text-sidebar-foreground/55 transition-colors group-hover/trigger:text-sidebar-accent-foreground",
+                    groupActive && "text-sidebar-accent-foreground",
+                  )}
+                />
+                <span className="flex-1 text-left">{groupMeta.label}</span>
+                <ChevronDown className="size-4 text-sidebar-foreground/40 transition-transform group-data-[state=open]/trigger:rotate-180" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-1 py-1 pl-4">
+                {item.routes.map((route) => {
+                  const active = pathname === route.href;
+                  const Icon = route.icon;
+
+                  return (
+                    <NavLink
+                      active={active}
+                      closeOnNavigate={closeOnNavigate}
+                      href={route.href}
+                      key={route.href}
+                    >
+                      <Icon
+                        className={cn(
+                          "size-4 text-sidebar-foreground/55 transition-colors group-hover:text-sidebar-accent-foreground",
+                          active && "text-sidebar-accent-foreground",
+                        )}
+                      />
+                      {route.label}
+                    </NavLink>
+                  );
+                })}
+              </CollapsibleContent>
+            </Collapsible>
           );
         })}
       </nav>
