@@ -129,4 +129,47 @@ describe("buildWarehouseLayoutOperations", () => {
       { op: "DELETE", entity: "ZONE", id: "z1" },
     ]);
   });
+  it("xóa lối đi cũ trước khi tạo lối đi mới dùng lại cùng mã", () => {
+    const persisted = structuredClone(base);
+    persisted.aisles = [
+      {
+        id: "aisle-old",
+        code: "AISLE-03",
+        type: "MAIN",
+        xM: 1,
+        yM: 1,
+        widthM: 8,
+        heightM: 1,
+      },
+    ];
+    const draft = structuredClone(base);
+    draft.aisles = [
+      {
+        id: "tmp:00000000-0000-4000-8000-000000000004",
+        code: "AISLE-03",
+        type: "MAIN",
+        xM: 2,
+        yM: 2,
+        widthM: 10,
+        heightM: 1,
+      },
+    ];
+
+    expect(buildWarehouseLayoutOperations(persisted, draft)).toEqual([
+      { op: "DELETE", entity: "AISLE", id: "aisle-old" },
+      {
+        op: "CREATE",
+        entity: "AISLE",
+        clientId: "tmp:00000000-0000-4000-8000-000000000004",
+        data: {
+          code: "AISLE-03",
+          type: "MAIN",
+          xM: 2,
+          yM: 2,
+          widthM: 10,
+          heightM: 1,
+        },
+      },
+    ]);
+  });
 });

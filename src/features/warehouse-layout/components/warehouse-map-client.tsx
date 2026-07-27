@@ -123,8 +123,7 @@ function formatLayoutError(error: unknown, fallback: string) {
       "Không thể xoá rack vì rack vẫn còn tầng kệ. Hãy xoá tầng kệ hoặc dùng Reset sơ đồ nếu muốn dựng lại từ đầu.",
     ZONE_HAS_RACKS:
       "Không thể xoá khu vực vì khu vực vẫn còn rack. Hãy xoá hoặc chuyển rack trước.",
-    SHELF_HAS_STOCK:
-      "Không thể xoá tầng kệ vì tầng này vẫn còn hàng tồn.",
+    SHELF_HAS_STOCK: "Không thể xoá tầng kệ vì tầng này vẫn còn hàng tồn.",
   };
 
   return (code && messages[code]) || getApiErrorMessage(error) || fallback;
@@ -230,7 +229,9 @@ function WarehouseEditor({
       setClientErrors([]);
       setConflictRevision(null);
       queryClient.setQueryData(layoutKey, layout);
-      toast.success("Đã reset sơ đồ kho. Hãy tạo lại khu vực, rack và chọn một tầng kệ làm vị trí nhận hàng tạm.");
+      toast.success(
+        "Đã reset sơ đồ kho. Hãy tạo lại khu vực, rack và chọn một tầng kệ làm vị trí nhận hàng tạm.",
+      );
     },
     onError: (error) => {
       toast.error(formatLayoutError(error, "Không thể reset sơ đồ kho."));
@@ -278,6 +279,62 @@ function WarehouseEditor({
             : item,
         );
       }
+      return layout;
+    };
+
+    if (live) editor.updateLive(updater);
+    else editor.commit(updater);
+    setIssues([]);
+    setClientErrors([]);
+  }
+
+  function updateGroupElements(
+    moves: Array<{
+      selection: NonNullable<LayoutSelection>;
+      position: { xM: number; yM: number };
+    }>,
+    live = false,
+  ) {
+    const moveByKey = new Map(
+      moves.map((move) => [
+        `${move.selection.kind}:${move.selection.id}`,
+        move.position,
+      ]),
+    );
+    const updater = (layout: WarehouseLayout) => {
+      layout.zones = layout.zones.map((item) => {
+        const position = moveByKey.get(`zone:${item.id}`);
+        return position ? { ...item, ...position } : item;
+      }) as WarehouseLayoutZone[];
+
+      layout.racks = layout.racks.map((item) => {
+        const position = moveByKey.get(`rack:${item.id}`);
+        if (!position) return item;
+        const deltaX = position.xM - item.xM;
+        const deltaY = position.yM - item.yM;
+        return {
+          ...item,
+          ...position,
+          accessPoint: {
+            ...item.accessPoint,
+            xM: item.accessPoint.xM + deltaX,
+            yM: item.accessPoint.yM + deltaY,
+          },
+        };
+      });
+
+      layout.aisles = layout.aisles.map((item) => {
+        const position = moveByKey.get(`aisle:${item.id}`);
+        return position ? { ...item, ...position } : item;
+      });
+
+      layout.gates = layout.gates.map((item) => {
+        const position = moveByKey.get(`gate:${item.id}`);
+        return position
+          ? ({ ...item, ...position } as WarehouseLayoutGate)
+          : item;
+      });
+
       return layout;
     };
 
@@ -440,7 +497,9 @@ function WarehouseEditor({
             (item) => item.rackId === currentSelection.id && item.isStaging,
           )
         ) {
-          toast.error("Rack này đang chứa vị trí nhận hàng tạm. Hãy chọn tầng kệ khác làm vị trí nhận hàng tạm trước.");
+          toast.error(
+            "Rack này đang chứa vị trí nhận hàng tạm. Hãy chọn tầng kệ khác làm vị trí nhận hàng tạm trước.",
+          );
           return layout;
         }
         layout.racks = layout.racks.filter(
@@ -655,7 +714,10 @@ function WarehouseEditor({
               onClick={confirmResetLayoutToEmpty}
             >
               {resetMutation.isPending ? (
-                <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
               ) : (
                 <RefreshCw data-icon="inline-start" />
               )}
@@ -754,7 +816,8 @@ function WarehouseEditor({
 
       {!hasStagingShelf ? (
         <div className="border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-900">
-          Chưa có vị trí nhận hàng tạm. Sau khi tạo rack, hãy chọn một tầng kệ làm vị trí nhận hàng tạm trước khi dùng nhập kho.
+          Chưa có vị trí nhận hàng tạm. Sau khi tạo rack, hãy chọn một tầng kệ
+          làm vị trí nhận hàng tạm trước khi dùng nhập kho.
         </div>
       ) : null}
 
@@ -805,6 +868,7 @@ function WarehouseEditor({
             onMoveElement={(target, position) =>
               updateElement(target, position, true)
             }
+            onMoveGroup={(moves) => updateGroupElements(moves, true)}
             onResizeElement={(target, size) =>
               updateElement(target, size, true)
             }

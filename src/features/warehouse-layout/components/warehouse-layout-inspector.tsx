@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { MapPinned, RotateCw, Settings2, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,15 @@ function NumberField({
   step?: number;
   value: number;
 }) {
+  const [draftValue, setDraftValue] = useState(() => String(value));
+  const focusedRef = useRef(false);
+
+  useEffect(() => {
+    if (!focusedRef.current) {
+      setDraftValue(String(value));
+    }
+  }, [value]);
+
   return (
     <div className="grid gap-1.5">
       <Label className="text-xs text-slate-600">{label}</Label>
@@ -39,10 +49,38 @@ function NumberField({
         className="h-9"
         disabled={disabled}
         min={min}
-        onChange={(event) => onChange(Number(event.target.value))}
+        onBlur={() => {
+          focusedRef.current = false;
+          const numericValue = Number(draftValue);
+          if (draftValue.trim() === "" || !Number.isFinite(numericValue)) {
+            setDraftValue(String(value));
+            return;
+          }
+          onChange(numericValue);
+          setDraftValue(String(numericValue));
+        }}
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          setDraftValue(nextValue);
+          if (
+            nextValue.trim() === "" ||
+            nextValue === "-" ||
+            nextValue === "." ||
+            nextValue === "-."
+          ) {
+            return;
+          }
+          const numericValue = Number(nextValue);
+          if (Number.isFinite(numericValue)) {
+            onChange(numericValue);
+          }
+        }}
+        onFocus={() => {
+          focusedRef.current = true;
+        }}
         step={step}
         type="number"
-        value={value}
+        value={draftValue}
       />
     </div>
   );
@@ -284,7 +322,8 @@ export function WarehouseLayoutInspector({
                 Tầng kệ của rack
               </div>
               <p className="text-[11px] leading-4 text-slate-500">
-                Đây là nơi hàng mới nhập được đặt tạm trước khi chuyển vào kệ chính.
+                Đây là nơi hàng mới nhập được đặt tạm trước khi chuyển vào kệ
+                chính.
               </p>
               {rackShelves.map((shelf) => (
                 <div

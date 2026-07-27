@@ -161,6 +161,11 @@ export function buildWarehouseLayoutOperations(
   const draftShelves = draft.shelves;
 
   operations.push(
+    ...deleteOperations(baseShelves, draftShelves, "SHELF"),
+    ...deleteOperations(base.racks, draft.racks, "RACK"),
+    ...deleteOperations(base.zones, draft.zones, "ZONE"),
+    ...deleteOperations(base.aisles, draft.aisles, "AISLE"),
+    ...deleteOperations(base.gates, draft.gates, "GATE"),
     ...createOperations(draft.zones, "ZONE", zoneData),
     ...createOperations(draft.racks, "RACK", rackData),
     ...createOperations(draftShelves, "SHELF", shelfData),
@@ -171,11 +176,6 @@ export function buildWarehouseLayoutOperations(
     ...updateOperations(baseShelves, draftShelves, "SHELF", shelfData),
     ...updateOperations(base.aisles, draft.aisles, "AISLE", aisleData),
     ...updateOperations(base.gates, draft.gates, "GATE", gateData),
-    ...deleteOperations(baseShelves, draftShelves, "SHELF"),
-    ...deleteOperations(base.racks, draft.racks, "RACK"),
-    ...deleteOperations(base.zones, draft.zones, "ZONE"),
-    ...deleteOperations(base.aisles, draft.aisles, "AISLE"),
-    ...deleteOperations(base.gates, draft.gates, "GATE"),
   );
 
   return operations;
