@@ -1,8 +1,16 @@
 "use client";
 
 import { FormEvent, type ReactNode, useMemo, useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LoaderCircle, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import {
+  LoaderCircle,
+  MapPinned,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -116,16 +124,27 @@ export function LocationStructureClient() {
       <PageHeader
         title="Kho tổng"
         actions={
-          <Button onClick={refresh} type="button" variant="outline">
-            {zonesQuery.isFetching ||
-            racksQuery.isFetching ||
-            shelvesQuery.isFetching ? (
-              <LoaderCircle className="animate-spin" data-icon="inline-start" />
-            ) : (
-              <RefreshCw data-icon="inline-start" />
-            )}
-            Làm mới
-          </Button>
+          <>
+            <Link href="/locations/map">
+              <Button type="button" variant="outline">
+                <MapPinned data-icon="inline-start" />
+                Xem sơ đồ kho
+              </Button>
+            </Link>
+            <Button onClick={refresh} type="button" variant="outline">
+              {zonesQuery.isFetching ||
+              racksQuery.isFetching ||
+              shelvesQuery.isFetching ? (
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
+              ) : (
+                <RefreshCw data-icon="inline-start" />
+              )}
+              Làm mới
+            </Button>
+          </>
         }
       />
 
