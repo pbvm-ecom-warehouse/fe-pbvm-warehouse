@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Eye,
@@ -11,7 +12,6 @@ import {
   RefreshCw,
   Save,
   Search,
-  Settings2,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -45,7 +45,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   EmptyState,
   PageHeader,
@@ -58,7 +57,6 @@ import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { useSessionUser } from "@/hooks/use-session-user";
 
-import { AttributeOptionsAdminPanel } from "./attribute-options-admin-dialog";
 import { CreateWarehouseItemPanel } from "./create-warehouse-item-panel";
 import {
   deleteWarehouseItem,
@@ -294,42 +292,38 @@ export function WarehouseItemsClient() {
               )}
               Làm mới
             </Button>
+            {canAdministerOptions ? (
+              <Button asChild variant="outline">
+                <Link href="/products/attributes">
+                  <PackageSearch data-icon="inline-start" />
+                  Quản lý thuộc tính
+                </Link>
+              </Button>
+            ) : null}
           </>
         }
       />
 
-      <Tabs defaultValue="items">
-        <TabsList className="h-9 rounded-lg border bg-card p-1">
-          <TabsTrigger className="px-3" value="items">
-            <PackageSearch data-icon="inline-start" />
-            Mặt hàng
-          </TabsTrigger>
-          <TabsTrigger className="px-3" value="create-sku">
-            <Settings2 data-icon="inline-start" />
-            Tạo thuộc tính SKU
-          </TabsTrigger>
-        </TabsList>
+      <div className="space-y-4">
+        {!canManage ? (
+          <PermissionNotice>
+            Bạn có thể xem danh sách mặt hàng. Quyền tạo và sửa dành cho quản
+            lý kho.
+          </PermissionNotice>
+        ) : null}
 
-        <TabsContent className="mt-4 space-y-4" value="items">
-          {!canManage ? (
-            <PermissionNotice>
-              Bạn có thể xem danh sách mặt hàng. Quyền tạo và sửa dành cho quản
-              lý kho.
-            </PermissionNotice>
-          ) : null}
+        {itemsQuery.error ? <ErrorBanner error={itemsQuery.error} /> : null}
 
-          {itemsQuery.error ? <ErrorBanner error={itemsQuery.error} /> : null}
+        {canManage ? (
+          <div className="flex justify-end">
+            <Button type="button" onClick={() => setCreateDialogOpen(true)}>
+              <Plus data-icon="inline-start" />
+              Tạo mặt hàng
+            </Button>
+          </div>
+        ) : null}
 
-          {canManage ? (
-            <div className="flex justify-end">
-              <Button type="button" onClick={() => setCreateDialogOpen(true)}>
-                <Plus data-icon="inline-start" />
-                Tạo mặt hàng
-              </Button>
-            </div>
-          ) : null}
-
-          <TablePanel
+        <TablePanel
             count={`${total} bản ghi · trang ${page}/${totalPages}`}
             title={
               <span className="flex items-center gap-2">
@@ -480,18 +474,7 @@ export function WarehouseItemsClient() {
               </Button>
             </div>
           </TablePanel>
-        </TabsContent>
-
-        <TabsContent className="mt-4 space-y-4" value="create-sku">
-          {!canAdministerOptions ? (
-            <PermissionNotice>
-              Quyền tạo và quản lý giá trị SKU dành cho quản trị viên.
-            </PermissionNotice>
-          ) : (
-            <AttributeOptionsAdminPanel />
-          )}
-        </TabsContent>
-      </Tabs>
+      </div>
 
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent
