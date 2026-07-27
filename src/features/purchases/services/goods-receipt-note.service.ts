@@ -16,6 +16,15 @@ export type GoodsReceiptNoteItem = {
   itemId: string;
   sku: string;
   itemName?: string;
+  barcode?: string;
+  category?: string;
+  type?: string;
+  images?: string[];
+  isPerishable?: boolean;
+  expectedQty?: number;
+  unitPrice?: number;
+  receivedQty?: number;
+  remainingQty?: number;
   actualQty: number;
   unit: string;
   lotNumber?: string | null;

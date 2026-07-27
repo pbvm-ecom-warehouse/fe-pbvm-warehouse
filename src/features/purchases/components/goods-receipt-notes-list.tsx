@@ -35,8 +35,16 @@ import {
 import { StatusBadge } from "@/features/admin-shell/components/operations-ui";
 import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
 
-import type { GoodsReceiptNote } from "../services/goods-receipt-note.service";
+import type {
+  GoodsReceiptNote,
+  GoodsReceiptNoteItem,
+} from "../services/goods-receipt-note.service";
 import { GoodsReceiptPutawayPanel } from "./goods-receipt-putaway-panel";
+
+function formatCurrency(value?: number) {
+  if (value == null) return "—";
+  return `${value.toLocaleString("vi-VN")} đ`;
+}
 
 function formatDate(value?: string | null) {
   if (!value) {
@@ -227,26 +235,20 @@ export function GoodsReceiptNoteDetailDialog({
         <Table scrollable>
           <TableHeader>
             <TableRow>
-              <TableHead>Tên mặt hàng</TableHead>
-              <TableHead>SKU</TableHead>
+              <TableHead>Mặt hàng</TableHead>
               <TableHead>Thực nhập</TableHead>
-              <TableHead>Đơn vị</TableHead>
+              <TableHead>Đối chiếu PO</TableHead>
+              <TableHead>Đơn giá</TableHead>
               <TableHead>Mã lô</TableHead>
               <TableHead>Hạn sử dụng</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {grn.items.map((item) => (
-              <TableRow key={`${item.itemId}-${item.sku}-${item.lotNumber}`}>
-                <TableCell className="font-medium">
-                  {item.itemName ?? item.sku}
-                </TableCell>
-                <TableCell>{item.sku}</TableCell>
-                <TableCell>{item.actualQty}</TableCell>
-                <TableCell>{item.unit}</TableCell>
-                <TableCell>{item.lotNumber || "Không có"}</TableCell>
-                <TableCell>{formatDate(item.expiryDate)}</TableCell>
-              </TableRow>
+              <GoodsReceiptItemRow
+                item={item}
+                key={`${item.itemId}-${item.sku}-${item.lotNumber}`}
+              />
             ))}
           </TableBody>
         </Table>
@@ -273,6 +275,63 @@ function Info({ label, value }: { label: string; value: string }) {
       <div className="text-muted-foreground">{label}</div>
       <div className="mt-1 font-medium">{value}</div>
     </div>
+  );
+}
+
+function GoodsReceiptItemRow({ item }: { item: GoodsReceiptNoteItem }) {
+  const thumbnail = item.images?.find(Boolean);
+  const hasPoReference = item.expectedQty != null;
+
+  return (
+    <TableRow>
+      <TableCell className="font-medium">
+        <div className="flex items-center gap-2">
+          {thumbnail ? (
+            <span
+              aria-hidden
+              className="size-8 shrink-0 rounded-md border bg-muted bg-cover bg-center"
+              style={{ backgroundImage: `url("${thumbnail}")` }}
+            />
+          ) : null}
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 truncate">
+              {item.itemName ?? item.sku}
+              {item.isPerishable ? (
+                <span
+                  className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+                  title="Mặt hàng có hạn sử dụng"
+                >
+                  HSD
+                </span>
+              ) : null}
+            </div>
+            <div
+              className="truncate font-mono text-xs text-muted-foreground"
+              title={item.barcode ? `SKU · Mã vạch: ${item.barcode}` : "SKU"}
+            >
+              {item.sku}
+              {item.barcode ? ` · ${item.barcode}` : ""}
+            </div>
+          </div>
+        </div>
+      </TableCell>
+      <TableCell>
+        {item.actualQty} {item.unit}
+      </TableCell>
+      <TableCell className="text-xs text-muted-foreground">
+        {hasPoReference ? (
+          <>
+            Đặt: {item.expectedQty} · Đã nhận: {item.receivedQty ?? 0} · Còn:{" "}
+            {item.remainingQty ?? 0}
+          </>
+        ) : (
+          "—"
+        )}
+      </TableCell>
+      <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
+      <TableCell>{item.lotNumber || "Không có"}</TableCell>
+      <TableCell>{formatDate(item.expiryDate)}</TableCell>
+    </TableRow>
   );
 }
 
