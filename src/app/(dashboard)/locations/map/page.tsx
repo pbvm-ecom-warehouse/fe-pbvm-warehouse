@@ -1,5 +1,5 @@
-import { WarehouseMapClient } from "@/features/warehouse-layout/components/warehouse-map-client";
+import { redirect } from "next/navigation";
 
 export default function LocationsMapPage() {
-  return <WarehouseMapClient />;
+  redirect("/locations");
 }

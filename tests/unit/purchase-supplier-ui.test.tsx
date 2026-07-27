@@ -88,20 +88,6 @@ vi.mock(
 );
 
 vi.mock(
-  "@/features/warehouse-structure/services/warehouse-structure.service",
-  async (importOriginal) => {
-    const actual =
-      await importOriginal<
-        typeof import("@/features/warehouse-structure/services/warehouse-structure.service")
-      >();
-
-    return {
-      ...actual,
-    };
-  },
-);
-
-vi.mock(
   "@/features/products/services/warehouse-items.service",
   async (importOriginal) => {
     const actual =

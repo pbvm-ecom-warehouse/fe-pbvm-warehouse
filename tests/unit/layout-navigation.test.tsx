@@ -33,6 +33,8 @@ vi.mock("@/features/auth/services/auth.service", () => ({
 
 const { useSessionUser } = await import("@/hooks/use-session-user");
 const mockedUseSessionUser = vi.mocked(useSessionUser);
+const { usePathname } = await import("next/navigation");
+const mockedUsePathname = vi.mocked(usePathname);
 
 function sessionUser(roles: SessionUser["roles"]): SessionUser {
   return {
@@ -59,6 +61,7 @@ function renderDashboardHeader() {
 describe("dashboard navigation chrome", () => {
   beforeEach(() => {
     mockedUseSessionUser.mockReset();
+    mockedUsePathname.mockReturnValue("/dashboard");
   });
 
   it("shows the single-warehouse scope for ADMIN in the sidebar", () => {
@@ -87,6 +90,18 @@ describe("dashboard navigation chrome", () => {
     expect(
       screen.queryByRole("link", { name: /Nhân viên/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps Kho active on the canonical editor route", () => {
+    mockedUseSessionUser.mockReturnValue(sessionUser(["MANAGER"]));
+    mockedUsePathname.mockReturnValue("/locations");
+
+    render(<SidebarContent />);
+
+    expect(screen.getByRole("link", { name: /^Kho$/i })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it("hides product and non-printer operations from PRINTER", () => {

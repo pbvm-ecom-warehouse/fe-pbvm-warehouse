@@ -885,9 +885,7 @@ test("picker mobile drawer exposes picker routes", async ({ page }) => {
   await expect(page.getByRole("link", { name: /Nhập hàng/i })).toHaveCount(0);
 });
 
-test("manager manages the single-warehouse location structure", async ({
-  page,
-}) => {
+test("manager opens the canonical warehouse map editor", async ({ page }) => {
   await seedWmsSession(page, ["MANAGER"], "Manager User");
   let legacyWarehouseCalled = false;
 
@@ -895,47 +893,71 @@ test("manager manages the single-warehouse location structure", async ({
     legacyWarehouseCalled = true;
     await route.abort();
   });
-  await page.route("**/api/wms/location/zones", async (route) => {
+  await page.route("**/api/wms/location/layout", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
-        data: [{ code: "A", id: "zone-1", name: "Khu A" }],
-        meta: { requestId: "location-zones" },
-      }),
-    });
-  });
-  await page.route("**/api/wms/location/racks**", async (route) => {
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: [{ code: "A1", id: "rack-1", name: "Kệ A1", zoneId: "zone-1" }],
-        meta: { requestId: "location-racks" },
-      }),
-    });
-  });
-  await page.route("**/api/wms/location/shelves**", async (route) => {
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: [
-          {
-            code: "A1-S01",
-            id: "shelf-1",
-            isStaging: false,
-            level: 1,
-            rackId: "rack-1",
+        data: {
+          id: "single-warehouse-layout",
+          revision: 7,
+          updatedAt: "2026-07-27T10:00:00.000Z",
+          canvas: { widthM: 40, heightM: 24, gridM: 0.5 },
+          rackTemplate: {
+            widthM: 10,
+            depthM: 1.5,
+            levelCount: 3,
+            bayCount: 3,
           },
-        ],
-        meta: { requestId: "location-shelves" },
+          zones: [
+            {
+              code: "A",
+              id: "zone-1",
+              name: "Khu A",
+              xM: 1,
+              yM: 1,
+              widthM: 16,
+              heightM: 12,
+              rotation: 0,
+            },
+          ],
+          racks: [
+            {
+              code: "A1",
+              id: "rack-1",
+              name: "Kệ A1",
+              zoneId: "zone-1",
+              xM: 3,
+              yM: 3,
+              rotation: 0,
+              accessPointXM: 8,
+              accessPointYM: 6,
+            },
+          ],
+          shelves: [
+            {
+              code: "A1-S01",
+              id: "shelf-1",
+              isStaging: false,
+              level: 1,
+              rackId: "rack-1",
+            },
+          ],
+          aisles: [],
+          gates: [],
+        },
+        meta: { requestId: "location-layout" },
       }),
     });
   });
 
-  await page.goto("/locations");
-  await expect(page.getByRole("heading", { name: "Vị trí kho" })).toBeVisible();
-  await expect(page.getByText("Khu A")).toBeVisible();
-  await expect(page.getByText("Kệ A1")).toBeVisible();
-  await expect(page.getByText("A1-S01")).toBeVisible();
+  await page.goto("/locations/map");
+  await expect(page).toHaveURL(/\/locations$/);
+  await expect(
+    page.getByRole("heading", { name: "Bản đồ kho 2D" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Khu vực" })).toBeVisible();
+  await expect(page.getByLabel("Sơ đồ kho")).toBeVisible();
+  await expect(page.getByText("Kích thước rack chuẩn")).toHaveCount(0);
   expect(legacyWarehouseCalled).toBe(false);
 });
 

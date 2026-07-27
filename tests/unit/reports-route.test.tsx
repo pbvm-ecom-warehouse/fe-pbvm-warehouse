@@ -15,11 +15,6 @@ vi.mock("@/features/reports/services/report.service", () => ({
   getStockReport: vi.fn(),
 }));
 
-vi.mock(
-  "@/features/warehouse-structure/services/warehouse-structure.service",
-  () => ({}),
-);
-
 const mockedGetLotReport = vi.mocked(getLotReport);
 const mockedGetPerformanceReport = vi.mocked(getPerformanceReport);
 const mockedGetStockReport = vi.mocked(getStockReport);

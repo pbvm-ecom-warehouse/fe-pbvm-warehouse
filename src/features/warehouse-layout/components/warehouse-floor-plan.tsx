@@ -1,6 +1,12 @@
 "use client";
 
-import { useRef, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type WheelEvent as ReactWheelEvent,
+} from "react";
+import { Maximize2, Minus, Plus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type {
@@ -9,7 +15,6 @@ import type {
   WarehouseLayoutGate,
   WarehouseLayoutRack,
   WarehouseLayoutZone,
-  WarehouseRoute,
 } from "@/types/api";
 
 import {
@@ -21,6 +26,13 @@ import {
 } from "../utils/warehouse-layout";
 
 export type LayoutElementKind = "zone" | "rack" | "aisle" | "gate";
+export type WarehouseEditorTool =
+  | "select"
+  | "pan"
+  | "zone"
+  | "rack"
+  | "aisle"
+  | "gate";
 export type LayoutSelection = {
   kind: LayoutElementKind;
   id: string;
@@ -35,6 +47,14 @@ type DragState = {
   startRect: LayoutRect;
 };
 
+type ViewBox = { x: number; y: number; width: number; height: number };
+
+type PanState = {
+  pointerId: number;
+  startClient: { x: number; y: number };
+  startViewBox: ViewBox;
+};
+
 function isSelected(
   selection: LayoutSelection,
   kind: LayoutElementKind,
@@ -45,7 +65,9 @@ function isSelected(
 
 function getPoint(
   svg: SVGSVGElement,
-  event: ReactPointerEvent<SVGSVGElement | SVGElement>,
+  event:
+    | ReactPointerEvent<SVGSVGElement | SVGElement>
+    | ReactWheelEvent<SVGSVGElement>,
 ) {
   const point = svg.createSVGPoint();
   point.x = event.clientX;
@@ -66,10 +88,6 @@ function rackRect(rack: WarehouseLayoutRack) {
 
 function aisleRect(aisle: WarehouseLayoutAisle) {
   return getAisleRect(aisle);
-}
-
-function routePoints(route: WarehouseRoute | null) {
-  return route?.waypoints.map((point) => `${point.x},${point.y}`).join(" ") ?? "";
 }
 
 function LayoutResizeHandle({
@@ -101,43 +119,53 @@ function LayoutResizeHandle({
 export function WarehouseFloorPlan({
   className,
   editable = false,
+  invalidSelectionKeys = new Set<string>(),
   layout,
+  onCreate,
   onMoveElement,
-  onOpenRack,
   onInteractionEnd,
   onInteractionStart,
   onResizeElement,
   onSelect,
-  route = null,
-  selectedRackCode = null,
   selection = null,
+  tool = "select",
 }: {
   className?: string;
   editable?: boolean;
+  invalidSelectionKeys?: ReadonlySet<string>;
   layout: WarehouseLayout;
+  onCreate?: (
+    kind: LayoutElementKind,
+    point: { xM: number; yM: number },
+  ) => void;
   onMoveElement?: (
     selection: NonNullable<LayoutSelection>,
     position: { xM: number; yM: number },
   ) => void;
   onInteractionEnd?: () => void;
   onInteractionStart?: () => void;
-  onOpenRack?: (rackCode: string, shelfCode: string) => void;
   onResizeElement?: (
     selection: NonNullable<LayoutSelection>,
     size: { widthM: number; heightM: number },
   ) => void;
   onSelect?: (selection: LayoutSelection) => void;
-  route?: WarehouseRoute | null;
-  selectedRackCode?: string | null;
   selection?: LayoutSelection;
+  tool?: WarehouseEditorTool;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const panRef = useRef<PanState | null>(null);
   const { widthM, heightM, gridM } = layout.canvas;
-  const layoutDomId = layout.id ?? "single-warehouse-layout";
+  const defaultViewBox = {
+    x: -1.8,
+    y: -1.8,
+    width: widthM + 3.6,
+    height: heightM + 3.6,
+  };
+  const [viewBox, setViewBox] = useState<ViewBox>(defaultViewBox);
+  const layoutDomId = layout.id;
   const patternId = `warehouse-grid-${layoutDomId}`;
   const hatchId = `warehouse-zone-hatch-${layoutDomId}`;
-  const arrowId = `warehouse-route-arrow-${layoutDomId}`;
 
   function startDrag(
     event: ReactPointerEvent<SVGElement>,
@@ -145,7 +173,7 @@ export function WarehouseFloorPlan({
     rect: LayoutRect,
     action: DragState["action"],
   ) {
-    if (!editable || !svgRef.current) {
+    if (!editable || !svgRef.current || tool !== "select") {
       return;
     }
 
@@ -164,6 +192,23 @@ export function WarehouseFloorPlan({
   }
 
   function handlePointerMove(event: ReactPointerEvent<SVGSVGElement>) {
+    const pan = panRef.current;
+    if (pan && svgRef.current) {
+      const bounds = svgRef.current.getBoundingClientRect();
+      const deltaX =
+        ((event.clientX - pan.startClient.x) / Math.max(bounds.width, 1)) *
+        pan.startViewBox.width;
+      const deltaY =
+        ((event.clientY - pan.startClient.y) / Math.max(bounds.height, 1)) *
+        pan.startViewBox.height;
+      setViewBox({
+        ...pan.startViewBox,
+        x: pan.startViewBox.x - deltaX,
+        y: pan.startViewBox.y - deltaY,
+      });
+      return;
+    }
+
     const drag = dragRef.current;
     if (!drag || !svgRef.current) {
       return;
@@ -174,14 +219,14 @@ export function WarehouseFloorPlan({
     const deltaY = point.y - drag.startPoint.y;
 
     if (drag.action === "move") {
+      const gateOffset = drag.selection.kind === "gate" ? 0.5 : 0;
+      const originalX = drag.startRect.xM + gateOffset;
+      const originalY = drag.startRect.yM + gateOffset;
       const position = {
-        xM: snapToGrid(drag.startRect.xM + deltaX, gridM),
-        yM: snapToGrid(drag.startRect.yM + deltaY, gridM),
+        xM: snapToGrid(originalX + deltaX, gridM),
+        yM: snapToGrid(originalY + deltaY, gridM),
       };
-      if (
-        position.xM === drag.startRect.xM &&
-        position.yM === drag.startRect.yM
-      ) {
+      if (position.xM === originalX && position.yM === originalY) {
         return;
       }
       if (!drag.changed) {
@@ -193,7 +238,10 @@ export function WarehouseFloorPlan({
     }
 
     const size = {
-      widthM: Math.max(gridM, snapToGrid(drag.startRect.widthM + deltaX, gridM)),
+      widthM: Math.max(
+        gridM,
+        snapToGrid(drag.startRect.widthM + deltaX, gridM),
+      ),
       heightM: Math.max(
         gridM,
         snapToGrid(drag.startRect.heightM + deltaY, gridM),
@@ -213,6 +261,12 @@ export function WarehouseFloorPlan({
   }
 
   function handlePointerUp(event: ReactPointerEvent<SVGSVGElement>) {
+    if (panRef.current?.pointerId === event.pointerId) {
+      panRef.current = null;
+      svgRef.current?.releasePointerCapture(event.pointerId);
+      return;
+    }
+
     if (dragRef.current?.pointerId === event.pointerId) {
       const changed = dragRef.current.changed;
       dragRef.current = null;
@@ -227,8 +281,65 @@ export function WarehouseFloorPlan({
     event: ReactPointerEvent<SVGElement>,
     nextSelection: NonNullable<LayoutSelection>,
   ) {
+    if (tool !== "select") return;
     event.stopPropagation();
     onSelect?.(nextSelection);
+  }
+
+  function handleCanvasPointerDown(event: ReactPointerEvent<SVGSVGElement>) {
+    if (!svgRef.current) return;
+
+    if (tool === "pan" || event.button === 1) {
+      event.preventDefault();
+      svgRef.current.setPointerCapture(event.pointerId);
+      panRef.current = {
+        pointerId: event.pointerId,
+        startClient: { x: event.clientX, y: event.clientY },
+        startViewBox: viewBox,
+      };
+      return;
+    }
+
+    if (tool === "select") {
+      onSelect?.(null);
+      return;
+    }
+
+    if (!editable) return;
+    const point = getPoint(svgRef.current, event);
+    if (point.x < 0 || point.y < 0 || point.x > widthM || point.y > heightM) {
+      return;
+    }
+    onCreate?.(tool, {
+      xM: snapToGrid(point.x, gridM),
+      yM: snapToGrid(point.y, gridM),
+    });
+  }
+
+  function zoom(factor: number, center?: { x: number; y: number }) {
+    const nextWidth = Math.min(
+      widthM * 3,
+      Math.max(widthM / 5, viewBox.width * factor),
+    );
+    const nextHeight = nextWidth * (viewBox.height / viewBox.width);
+    const target = center ?? {
+      x: viewBox.x + viewBox.width / 2,
+      y: viewBox.y + viewBox.height / 2,
+    };
+    const xRatio = (target.x - viewBox.x) / viewBox.width;
+    const yRatio = (target.y - viewBox.y) / viewBox.height;
+    setViewBox({
+      x: target.x - nextWidth * xRatio,
+      y: target.y - nextHeight * yRatio,
+      width: nextWidth,
+      height: nextHeight,
+    });
+  }
+
+  function handleWheel(event: ReactWheelEvent<SVGSVGElement>) {
+    if (!svgRef.current) return;
+    event.preventDefault();
+    zoom(event.deltaY > 0 ? 1.12 : 0.88, getPoint(svgRef.current, event));
   }
 
   return (
@@ -240,14 +351,19 @@ export function WarehouseFloorPlan({
     >
       <svg
         aria-label="Sơ đồ kho"
-        className="block h-auto min-h-[420px] w-full touch-none select-none"
-        onPointerDown={() => onSelect?.(null)}
+        className={cn(
+          "block h-full min-h-[420px] w-full touch-none select-none",
+          tool === "pan" ? "cursor-grab active:cursor-grabbing" : null,
+          tool !== "pan" && tool !== "select" ? "cursor-crosshair" : null,
+        )}
+        onPointerDown={handleCanvasPointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onWheel={handleWheel}
         preserveAspectRatio="xMidYMid meet"
         ref={svgRef}
         role="group"
-        viewBox={`-1.8 -1.8 ${widthM + 3.6} ${heightM + 3.6}`}
+        viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
       >
         <defs>
           <pattern
@@ -279,30 +395,35 @@ export function WarehouseFloorPlan({
               y2="0.6"
             />
           </pattern>
-          <marker
-            id={arrowId}
-            markerHeight="5"
-            markerUnits="strokeWidth"
-            markerWidth="5"
-            orient="auto"
-            refX="4"
-            refY="2.5"
-          >
-            <path d="M0,0 L5,2.5 L0,5 Z" fill="#1d4ed8" />
-          </marker>
         </defs>
 
-        <rect fill="#fbfcfb" height={heightM} width={widthM} x="0" y="0" />
-        <rect fill={`url(#${patternId})`} height={heightM} width={widthM} />
+        <rect
+          data-canvas-background
+          fill="#fbfcfb"
+          height={heightM}
+          width={widthM}
+          x="0"
+          y="0"
+        />
+        <rect
+          data-canvas-background
+          fill={`url(#${patternId})`}
+          height={heightM}
+          width={widthM}
+        />
 
         {layout.zones.map((zone) => {
           const rect = zoneRect(zone);
           const selected = isSelected(selection, "zone", zone.id);
+          const invalid = invalidSelectionKeys.has(`zone:${zone.id}`);
 
           return (
             <g
               aria-label={`${zone.name}, ${rect.widthM} x ${rect.heightM} mét`}
-              className={editable ? "cursor-move" : undefined}
+              className={
+                editable && tool === "select" ? "cursor-move" : undefined
+              }
+              data-layout-element
               key={zone.id}
               onPointerDown={(event) =>
                 startDrag(event, { kind: "zone", id: zone.id }, rect, "move")
@@ -317,9 +438,9 @@ export function WarehouseFloorPlan({
                 fill={`url(#${hatchId})`}
                 height={rect.heightM}
                 rx={0.18}
-                stroke={selected ? "#1d4ed8" : "#64748b"}
+                stroke={invalid ? "#dc2626" : selected ? "#1d4ed8" : "#64748b"}
                 strokeDasharray={selected ? undefined : "0.35 0.2"}
-                strokeWidth={selected ? 0.16 : 0.08}
+                strokeWidth={invalid || selected ? 0.16 : 0.08}
                 width={rect.widthM}
                 x={rect.xM}
                 y={rect.yM}
@@ -344,7 +465,12 @@ export function WarehouseFloorPlan({
               {editable && selected ? (
                 <LayoutResizeHandle
                   onPointerDown={(event) =>
-                    startDrag(event, { kind: "zone", id: zone.id }, rect, "resize")
+                    startDrag(
+                      event,
+                      { kind: "zone", id: zone.id },
+                      rect,
+                      "resize",
+                    )
                   }
                   rect={rect}
                 />
@@ -356,6 +482,7 @@ export function WarehouseFloorPlan({
         {layout.aisles.map((aisle) => {
           const rect = aisleRect(aisle);
           const selected = isSelected(selection, "aisle", aisle.id);
+          const invalid = invalidSelectionKeys.has(`aisle:${aisle.id}`);
           const isMain = aisle.type === "MAIN";
           const horizontal = rect.widthM >= rect.heightM;
           const centerX = rect.xM + rect.widthM / 2;
@@ -364,7 +491,10 @@ export function WarehouseFloorPlan({
           return (
             <g
               aria-label={`${isMain ? "Đường chính" : "Lối giữa kệ"} ${aisle.code}`}
-              className={editable ? "cursor-move" : undefined}
+              className={
+                editable && tool === "select" ? "cursor-move" : undefined
+              }
+              data-layout-element
               key={aisle.id}
               onPointerDown={(event) =>
                 startDrag(event, { kind: "aisle", id: aisle.id }, rect, "move")
@@ -378,8 +508,16 @@ export function WarehouseFloorPlan({
               <rect
                 fill={isMain ? "#dfe5e7" : "#edf0ef"}
                 height={rect.heightM}
-                stroke={selected ? "#1d4ed8" : isMain ? "#94a3b8" : "#cbd5e1"}
-                strokeWidth={selected ? 0.16 : 0.06}
+                stroke={
+                  invalid
+                    ? "#dc2626"
+                    : selected
+                      ? "#1d4ed8"
+                      : isMain
+                        ? "#94a3b8"
+                        : "#cbd5e1"
+                }
+                strokeWidth={invalid || selected ? 0.16 : 0.06}
                 width={rect.widthM}
                 x={rect.xM}
                 y={rect.yM}
@@ -420,38 +558,19 @@ export function WarehouseFloorPlan({
           );
         })}
 
-        {route ? (
-          <polyline
-            fill="none"
-            markerEnd={`url(#${arrowId})`}
-            points={routePoints(route)}
-            stroke="#1d4ed8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={0.28}
-          />
-        ) : null}
-
         {layout.racks.map((rack) => {
           const rect = rackRect(rack);
-          const selected =
-            isSelected(selection, "rack", rack.id) ||
-            rack.code === selectedRackCode;
+          const invalid = invalidSelectionKeys.has(`rack:${rack.id}`);
+          const selected = isSelected(selection, "rack", rack.id);
           const bayWidth = rect.widthM / rack.bayCount;
 
           return (
             <g
-              aria-label={`Mở ${rack.name}`}
+              aria-label={rack.name}
               aria-pressed={selected}
-              className="cursor-pointer"
+              className={tool === "select" ? "cursor-pointer" : undefined}
+              data-layout-element
               key={rack.id}
-              onClick={() => onOpenRack?.(rack.code, rack.shelfCodes[0] ?? rack.code)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  onOpenRack?.(rack.code, rack.shelfCodes[0] ?? rack.code);
-                }
-              }}
               onPointerDown={(event) =>
                 startDrag(event, { kind: "rack", id: rack.id }, rect, "move")
               }
@@ -466,7 +585,7 @@ export function WarehouseFloorPlan({
                   fill="none"
                   height={rect.heightM + 0.5}
                   rx={0.16}
-                  stroke="#1d4ed8"
+                  stroke={invalid ? "#dc2626" : "#1d4ed8"}
                   strokeWidth={0.16}
                   width={rect.widthM + 0.5}
                   x={rect.xM - 0.25}
@@ -477,8 +596,8 @@ export function WarehouseFloorPlan({
                 fill={selected ? "#dbeafe" : "#e2e8f0"}
                 height={rect.heightM}
                 rx={0.08}
-                stroke={selected ? "#1d4ed8" : "#475569"}
-                strokeWidth={selected ? 0.14 : 0.08}
+                stroke={invalid ? "#dc2626" : selected ? "#1d4ed8" : "#475569"}
+                strokeWidth={invalid || selected ? 0.14 : 0.08}
                 width={rect.widthM}
                 x={rect.xM}
                 y={rect.yM}
@@ -507,20 +626,13 @@ export function WarehouseFloorPlan({
               >
                 {rack.code} · {rack.levelCount} tầng
               </text>
-              {editable && isSelected(selection, "rack", rack.id) ? (
-                <LayoutResizeHandle
-                  onPointerDown={(event) =>
-                    startDrag(event, { kind: "rack", id: rack.id }, rect, "resize")
-                  }
-                  rect={rect}
-                />
-              ) : null}
             </g>
           );
         })}
 
         {layout.gates.map((gate: WarehouseLayoutGate) => {
           const selected = isSelected(selection, "gate", gate.id);
+          const invalid = invalidSelectionKeys.has(`gate:${gate.id}`);
           const gateRect = {
             xM: gate.xM - 0.5,
             yM: gate.yM - 0.5,
@@ -531,10 +643,18 @@ export function WarehouseFloorPlan({
           return (
             <g
               aria-label={gate.label}
-              className={editable ? "cursor-move" : undefined}
+              className={
+                editable && tool === "select" ? "cursor-move" : undefined
+              }
+              data-layout-element
               key={gate.id}
               onPointerDown={(event) =>
-                startDrag(event, { kind: "gate", id: gate.id }, gateRect, "move")
+                startDrag(
+                  event,
+                  { kind: "gate", id: gate.id },
+                  gateRect,
+                  "move",
+                )
               }
               onPointerUp={(event) =>
                 selectElement(event, { kind: "gate", id: gate.id })
@@ -545,13 +665,13 @@ export function WarehouseFloorPlan({
               <circle
                 cx={gate.xM}
                 cy={gate.yM}
-                fill="#0f766e"
+                fill={invalid ? "#dc2626" : "#0f766e"}
                 r={selected ? 0.42 : 0.32}
                 stroke="white"
                 strokeWidth={0.1}
               />
               <text
-                fill="#0f766e"
+                fill={invalid ? "#dc2626" : "#0f766e"}
                 fontSize="0.42"
                 fontWeight="700"
                 textAnchor="middle"
@@ -610,6 +730,37 @@ export function WarehouseFloorPlan({
           {heightM} m
         </text>
       </svg>
+
+      <div className="absolute bottom-3 left-3 flex items-center gap-1 rounded-lg border border-slate-200 bg-white/95 p-1 shadow-sm backdrop-blur">
+        <button
+          aria-label="Thu nhỏ"
+          className="grid size-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+          onClick={() => zoom(1.2)}
+          type="button"
+        >
+          <Minus className="size-4" />
+        </button>
+        <button
+          aria-label="Vừa màn hình"
+          className="grid size-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+          onClick={() => setViewBox(defaultViewBox)}
+          type="button"
+        >
+          <Maximize2 className="size-4" />
+        </button>
+        <button
+          aria-label="Phóng to"
+          className="grid size-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+          onClick={() => zoom(0.8)}
+          type="button"
+        >
+          <Plus className="size-4" />
+        </button>
+      </div>
+
+      <div className="pointer-events-none absolute right-3 top-3 rounded-md border border-slate-200 bg-white/90 px-2 py-1 font-mono text-[10px] text-slate-500 shadow-sm">
+        Lưới {gridM} m · {widthM} × {heightM} m
+      </div>
     </div>
   );
 }

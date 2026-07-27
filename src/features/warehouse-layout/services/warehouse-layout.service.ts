@@ -3,19 +3,52 @@ import { type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
 import type {
   WarehouseLayout,
   WarehouseLayoutAisle,
+  WarehouseLayoutCanvas,
   WarehouseLayoutGate,
   WarehouseLayoutRack,
+  WarehouseLayoutRotation,
+  WarehouseLayoutShelf,
   WarehouseLayoutZone,
+  WarehouseRackTemplate,
 } from "@/types/api";
 
-const CANVAS_PADDING_M = 2;
-const CANVAS_GRID_M = 0.5;
+export type WarehouseLayoutEntity =
+  | "CANVAS"
+  | "RACK_TEMPLATE"
+  | "ZONE"
+  | "RACK"
+  | "SHELF"
+  | "AISLE"
+  | "GATE";
 
-export type RackTemplate = {
-  widthM: number;
-  depthM: number;
-  levelCount: number;
-  bayCount: number;
+export type WarehouseLayoutOperation =
+  | {
+      op: "CREATE";
+      entity: Exclude<WarehouseLayoutEntity, "CANVAS" | "RACK_TEMPLATE">;
+      clientId: string;
+      data: Record<string, unknown>;
+    }
+  | {
+      op: "UPDATE";
+      entity: WarehouseLayoutEntity;
+      id?: string;
+      patch: Record<string, unknown>;
+    }
+  | {
+      op: "DELETE";
+      entity: Exclude<WarehouseLayoutEntity, "CANVAS" | "RACK_TEMPLATE">;
+      id: string;
+    };
+
+export type SaveWarehouseLayoutRequest = {
+  expectedRevision: number;
+  operations: WarehouseLayoutOperation[];
+};
+
+export type SaveWarehouseLayoutResponse = {
+  revision: number;
+  idMap: Record<string, string>;
+  layout: WarehouseLayout;
 };
 
 type RackPositionApiRow = {
@@ -25,37 +58,112 @@ type RackPositionApiRow = {
   name: string;
   xM: number;
   yM: number;
-  rotation: 0 | 90;
+  rotation: number;
   accessPointXM: number;
   accessPointYM: number;
 };
 
-type LayoutApiResponse = {
+type WarehouseLayoutApiResponse = {
+  id: "single-warehouse-layout";
+  revision: number;
+  updatedAt: string;
+  canvas: WarehouseLayoutCanvas;
+  rackTemplate: WarehouseRackTemplate;
   zones: WarehouseLayoutZone[];
   racks: RackPositionApiRow[];
+  shelves: WarehouseLayoutShelf[];
   aisles: WarehouseLayoutAisle[];
   gates: WarehouseLayoutGate[];
-  rackTemplate: RackTemplate;
 };
 
-function buildCanvas(zones: WarehouseLayoutZone[]) {
-  if (zones.length === 0) {
-    return { widthM: 40, heightM: 24, gridM: CANVAS_GRID_M };
+export class WarehouseLayoutContractError extends Error {
+  readonly code = "WAREHOUSE_LAYOUT_API_OUTDATED";
+
+  constructor(readonly missingFields: string[]) {
+    super(
+      `Warehouse layout API thiếu các field bắt buộc: ${missingFields.join(", ")}.`,
+    );
+    this.name = "WarehouseLayoutContractError";
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function assertWarehouseLayoutApiResponse(
+  value: unknown,
+): asserts value is WarehouseLayoutApiResponse {
+  const missingFields: string[] = [];
+
+  if (!isRecord(value)) {
+    throw new WarehouseLayoutContractError([
+      "id",
+      "updatedAt",
+      "canvas",
+      "revision",
+      "shelves",
+      "rackTemplate",
+      "zones",
+      "racks",
+      "aisles",
+      "gates",
+    ]);
   }
 
-  const maxX = Math.max(...zones.map((zone) => zone.xM + zone.widthM));
-  const maxY = Math.max(...zones.map((zone) => zone.yM + zone.heightM));
+  if (value.id !== "single-warehouse-layout") missingFields.push("id");
+  if (typeof value.updatedAt !== "string" || value.updatedAt.length === 0) {
+    missingFields.push("updatedAt");
+  }
+  if (!isRecord(value.canvas)) {
+    missingFields.push("canvas");
+  } else {
+    if (
+      typeof value.canvas.widthM !== "number" ||
+      !Number.isFinite(value.canvas.widthM) ||
+      value.canvas.widthM <= 0
+    ) {
+      missingFields.push("canvas.widthM");
+    }
+    if (
+      typeof value.canvas.heightM !== "number" ||
+      !Number.isFinite(value.canvas.heightM) ||
+      value.canvas.heightM <= 0
+    ) {
+      missingFields.push("canvas.heightM");
+    }
+    if (
+      typeof value.canvas.gridM !== "number" ||
+      !Number.isFinite(value.canvas.gridM) ||
+      value.canvas.gridM <= 0
+    ) {
+      missingFields.push("canvas.gridM");
+    }
+  }
+  if (typeof value.revision !== "number") missingFields.push("revision");
+  if (!Array.isArray(value.shelves)) missingFields.push("shelves");
+  if (!isRecord(value.rackTemplate)) missingFields.push("rackTemplate");
+  if (!Array.isArray(value.zones)) missingFields.push("zones");
+  if (!Array.isArray(value.racks)) missingFields.push("racks");
+  if (!Array.isArray(value.aisles)) missingFields.push("aisles");
+  if (!Array.isArray(value.gates)) missingFields.push("gates");
 
-  return {
-    widthM: maxX + CANVAS_PADDING_M,
-    heightM: maxY + CANVAS_PADDING_M,
-    gridM: CANVAS_GRID_M,
-  };
+  if (missingFields.length > 0) {
+    throw new WarehouseLayoutContractError(missingFields);
+  }
 }
+
+type SaveWarehouseLayoutApiResponse = Omit<
+  SaveWarehouseLayoutResponse,
+  "layout"
+> & {
+  layout: WarehouseLayoutApiResponse;
+};
 
 function toLayoutRack(
   rack: RackPositionApiRow,
-  template: RackTemplate,
+  template: WarehouseRackTemplate,
+  shelves: WarehouseLayoutShelf[],
 ): WarehouseLayoutRack {
   return {
     id: rack.id,
@@ -66,84 +174,57 @@ function toLayoutRack(
     yM: rack.yM,
     widthM: template.widthM,
     depthM: template.depthM,
-    rotation: rack.rotation,
+    rotation: rack.rotation as WarehouseLayoutRotation,
     levelCount: template.levelCount,
     bayCount: template.bayCount,
-    shelfCodes: [],
+    shelfCodes: shelves
+      .filter((shelf) => shelf.rackId === rack.id)
+      .sort((left, right) => left.level - right.level)
+      .map((shelf) => shelf.code),
     accessPoint: { xM: rack.accessPointXM, yM: rack.accessPointYM },
   };
 }
 
-export async function fetchWarehouseLayout(): Promise<WarehouseLayout> {
-  const response = await apiClient.get<
-    ApiEnvelope<LayoutApiResponse> | LayoutApiResponse
-  >("/location/layout");
-  const data = unwrapApiData(response.data);
+export function mapWarehouseLayoutResponse(data: unknown): WarehouseLayout {
+  assertWarehouseLayoutApiResponse(data);
+  const shelves = data.shelves;
 
   return {
-    id: "single-warehouse-layout",
-    revision: 1,
+    id: data.id,
+    revision: data.revision,
+    updatedAt: data.updatedAt,
     status: "PUBLISHED",
-    canvas: buildCanvas(data.zones),
+    canvas: data.canvas,
+    rackTemplate: data.rackTemplate,
     zones: data.zones,
-    racks: data.racks.map((rack) => toLayoutRack(rack, data.rackTemplate)),
+    racks: data.racks.map((rack) =>
+      toLayoutRack(rack, data.rackTemplate, shelves),
+    ),
+    shelves,
     aisles: data.aisles,
     gates: data.gates,
   };
 }
 
-export async function patchZone(
-  zoneId: string,
-  patch: Record<string, unknown>,
-) {
-  const response = await apiClient.patch<
-    ApiEnvelope<WarehouseLayoutZone> | WarehouseLayoutZone
-  >(`/location/zones/${encodeURIComponent(zoneId)}`, patch);
-  return unwrapApiData(response.data);
-}
-
-export async function patchRack(
-  rackId: string,
-  patch: Record<string, unknown>,
-) {
-  const response = await apiClient.patch<
-    ApiEnvelope<RackPositionApiRow> | RackPositionApiRow
-  >(`/location/racks/${encodeURIComponent(rackId)}`, patch);
-  return unwrapApiData(response.data);
-}
-
-export async function patchAisle(
-  aisleId: string,
-  patch: Record<string, unknown>,
-) {
-  const response = await apiClient.patch<
-    ApiEnvelope<WarehouseLayoutAisle> | WarehouseLayoutAisle
-  >(`/location/aisles/${encodeURIComponent(aisleId)}`, patch);
-  return unwrapApiData(response.data);
-}
-
-export async function patchGate(
-  gateId: string,
-  patch: Record<string, unknown>,
-) {
-  const response = await apiClient.patch<
-    ApiEnvelope<WarehouseLayoutGate> | WarehouseLayoutGate
-  >(`/location/gates/${encodeURIComponent(gateId)}`, patch);
-  return unwrapApiData(response.data);
-}
-
-export async function fetchRackTemplate(): Promise<RackTemplate> {
+export async function fetchWarehouseLayout(): Promise<WarehouseLayout> {
   const response = await apiClient.get<
-    ApiEnvelope<RackTemplate> | RackTemplate
-  >("/location/rack-template");
-  return unwrapApiData(response.data);
+    ApiEnvelope<WarehouseLayoutApiResponse> | WarehouseLayoutApiResponse
+  >("/location/layout");
+
+  return mapWarehouseLayoutResponse(unwrapApiData(response.data));
 }
 
-export async function updateRackTemplate(
-  patch: RackTemplate,
-): Promise<RackTemplate> {
-  const response = await apiClient.put<
-    ApiEnvelope<RackTemplate> | RackTemplate
-  >("/location/rack-template", patch);
-  return unwrapApiData(response.data);
+export async function saveWarehouseLayout(
+  request: SaveWarehouseLayoutRequest,
+): Promise<SaveWarehouseLayoutResponse> {
+  const response = await apiClient.patch<
+    ApiEnvelope<SaveWarehouseLayoutApiResponse> | SaveWarehouseLayoutApiResponse
+  >("/location/layout", request);
+  const data = unwrapApiData(response.data);
+
+  return {
+    revision: data.revision,
+    idMap: data.idMap,
+    layout: mapWarehouseLayoutResponse(data.layout),
+  };
 }

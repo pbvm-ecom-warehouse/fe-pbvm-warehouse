@@ -1,0 +1,132 @@
+import { describe, expect, it } from "vitest";
+
+import { buildWarehouseLayoutOperations } from "@/features/warehouse-layout/utils/warehouse-layout-operations";
+import type { WarehouseLayout } from "@/types/api";
+
+const base: WarehouseLayout = {
+  id: "single-warehouse-layout",
+  revision: 4,
+  status: "PUBLISHED",
+  updatedAt: "2026-07-27T00:00:00.000Z",
+  canvas: { widthM: 40, heightM: 24, gridM: 0.5 },
+  rackTemplate: { widthM: 6, depthM: 1.5, levelCount: 2, bayCount: 3 },
+  zones: [],
+  racks: [],
+  shelves: [],
+  aisles: [],
+  gates: [],
+};
+
+describe("buildWarehouseLayoutOperations", () => {
+  it("tạo Zone → Rack → Shelf với tham chiếu ID tạm đúng thứ tự", () => {
+    const zoneId = "tmp:00000000-0000-4000-8000-000000000001";
+    const rackId = "tmp:00000000-0000-4000-8000-000000000002";
+    const shelfId = "tmp:00000000-0000-4000-8000-000000000003";
+    const draft: WarehouseLayout = {
+      ...structuredClone(base),
+      zones: [
+        {
+          id: zoneId,
+          code: "A",
+          name: "Khu A",
+          xM: 1,
+          yM: 1,
+          widthM: 12,
+          heightM: 8,
+          rotation: 0,
+        },
+      ],
+      racks: [
+        {
+          id: rackId,
+          zoneId,
+          code: "A-01",
+          name: "Rack A-01",
+          xM: 2,
+          yM: 2,
+          widthM: 6,
+          depthM: 1.5,
+          rotation: 0,
+          levelCount: 2,
+          bayCount: 3,
+          shelfCodes: ["A-01-T1"],
+          accessPoint: { xM: 5, yM: 4 },
+        },
+      ],
+      shelves: [
+        { id: shelfId, rackId, level: 1, code: "A-01-T1", isStaging: false },
+      ],
+    };
+
+    const operations = buildWarehouseLayoutOperations(base, draft);
+
+    expect(operations.map(({ entity }) => entity)).toEqual([
+      "ZONE",
+      "RACK",
+      "SHELF",
+    ]);
+    expect(operations[1]).toMatchObject({
+      op: "CREATE",
+      clientId: rackId,
+      data: { zoneId },
+    });
+    expect(operations[2]).toMatchObject({
+      op: "CREATE",
+      clientId: shelfId,
+      data: { rackId },
+    });
+  });
+
+  it("update canvas/template và chỉ gửi field thay đổi", () => {
+    const draft = structuredClone(base);
+    draft.canvas.widthM = 48;
+    draft.rackTemplate!.depthM = 2;
+
+    expect(buildWarehouseLayoutOperations(base, draft)).toEqual([
+      { op: "UPDATE", entity: "CANVAS", patch: { widthM: 48 } },
+      { op: "UPDATE", entity: "RACK_TEMPLATE", patch: { depthM: 2 } },
+    ]);
+  });
+
+  it("xóa Shelf trước Rack trước Zone để vượt delete guards", () => {
+    const persisted = structuredClone(base);
+    persisted.zones = [
+      {
+        id: "z1",
+        code: "A",
+        name: "Khu A",
+        xM: 1,
+        yM: 1,
+        widthM: 12,
+        heightM: 8,
+        rotation: 0,
+      },
+    ];
+    persisted.racks = [
+      {
+        id: "r1",
+        zoneId: "z1",
+        code: "A-01",
+        name: "Rack A-01",
+        xM: 2,
+        yM: 2,
+        widthM: 6,
+        depthM: 1.5,
+        rotation: 0,
+        levelCount: 2,
+        bayCount: 3,
+        shelfCodes: ["A-01-T1"],
+        accessPoint: { xM: 5, yM: 4 },
+      },
+    ];
+    persisted.shelves = [
+      { id: "s1", rackId: "r1", level: 1, code: "A-01-T1", isStaging: false },
+    ];
+
+    expect(buildWarehouseLayoutOperations(persisted, base)).toEqual([
+      { op: "DELETE", entity: "SHELF", id: "s1" },
+      { op: "DELETE", entity: "RACK", id: "r1" },
+      { op: "DELETE", entity: "ZONE", id: "z1" },
+    ]);
+  });
+});
