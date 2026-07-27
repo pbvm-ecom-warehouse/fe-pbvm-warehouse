@@ -284,7 +284,7 @@ export function WarehouseLayoutInspector({
                 Tầng kệ của rack
               </div>
               <p className="text-[11px] leading-4 text-slate-500">
-                Hệ thống chỉ cho phép đúng 1 shelf staging trên toàn kho.
+                Đây là nơi hàng mới nhập được đặt tạm trước khi chuyển vào kệ chính.
               </p>
               {rackShelves.map((shelf) => (
                 <div
@@ -307,7 +307,7 @@ export function WarehouseLayoutInspector({
                     size="sm"
                     variant={shelf.isStaging ? "default" : "outline"}
                   >
-                    {shelf.isStaging ? "Đang staging" : "Đặt staging"}
+                    {shelf.isStaging ? "Đang nhận tạm" : "Chọn nhận tạm"}
                   </Button>
                 </div>
               ))}

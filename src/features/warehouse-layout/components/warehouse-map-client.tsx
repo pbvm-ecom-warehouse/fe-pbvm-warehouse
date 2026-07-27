@@ -105,6 +105,24 @@ function getErrorDetails(error: unknown) {
   ).response?.data?.error?.details;
 }
 
+function formatLayoutError(error: unknown, fallback: string) {
+  const code = getApiErrorCode(error);
+  const messages: Record<string, string> = {
+    STAGING_SHELF_CANNOT_DELETE:
+      "Không thể xoá vị trí nhận hàng tạm. Hãy chọn một tầng kệ khác làm vị trí nhận hàng tạm trước, rồi xoá lại.",
+    LAYOUT_RESET_REQUIRES_EMPTY_STOCK:
+      "Không thể reset sơ đồ vì vẫn còn hàng tồn trên kệ. Hãy chuyển hoặc xuất hết hàng khỏi các kệ trước.",
+    RACK_HAS_SHELVES:
+      "Không thể xoá rack vì rack vẫn còn tầng kệ. Hãy xoá tầng kệ hoặc dùng Reset sơ đồ nếu muốn dựng lại từ đầu.",
+    ZONE_HAS_RACKS:
+      "Không thể xoá khu vực vì khu vực vẫn còn rack. Hãy xoá hoặc chuyển rack trước.",
+    SHELF_HAS_STOCK:
+      "Không thể xoá tầng kệ vì tầng này vẫn còn hàng tồn.",
+  };
+
+  return (code && messages[code]) || getApiErrorMessage(error) || fallback;
+}
+
 function selectionExists(layout: WarehouseLayout, selection: LayoutSelection) {
   if (!selection) return false;
   const collection =
@@ -191,7 +209,7 @@ function WarehouseEditor({
         );
         return;
       }
-      toast.error(getApiErrorMessage(error) ?? "Không thể lưu bản đồ kho.");
+      toast.error(formatLayoutError(error, "Không thể lưu bản đồ kho."));
     },
   });
 
@@ -204,10 +222,10 @@ function WarehouseEditor({
       setClientErrors([]);
       setConflictRevision(null);
       queryClient.setQueryData(layoutKey, layout);
-      toast.success("Đã reset sơ đồ kho. Hãy tạo lại khu vực, rack và chọn shelf staging mới.");
+      toast.success("Đã reset sơ đồ kho. Hãy tạo lại khu vực, rack và chọn một tầng kệ làm vị trí nhận hàng tạm.");
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error) ?? "Không thể reset sơ đồ kho.");
+      toast.error(formatLayoutError(error, "Không thể reset sơ đồ kho."));
     },
   });
 
@@ -414,7 +432,7 @@ function WarehouseEditor({
             (item) => item.rackId === currentSelection.id && item.isStaging,
           )
         ) {
-          toast.error("Rack này đang chứa shelf staging. Hãy chuyển staging sang shelf khác trước.");
+          toast.error("Rack này đang chứa vị trí nhận hàng tạm. Hãy chọn tầng kệ khác làm vị trí nhận hàng tạm trước.");
           return layout;
         }
         layout.racks = layout.racks.filter(
@@ -674,7 +692,7 @@ function WarehouseEditor({
 
       {!hasStagingShelf ? (
         <div className="border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-900">
-          Chưa có shelf staging. Sau khi tạo rack, hãy chọn 1 shelf làm staging trước khi dùng nhập kho.
+          Chưa có vị trí nhận hàng tạm. Sau khi tạo rack, hãy chọn một tầng kệ làm vị trí nhận hàng tạm trước khi dùng nhập kho.
         </div>
       ) : null}
 
