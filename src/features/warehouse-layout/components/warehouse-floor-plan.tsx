@@ -21,6 +21,7 @@ import {
   getAisleRect,
   getRackRect,
   getZoneRect,
+  isRectInside,
   snapToGrid,
   type LayoutRect,
 } from "../utils/warehouse-layout";
@@ -38,9 +39,20 @@ export type LayoutSelection = {
   id: string;
 } | null;
 
+type LayoutMove = {
+  selection: NonNullable<LayoutSelection>;
+  position: { xM: number; yM: number };
+};
+
+type DragGroupMember = {
+  selection: NonNullable<LayoutSelection>;
+  startPosition: { xM: number; yM: number };
+};
+
 type DragState = {
   action: "move" | "resize";
   changed: boolean;
+  groupMembers?: DragGroupMember[];
   pointerId: number;
   selection: NonNullable<LayoutSelection>;
   startPoint: { x: number; y: number };
@@ -125,6 +137,7 @@ export function WarehouseFloorPlan({
   onMoveElement,
   onInteractionEnd,
   onInteractionStart,
+  onMoveGroup,
   onResizeElement,
   onSelect,
   selection = null,
@@ -142,6 +155,7 @@ export function WarehouseFloorPlan({
     selection: NonNullable<LayoutSelection>,
     position: { xM: number; yM: number },
   ) => void;
+  onMoveGroup?: (moves: LayoutMove[]) => void;
   onInteractionEnd?: () => void;
   onInteractionStart?: () => void;
   onResizeElement?: (
@@ -167,6 +181,55 @@ export function WarehouseFloorPlan({
   const patternId = `warehouse-grid-${layoutDomId}`;
   const hatchId = `warehouse-zone-hatch-${layoutDomId}`;
 
+  function getZoneGroupMembers(
+    nextSelection: NonNullable<LayoutSelection>,
+    rect: LayoutRect,
+  ): DragGroupMember[] | undefined {
+    if (nextSelection.kind !== "zone") return undefined;
+
+    const members: DragGroupMember[] = [
+      {
+        selection: nextSelection,
+        startPosition: { xM: rect.xM, yM: rect.yM },
+      },
+    ];
+
+    layout.racks
+      .filter((rack) => rack.zoneId === nextSelection.id)
+      .forEach((rack) => {
+        members.push({
+          selection: { kind: "rack", id: rack.id },
+          startPosition: { xM: rack.xM, yM: rack.yM },
+        });
+      });
+
+    layout.aisles
+      .filter((aisle) => isRectInside(aisleRect(aisle), rect))
+      .forEach((aisle) => {
+        members.push({
+          selection: { kind: "aisle", id: aisle.id },
+          startPosition: { xM: aisle.xM, yM: aisle.yM },
+        });
+      });
+
+    layout.gates
+      .filter(
+        (gate) =>
+          gate.xM >= rect.xM &&
+          gate.yM >= rect.yM &&
+          gate.xM <= rect.xM + rect.widthM &&
+          gate.yM <= rect.yM + rect.heightM,
+      )
+      .forEach((gate) => {
+        members.push({
+          selection: { kind: "gate", id: gate.id },
+          startPosition: { xM: gate.xM, yM: gate.yM },
+        });
+      });
+
+    return members;
+  }
+
   function startDrag(
     event: ReactPointerEvent<SVGElement>,
     nextSelection: NonNullable<LayoutSelection>,
@@ -184,13 +247,16 @@ export function WarehouseFloorPlan({
     dragRef.current = {
       action,
       changed: false,
+      groupMembers:
+        action === "move" && event.ctrlKey
+          ? getZoneGroupMembers(nextSelection, rect)
+          : undefined,
       pointerId: event.pointerId,
       selection: nextSelection,
       startPoint: getPoint(svgRef.current, event),
       startRect: rect,
     };
   }
-
   function handlePointerMove(event: ReactPointerEvent<SVGSVGElement>) {
     const pan = panRef.current;
     if (pan && svgRef.current) {
@@ -219,6 +285,30 @@ export function WarehouseFloorPlan({
     const deltaY = point.y - drag.startPoint.y;
 
     if (drag.action === "move") {
+      if (drag.groupMembers?.length) {
+        const deltaM = {
+          xM: snapToGrid(deltaX, gridM),
+          yM: snapToGrid(deltaY, gridM),
+        };
+        if (deltaM.xM === 0 && deltaM.yM === 0) {
+          return;
+        }
+        if (!drag.changed) {
+          drag.changed = true;
+          onInteractionStart?.();
+        }
+        onMoveGroup?.(
+          drag.groupMembers.map((member) => ({
+            selection: member.selection,
+            position: {
+              xM: member.startPosition.xM + deltaM.xM,
+              yM: member.startPosition.yM + deltaM.yM,
+            },
+          })),
+        );
+        return;
+      }
+
       const gateOffset = drag.selection.kind === "gate" ? 0.5 : 0;
       const originalX = drag.startRect.xM + gateOffset;
       const originalY = drag.startRect.yM + gateOffset;
@@ -236,7 +326,6 @@ export function WarehouseFloorPlan({
       onMoveElement?.(drag.selection, position);
       return;
     }
-
     const size = {
       widthM: Math.max(
         gridM,

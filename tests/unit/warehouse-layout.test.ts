@@ -123,6 +123,21 @@ describe("warehouse architectural layout", () => {
     });
   });
 
+  it("báo rõ mã layout nào đang bị trùng", () => {
+    const layout = cloneWarehouseLayout(editorLayout);
+    layout.aisles.push({
+      ...layout.aisles[1],
+      id: "aisle-copy",
+      code: "AISLE-A1",
+      yM: 9,
+    });
+
+    expect(validateWarehouseLayoutClient(layout)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("AISLE-A1 đang bị dùng 2 lần"),
+      ]),
+    );
+  });
   it("reports overlap errors before publish", () => {
     const layout = cloneWarehouseLayout(editorLayout);
     layout.racks[1].xM = layout.racks[0].xM;

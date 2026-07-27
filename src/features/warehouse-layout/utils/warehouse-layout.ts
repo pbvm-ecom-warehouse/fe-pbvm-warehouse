@@ -76,16 +76,37 @@ export function validateWarehouseLayoutClient(
     widthM: layout.canvas.widthM,
     heightM: layout.canvas.heightM,
   };
-  const allCodes = [
-    ...layout.zones,
-    ...layout.racks,
-    ...layout.aisles,
-    ...layout.gates,
-  ].map((item) => item.code.trim().toUpperCase());
-
-  if (new Set(allCodes).size !== allCodes.length) {
-    errors.push("Mã zone, rack, aisle và gate không được trùng.");
-  }
+  const codeEntries = [
+    ...layout.zones.map((item) => ({
+      code: item.code,
+      label: `Khu vực ${item.code}`,
+    })),
+    ...layout.racks.map((item) => ({
+      code: item.code,
+      label: `Rack ${item.code}`,
+    })),
+    ...layout.aisles.map((item) => ({
+      code: item.code,
+      label: `Lối đi ${item.code}`,
+    })),
+    ...layout.gates.map((item) => ({
+      code: item.code,
+      label: `Cổng ${item.code}`,
+    })),
+  ];
+  const codeGroups = new Map<string, string[]>();
+  codeEntries.forEach((entry) => {
+    const code = entry.code.trim().toUpperCase();
+    if (!code) return;
+    codeGroups.set(code, [...(codeGroups.get(code) ?? []), entry.label]);
+  });
+  codeGroups.forEach((labels, code) => {
+    if (labels.length > 1) {
+      errors.push(
+        `${code} đang bị dùng ${labels.length} lần: ${labels.join(", ")}.`,
+      );
+    }
+  });
 
   layout.zones.forEach((zone) => {
     if (!isRectInside(getZoneRect(zone), canvas)) {
