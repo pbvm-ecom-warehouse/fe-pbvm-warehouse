@@ -58,6 +58,7 @@ const RETIRED_ROUTES = new Set<string>(["/inventory", "/transfers"]);
 export const ROUTE_ACCESS_BY_HREF = {
   "/dashboard": ALL_STAFF_ROLES,
   "/locations": ["MANAGER"],
+  "/locations/map": ["MANAGER"],
   "/products": ["ADMIN", "MANAGER"],
   "/products/attributes": ["ADMIN"],
   "/purchase-orders": ["ADMIN", "MANAGER"],

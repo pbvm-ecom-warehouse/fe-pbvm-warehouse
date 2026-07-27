@@ -62,6 +62,16 @@ function RackTemplateForm({
 }) {
   const [form, setForm] = useState(template);
 
+  const isValid =
+    Number.isFinite(form.widthM) &&
+    form.widthM > 0 &&
+    Number.isFinite(form.depthM) &&
+    form.depthM > 0 &&
+    Number.isInteger(form.levelCount) &&
+    form.levelCount >= 1 &&
+    Number.isInteger(form.bayCount) &&
+    form.bayCount >= 1;
+
   const mutation = useMutation({
     mutationFn: () => updateRackTemplate(form),
     onError: (error) => toast.error(getApiErrorMessage(error)),
@@ -135,7 +145,7 @@ function RackTemplateForm({
         </div>
       </div>
       <Button
-        disabled={!canEdit || mutation.isPending}
+        disabled={!canEdit || !isValid || mutation.isPending}
         onClick={() => mutation.mutate()}
       >
         Áp dụng cho toàn bộ rack
@@ -321,8 +331,11 @@ export function WarehouseMapClient() {
         canEdit={canEdit}
         layout={layoutQuery.data}
         onDelete={() => {
-          // Xoá không nằm trong scope task này — để trống handler an toàn
-          // (không throw); nút xóa vẫn hiển thị nhưng không phá huỷ dữ liệu.
+          // Xoá qua bản đồ không nằm trong scope task này (xem ghi chú trong
+          // brief) — báo rõ cho người dùng thay vì im lặng không làm gì.
+          toast.info(
+            "Chưa hỗ trợ xoá phần tử qua bản đồ — vui lòng dùng trang quản lý vị trí.",
+          );
         }}
         onPatch={handlePatch}
         onRotate={() => {
