@@ -234,7 +234,12 @@ export function WarehouseMapClient() {
 
   function handleOpenRack(rackCode: string, shelfCode: string) {
     setSelectedRackCode(rackCode);
-    setSelectedShelfCode(shelfCode);
+    const shelfCodeIsReal = shelves.some((s) => s.code === shelfCode);
+    const resolvedShelfCode = shelfCodeIsReal
+      ? shelfCode
+      : (groupShelvesByRack(shelves, { rackCode })[0]?.shelves[0]?.code ??
+        null);
+    setSelectedShelfCode(resolvedShelfCode);
     setSceneMode("rack");
   }
 
@@ -259,6 +264,7 @@ export function WarehouseMapClient() {
       <div className="grid gap-4">
         <RackTemplateForm
           canEdit={canEdit}
+          key={JSON.stringify(rackTemplateQuery.data)}
           onSaved={() => {
             void queryClient.invalidateQueries({
               queryKey: rackTemplateKeys.detail,
