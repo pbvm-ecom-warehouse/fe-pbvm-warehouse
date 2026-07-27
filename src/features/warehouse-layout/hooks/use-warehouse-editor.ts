@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { WarehouseLayout } from "@/types/api";
 import { cloneWarehouseLayout } from "../utils/warehouse-layout";
@@ -22,7 +22,14 @@ export function useWarehouseEditor(initialLayout: WarehouseLayout) {
   const [undoStack, setUndoStack] = useState<WarehouseLayout[]>([]);
   const [redoStack, setRedoStack] = useState<WarehouseLayout[]>([]);
   const draftRef = useRef(draftLayout);
+  const undoStackRef = useRef(undoStack);
+  const redoStackRef = useRef(redoStack);
   const interactionStartRef = useRef<WarehouseLayout | null>(null);
+
+  useEffect(() => {
+    undoStackRef.current = undoStack;
+    redoStackRef.current = redoStack;
+  }, [redoStack, undoStack]);
 
   function setDraft(next: WarehouseLayout) {
     draftRef.current = next;
@@ -56,7 +63,7 @@ export function useWarehouseEditor(initialLayout: WarehouseLayout) {
   }
 
   function undo() {
-    const previous = undoStack.at(-1);
+    const previous = undoStackRef.current.at(-1);
     if (!previous) return;
     setUndoStack((history) => history.slice(0, -1));
     setRedoStack((history) => [
@@ -67,7 +74,7 @@ export function useWarehouseEditor(initialLayout: WarehouseLayout) {
   }
 
   function redo() {
-    const next = redoStack[0];
+    const next = redoStackRef.current[0];
     if (!next) return;
     setRedoStack((history) => history.slice(1));
     setUndoStack((history) => [

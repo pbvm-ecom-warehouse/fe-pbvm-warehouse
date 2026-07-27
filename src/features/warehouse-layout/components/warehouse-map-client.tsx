@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DoorOpen,
@@ -117,6 +117,18 @@ function selectionExists(layout: WarehouseLayout, selection: LayoutSelection) {
   return collection.some((item) => item.id === selection.id);
 }
 
+function isEditableEventTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tagName = target.tagName;
+  return (
+    tagName === "INPUT" ||
+    tagName === "TEXTAREA" ||
+    tagName === "SELECT" ||
+    Boolean(target.closest("[contenteditable='true']"))
+  );
+}
+
 function WarehouseEditor({
   initialLayout,
   onReload,
@@ -145,6 +157,11 @@ function WarehouseEditor({
     [issues],
   );
 
+  const activeSelection =
+    selection && selectionExists(editor.draftLayout, selection)
+      ? selection
+      : null;
+
   const saveMutation = useMutation({
     mutationFn: saveWarehouseLayout,
     onSuccess: (result) => {
@@ -152,7 +169,7 @@ function WarehouseEditor({
       setIssues([]);
       setClientErrors([]);
       setConflictRevision(null);
-      if (!selectionExists(result.layout, selection)) setSelection(null);
+      if (!selectionExists(result.layout, activeSelection)) setSelection(null);
       queryClient.setQueryData(layoutKey, result.layout);
       toast.success(`Đã lưu bản đồ kho · revision ${result.revision}.`);
     },
@@ -253,8 +270,8 @@ function WarehouseEditor({
       setSelection({ kind, id });
     } else if (kind === "rack") {
       const zone =
-        (selection?.kind === "zone"
-          ? layout.zones.find((item) => item.id === selection.id)
+        (activeSelection?.kind === "zone"
+          ? layout.zones.find((item) => item.id === activeSelection.id)
           : null) ??
         layout.zones.find((item) =>
           isRectInside(
@@ -354,44 +371,60 @@ function WarehouseEditor({
   }
 
   function deleteSelection() {
-    if (!selection) return;
+    if (!canEdit || saveMutation.isPending || !activeSelection) return;
+    const currentSelection = activeSelection;
+    const currentLayout = editor.draftLayout;
     if (
-      selection.kind === "zone" &&
-      editor.draftLayout.racks.some((rack) => rack.zoneId === selection.id)
+      currentSelection.kind === "zone" &&
+      currentLayout.racks.some((rack) => rack.zoneId === currentSelection.id)
     ) {
       toast.error("Khu vực vẫn còn rack. Hãy xoá hoặc chuyển rack trước.");
       return;
     }
     editor.commit((layout) => {
-      if (selection.kind === "zone") {
-        layout.zones = layout.zones.filter((item) => item.id !== selection.id);
-      } else if (selection.kind === "rack") {
-        layout.racks = layout.racks.filter((item) => item.id !== selection.id);
-        layout.shelves = layout.shelves.filter(
-          (item) => item.rackId !== selection.id,
+      if (currentSelection.kind === "zone") {
+        layout.zones = layout.zones.filter(
+          (item) => item.id !== currentSelection.id,
         );
-      } else if (selection.kind === "aisle") {
+      } else if (currentSelection.kind === "rack") {
+        layout.racks = layout.racks.filter(
+          (item) => item.id !== currentSelection.id,
+        );
+        layout.shelves = layout.shelves.filter(
+          (item) => item.rackId !== currentSelection.id,
+        );
+      } else if (currentSelection.kind === "aisle") {
         layout.aisles = layout.aisles.filter(
-          (item) => item.id !== selection.id,
+          (item) => item.id !== currentSelection.id,
         );
       } else {
-        layout.gates = layout.gates.filter((item) => item.id !== selection.id);
+        layout.gates = layout.gates.filter(
+          (item) => item.id !== currentSelection.id,
+        );
       }
       return layout;
     });
     setSelection(null);
     setIssues([]);
+    setClientErrors([]);
   }
 
   function rotateSelection() {
-    if (!selection || (selection.kind !== "zone" && selection.kind !== "rack"))
+    if (
+      !activeSelection ||
+      (activeSelection.kind !== "zone" && activeSelection.kind !== "rack")
+    )
       return;
     const item =
-      selection.kind === "zone"
-        ? editor.draftLayout.zones.find((entry) => entry.id === selection.id)
-        : editor.draftLayout.racks.find((entry) => entry.id === selection.id);
+      activeSelection.kind === "zone"
+        ? editor.draftLayout.zones.find(
+            (entry) => entry.id === activeSelection.id,
+          )
+        : editor.draftLayout.racks.find(
+            (entry) => entry.id === activeSelection.id,
+          );
     if (!item) return;
-    updateElement(selection, {
+    updateElement(activeSelection, {
       rotation: (item.rotation === 0 ? 90 : 0) as WarehouseLayoutRotation,
     });
   }
@@ -437,6 +470,20 @@ function WarehouseEditor({
     });
   }
 
+  function handleUndo() {
+    if (!canEdit || !editor.canUndo || saveMutation.isPending) return;
+    editor.undo();
+    setIssues([]);
+    setClientErrors([]);
+  }
+
+  function handleRedo() {
+    if (!canEdit || !editor.canRedo || saveMutation.isPending) return;
+    editor.redo();
+    setIssues([]);
+    setClientErrors([]);
+  }
+
   async function reloadCanonical() {
     const layout = await onReload();
     editor.reset(layout);
@@ -446,6 +493,40 @@ function WarehouseEditor({
     setConflictRevision(null);
     toast.success("Đã tải bản đồ mới nhất từ máy chủ.");
   }
+
+  const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
+    if (isEditableEventTarget(event.target)) return;
+    if (event.altKey) return;
+
+    if (event.key === "Delete") {
+      if (!activeSelection) return;
+      event.preventDefault();
+      deleteSelection();
+      return;
+    }
+
+    const key = event.key.toLowerCase();
+    const wantsUndo = (event.ctrlKey || event.metaKey) && key === "z";
+    const wantsRedo =
+      (event.ctrlKey || event.metaKey) &&
+      (key === "y" || (event.shiftKey && key === "z"));
+
+    if (wantsUndo) {
+      event.preventDefault();
+      handleUndo();
+      return;
+    }
+
+    if (wantsRedo) {
+      event.preventDefault();
+      handleRedo();
+    }
+  });
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   return (
     <div className="flex h-[calc(100dvh-7.25rem)] min-h-[640px] flex-col overflow-hidden bg-slate-100">
@@ -479,10 +560,7 @@ function WarehouseEditor({
           <Button
             aria-label="Hoàn tác"
             disabled={!canEdit || !editor.canUndo || saveMutation.isPending}
-            onClick={() => {
-              editor.undo();
-              setIssues([]);
-            }}
+            onClick={handleUndo}
             size="icon"
             variant="outline"
           >
@@ -491,10 +569,7 @@ function WarehouseEditor({
           <Button
             aria-label="Làm lại"
             disabled={!canEdit || !editor.canRedo || saveMutation.isPending}
-            onClick={() => {
-              editor.redo();
-              setIssues([]);
-            }}
+            onClick={handleRedo}
             size="icon"
             variant="outline"
           >
@@ -585,7 +660,7 @@ function WarehouseEditor({
               updateElement(target, size, true)
             }
             onSelect={setSelection}
-            selection={selection}
+            selection={activeSelection}
             tool={tool}
           />
         </main>
@@ -595,11 +670,13 @@ function WarehouseEditor({
           issues={issues}
           layout={editor.draftLayout}
           onDelete={deleteSelection}
-          onPatch={(patch) => selection && updateElement(selection, patch)}
+          onPatch={(patch) =>
+            activeSelection && updateElement(activeSelection, patch)
+          }
           onPatchCanvas={patchCanvas}
           onPatchRackTemplate={patchRackTemplate}
           onRotate={rotateSelection}
-          selection={selection}
+          selection={activeSelection}
         />
       </div>
     </div>

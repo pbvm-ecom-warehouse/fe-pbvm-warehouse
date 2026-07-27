@@ -47,23 +47,40 @@ vi.mock("@/hooks/use-session-user", () => ({
 
 vi.mock("@/features/warehouse-layout/components/warehouse-floor-plan", () => ({
   WarehouseFloorPlan: ({
+    layout,
     onCreate,
+    onSelect,
     tool,
   }: {
+    layout: WarehouseLayout;
     onCreate?: (
       kind: "zone" | "rack" | "aisle" | "gate",
       point: { xM: number; yM: number },
     ) => void;
+    onSelect?: (selection: { kind: "zone"; id: string } | null) => void;
     tool: string;
   }) => (
-    <button
-      aria-label="Sơ đồ kho"
-      onClick={() => {
-        if (tool === "zone") onCreate?.("zone", { xM: 2, yM: 2 });
-      }}
-    >
-      canvas
-    </button>
+    <div>
+      <button
+        aria-label="Sơ đồ kho"
+        onClick={() => {
+          if (tool === "zone") onCreate?.("zone", { xM: 2, yM: 2 });
+        }}
+      >
+        canvas
+      </button>
+      <output aria-label="Số zone">{layout.zones.length}</output>
+      {layout.zones.map((zone) => (
+        <button
+          aria-label={`Chọn zone ${zone.code}`}
+          key={zone.id}
+          onClick={() => onSelect?.({ kind: "zone", id: zone.id })}
+          type="button"
+        >
+          {zone.code}
+        </button>
+      ))}
+    </div>
   ),
 }));
 
@@ -135,6 +152,38 @@ describe("WarehouseMapClient", () => {
         operations: [expect.objectContaining({ op: "CREATE", entity: "ZONE" })],
       }),
     );
+  });
+
+  it("xóa phần tử bằng Delete và hỗ trợ phím tắt undo/redo", async () => {
+    renderWithClient();
+    await screen.findByText("Bản đồ kho 2D");
+
+    fireEvent.click(screen.getByRole("button", { name: "Khu vực" }));
+    fireEvent.click(screen.getByLabelText("Sơ đồ kho"));
+
+    expect(screen.getByLabelText("Số zone")).toHaveTextContent("1");
+    fireEvent.click(screen.getByLabelText("Chọn zone ZONE-01"));
+
+    fireEvent.keyDown(document, { key: "Delete" });
+    await waitFor(() => {
+      expect(screen.getByLabelText("Số zone")).toHaveTextContent("0");
+    });
+    expect(screen.getByRole("button", { name: "Lưu thay đổi" })).toBeDisabled();
+
+    fireEvent.keyDown(document, { ctrlKey: true, key: "z" });
+    await waitFor(() => {
+      expect(screen.getByLabelText("Số zone")).toHaveTextContent("1");
+    });
+    expect(screen.getByRole("button", { name: "Lưu thay đổi" })).toBeEnabled();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Làm lại" })).toBeEnabled();
+    });
+
+    fireEvent.keyDown(document, { ctrlKey: true, shiftKey: true, key: "Z" });
+    await waitFor(() => {
+      expect(screen.getByLabelText("Số zone")).toHaveTextContent("0");
+    });
+    expect(screen.getByRole("button", { name: "Lưu thay đổi" })).toBeDisabled();
   });
 
   it("giữ draft và hiện banner khi revision conflict", async () => {
