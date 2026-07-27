@@ -5,9 +5,7 @@ import { RotateCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RackConfigurationDialog } from "@/features/warehouse-layout/components/rack-configuration-dialog";
 import type { LayoutSelection } from "@/features/warehouse-layout/components/warehouse-floor-plan";
-import type { RackConfigurationScope } from "@/features/warehouse-layout/utils/warehouse-layout";
 import type { WarehouseLayout } from "@/types/api";
 
 function NumberField({
@@ -66,7 +64,6 @@ function TextField({
 export function WarehouseLayoutInspector({
   canEdit,
   layout,
-  onApplyRackConfiguration,
   onDelete,
   onPatch,
   onRotate,
@@ -74,7 +71,6 @@ export function WarehouseLayoutInspector({
 }: {
   canEdit: boolean;
   layout: WarehouseLayout;
-  onApplyRackConfiguration: (scope: RackConfigurationScope) => void;
   onDelete: () => void;
   onPatch: (patch: Record<string, unknown>) => void;
   onRotate: () => void;
@@ -101,10 +97,6 @@ export function WarehouseLayoutInspector({
     return null;
   }
 
-  const selectedRack =
-    selection.kind === "rack"
-      ? layout.racks.find((rack) => rack.id === selection.id)
-      : undefined;
   const selectionLabel = {
     aisle: "lối đi",
     gate: "cổng",
@@ -184,49 +176,17 @@ export function WarehouseLayoutInspector({
           </>
         ) : null}
 
-        {selection.kind === "rack" && "depthM" in item ? (
+        {selection.kind === "rack" ? (
           <>
-            <div className="grid grid-cols-2 gap-3">
-              <NumberField
-                disabled={!canEdit}
-                label="Dài (m)"
-                onChange={(widthM) => onPatch({ widthM })}
-                value={item.widthM}
-              />
-              <NumberField
-                disabled={!canEdit}
-                label="Sâu (m)"
-                onChange={(depthM) => onPatch({ depthM })}
-                value={item.depthM}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <NumberField
-                disabled={!canEdit}
-                label="Số tầng"
-                onChange={(levelCount) => onPatch({ levelCount })}
-                step={1}
-                value={item.levelCount}
-              />
-              <NumberField
-                disabled={!canEdit}
-                label="Số khoang"
-                onChange={(bayCount) => onPatch({ bayCount })}
-                step={1}
-                value={item.bayCount}
-              />
-            </div>
+            <p className="text-xs text-muted-foreground">
+              Kích thước rack dùng chung toàn kho — sửa ở mục &quot;Kích
+              thước rack chuẩn&quot; phía trên sơ đồ, áp dụng cho mọi rack
+              cùng lúc.
+            </p>
             <Button disabled={!canEdit} onClick={onRotate} variant="outline">
               <RotateCw data-icon="inline-start" />
               Xoay ngang/dọc
             </Button>
-            {canEdit && selectedRack ? (
-              <RackConfigurationDialog
-                layout={layout}
-                onApply={onApplyRackConfiguration}
-                sourceRack={selectedRack}
-              />
-            ) : null}
           </>
         ) : null}
 
