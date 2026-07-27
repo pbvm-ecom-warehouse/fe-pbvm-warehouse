@@ -865,7 +865,7 @@ function ShipmentTable({
   shipments: Shipment[];
 }) {
   return (
-    <Card className="gap-0">
+    <Card className="min-w-0 gap-0">
       <CardHeader className="border-b bg-muted/25 py-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Route className="size-4 text-primary" />

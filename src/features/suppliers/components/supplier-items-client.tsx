@@ -630,7 +630,7 @@ function SupplierItemTable({
                       : item.supplierId}
                   </TableCell>
                   <TableCell>
-                    {item.purchasePrice.toLocaleString("vi-VN")}
+                    {item.purchasePrice.toLocaleString("vi-VN")} đ
                   </TableCell>
                   <TableCell>
                     {item.leadTimeDays ?? 0} ngày / {item.minOrderQty ?? 0}

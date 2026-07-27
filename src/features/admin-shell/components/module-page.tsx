@@ -49,7 +49,7 @@ const moduleSummaries = {
     },
   },
   purchases: {
-    title: "Mua hàng",
+    title: "Đặt Nhập hàng",
     description: "Quản lý đơn mua hàng và phiếu nhập kho.",
     action: "Tạo đơn mua",
     highlights: ["Đơn mua", "Phiếu nhập", "Nhà cung cấp"],

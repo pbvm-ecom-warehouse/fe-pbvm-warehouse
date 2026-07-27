@@ -6,6 +6,14 @@ import { LoaderCircle, Plus, Save, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -59,56 +67,84 @@ function formatError(error: unknown) {
 
 export function AttributeOptionsAdminPanel() {
   const queryClient = useQueryClient();
-  const [selectedType, setSelectedType] =
+  const [filterType, setFilterType] =
     useState<CreatableWarehouseItemType>("CUP_BLANK");
-  const [selectedKey, setSelectedKey] = useState<AttributeKey | "">("");
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
+  const [filterKey, setFilterKey] = useState<AttributeKey | "">("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<AttributeOptionStatus>("ALL");
   const [drafts, setDrafts] = useState<Record<string, OptionDraft>>({});
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createType, setCreateType] =
+    useState<CreatableWarehouseItemType>("CUP_BLANK");
+  const [createKey, setCreateKey] = useState<AttributeKey | "">("");
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
 
-  const templateQuery = useQuery({
-    queryFn: () => getSkuTemplate(selectedType),
-    queryKey: ["stock-sku-template", "attribute-admin", selectedType],
+  const filterTemplateQuery = useQuery({
+    queryFn: () => getSkuTemplate(filterType),
+    queryKey: ["stock-sku-template", "attribute-admin", filterType],
     staleTime: 60_000,
   });
 
-  const availableKeys = useMemo(() => {
-    if (templateQuery.data?.kind === "template") {
+  const availableFilterKeys = useMemo(() => {
+    if (filterTemplateQuery.data?.kind === "template") {
       return Array.from(
-        new Set(templateQuery.data.fields.map((field) => field.key)),
+        new Set(filterTemplateQuery.data.fields.map((field) => field.key)),
       );
     }
 
-    return [...ITEM_TYPE_ATTRIBUTE_KEYS[selectedType]].sort((left, right) =>
+    return [...ITEM_TYPE_ATTRIBUTE_KEYS[filterType]].sort((left, right) =>
       ATTRIBUTE_LABELS[left].localeCompare(ATTRIBUTE_LABELS[right], "vi"),
     );
-  }, [selectedType, templateQuery.data]);
+  }, [filterType, filterTemplateQuery.data]);
 
-  const effectiveSelectedKey =
-    selectedKey && availableKeys.includes(selectedKey)
-      ? selectedKey
-      : availableKeys[0] || "";
+  const effectiveFilterKey =
+    filterKey && availableFilterKeys.includes(filterKey)
+      ? filterKey
+      : availableFilterKeys[0] || "";
   const optionQuery = useQuery({
-    enabled: Boolean(effectiveSelectedKey),
+    enabled: Boolean(effectiveFilterKey),
     queryFn: () =>
-      listAttributeOptions(effectiveSelectedKey as AttributeKey, true),
-    queryKey: ["stock-attribute-options", effectiveSelectedKey, true],
+      listAttributeOptions(effectiveFilterKey as AttributeKey, true),
+    queryKey: ["stock-attribute-options", effectiveFilterKey, true],
   });
   const filteredOptions = useMemo(
     () => filterAttributeOptions(optionQuery.data ?? [], search, status),
     [optionQuery.data, search, status],
   );
 
-  const metadataLoading = templateQuery.isLoading && !templateQuery.data;
+  const metadataLoading =
+    filterTemplateQuery.isLoading && !filterTemplateQuery.data;
   const optionsLoading = optionQuery.isLoading;
   const optionsError = optionQuery.error;
+
+  const createTemplateQuery = useQuery({
+    queryFn: () => getSkuTemplate(createType),
+    queryKey: ["stock-sku-template", "attribute-admin", createType],
+    staleTime: 60_000,
+  });
+
+  const availableCreateKeys = useMemo(() => {
+    if (createTemplateQuery.data?.kind === "template") {
+      return Array.from(
+        new Set(createTemplateQuery.data.fields.map((field) => field.key)),
+      );
+    }
+
+    return [...ITEM_TYPE_ATTRIBUTE_KEYS[createType]].sort((left, right) =>
+      ATTRIBUTE_LABELS[left].localeCompare(ATTRIBUTE_LABELS[right], "vi"),
+    );
+  }, [createType, createTemplateQuery.data]);
+
+  const effectiveCreateKey =
+    createKey && availableCreateKeys.includes(createKey)
+      ? createKey
+      : availableCreateKeys[0] || "";
 
   const suggestMutation = useMutation({
     mutationFn: () =>
       suggestAttributeOptionCode({
-        key: effectiveSelectedKey as AttributeKey,
+        key: effectiveCreateKey as AttributeKey,
         name: name.trim(),
       }),
     onError: (error) => toast.error(formatError(error)),
@@ -119,13 +155,14 @@ export function AttributeOptionsAdminPanel() {
     mutationFn: () =>
       createAttributeOption({
         code: code.trim().toUpperCase(),
-        key: effectiveSelectedKey as AttributeKey,
+        key: effectiveCreateKey as AttributeKey,
         name: name.trim(),
       }),
     onError: (error) => toast.error(formatError(error)),
     onSuccess: async () => {
       setCode("");
       setName("");
+      setCreateDialogOpen(false);
 
       await Promise.all([
         queryClient.invalidateQueries({
@@ -158,25 +195,23 @@ export function AttributeOptionsAdminPanel() {
 
   function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (effectiveSelectedKey && name.trim() && code.trim()) {
+    if (effectiveCreateKey && name.trim() && code.trim()) {
       createMutation.mutate();
     }
   }
 
-  const itemTypeField = (
+  const filterItemTypeField = (
     <div className="space-y-2">
-      <Label htmlFor="attribute-item-type">Loại mặt hàng</Label>
+      <Label htmlFor="attribute-filter-item-type">Loại mặt hàng</Label>
       <Select
-        value={selectedType}
+        value={filterType}
         onValueChange={(value) => {
-          setSelectedType(value as CreatableWarehouseItemType);
-          setSelectedKey("");
-          setCode("");
-          setName("");
+          setFilterType(value as CreatableWarehouseItemType);
+          setFilterKey("");
         }}
       >
         <SelectTrigger
-          id="attribute-item-type"
+          id="attribute-filter-item-type"
           aria-label="Loại mặt hàng"
           className="w-full"
         >
@@ -191,26 +226,79 @@ export function AttributeOptionsAdminPanel() {
     </div>
   );
 
-  const attributeGroupField = (
+  const filterGroupField = (
     <div className="space-y-2">
-      <Label htmlFor="attribute-group">Nhóm thuộc tính</Label>
+      <Label htmlFor="attribute-filter-group">Nhóm thuộc tính</Label>
       <Select
-        value={effectiveSelectedKey}
-        onValueChange={(value) => {
-          setSelectedKey(value as AttributeKey);
-          setCode("");
-          setName("");
-        }}
+        value={effectiveFilterKey}
+        onValueChange={(value) => setFilterKey(value as AttributeKey)}
       >
         <SelectTrigger
-          id="attribute-group"
+          id="attribute-filter-group"
           aria-label="Nhóm thuộc tính"
           className="w-full"
         >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {availableKeys.map((key) => (
+          {availableFilterKeys.map((key) => (
+            <SelectItem key={key} value={key}>
+              {ATTRIBUTE_LABELS[key]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
+  const createItemTypeField = (
+    <div className="space-y-2">
+      <Label htmlFor="attribute-create-item-type">Loại mặt hàng</Label>
+      <Select
+        value={createType}
+        onValueChange={(value) => {
+          setCreateType(value as CreatableWarehouseItemType);
+          setCreateKey("");
+          setCode("");
+          setName("");
+        }}
+      >
+        <SelectTrigger
+          id="attribute-create-item-type"
+          aria-label="Loại mặt hàng"
+          className="w-full"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="CUP_BLANK">Ly chưa in</SelectItem>
+          <SelectItem value="MATERIAL">Nguyên liệu</SelectItem>
+          <SelectItem value="PACKAGING">Bao bì</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
+  const createGroupField = (
+    <div className="space-y-2">
+      <Label htmlFor="attribute-create-group">Nhóm thuộc tính</Label>
+      <Select
+        value={effectiveCreateKey}
+        onValueChange={(value) => {
+          setCreateKey(value as AttributeKey);
+          setCode("");
+          setName("");
+        }}
+      >
+        <SelectTrigger
+          id="attribute-create-group"
+          aria-label="Nhóm thuộc tính"
+          className="w-full"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {availableCreateKeys.map((key) => (
             <SelectItem key={key} value={key}>
               {ATTRIBUTE_LABELS[key]}
             </SelectItem>
@@ -225,29 +313,44 @@ export function AttributeOptionsAdminPanel() {
       className="rounded-lg border bg-card p-4 shadow-sm"
       aria-labelledby="sku-option-title"
     >
-      <header className="mb-5">
-        <h2 id="sku-option-title" className="text-base font-semibold">
-          Giá trị thuộc tính SKU
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Quản lý tên, mã ghép SKU và trạng thái sử dụng.
-        </p>
-      </header>
-
-      {metadataLoading ? (
-        <div className="flex min-h-32 items-center justify-center text-muted-foreground">
-          <LoaderCircle className="mr-2 size-4 animate-spin" /> Đang tải cấu
-          hình
+      <header className="mb-5 flex items-start justify-between gap-3">
+        <div>
+          <h2 id="sku-option-title" className="text-base font-semibold">
+            Giá trị thuộc tính SKU
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Quản lý tên, mã ghép SKU và trạng thái sử dụng.
+          </p>
         </div>
-      ) : (
-        <div className="space-y-5">
-          <form
-            className="grid gap-3 border-y py-4 md:grid-cols-2 xl:grid-cols-[minmax(130px,0.7fr)_minmax(145px,0.8fr)_minmax(180px,1.4fr)_minmax(160px,0.9fr)_auto]"
-            onSubmit={handleCreate}
-          >
-            {itemTypeField}
-            {attributeGroupField}
-            <>
+
+        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button
+              type="button"
+              onClick={() => {
+                setCreateType(filterType);
+                setCreateKey(effectiveFilterKey);
+                setName("");
+                setCode("");
+              }}
+            >
+              <Plus data-icon="inline-start" />
+              Tạo giá trị thuộc tính
+            </Button>
+          </DialogTrigger>
+          <DialogContent size="lg">
+            <DialogHeader>
+              <DialogTitle>Tạo giá trị thuộc tính SKU</DialogTitle>
+              <DialogDescription>
+                Chọn loại mặt hàng và nhóm thuộc tính, sau đó đặt tên và mã
+                ghép SKU.
+              </DialogDescription>
+            </DialogHeader>
+            <form className="space-y-4" onSubmit={handleCreate}>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {createItemTypeField}
+                {createGroupField}
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="attribute-option-name">Tên giá trị</Label>
                 <Input
@@ -297,7 +400,7 @@ export function AttributeOptionsAdminPanel() {
                 </div>
               </div>
               <Button
-                className="self-end"
+                className="w-full"
                 disabled={
                   !name.trim() || !code.trim() || createMutation.isPending
                 }
@@ -313,10 +416,21 @@ export function AttributeOptionsAdminPanel() {
                 )}
                 Thêm giá trị
               </Button>
-            </>
-          </form>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </header>
 
-          <div className="grid gap-3 md:grid-cols-[minmax(280px,1fr)_220px]">
+      {metadataLoading ? (
+        <div className="flex min-h-32 items-center justify-center text-muted-foreground">
+          <LoaderCircle className="mr-2 size-4 animate-spin" /> Đang tải cấu
+          hình
+        </div>
+      ) : (
+        <div className="space-y-5">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[220px_220px_minmax(220px,1fr)_180px]">
+            {filterItemTypeField}
+            {filterGroupField}
             <div className="space-y-2">
               <Label htmlFor="attribute-option-search">Tìm kiếm</Label>
               <div className="relative">

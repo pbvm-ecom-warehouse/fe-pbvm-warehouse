@@ -298,7 +298,7 @@ export function GoodsIssuesClient() {
           selectedItem ? "xl:grid-cols-[minmax(0,1fr)_420px]" : "grid-cols-1",
         )}
       >
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <Card>
             <CardHeader className="border-b bg-muted/20">
               <CardTitle className="flex items-center gap-2 text-base">

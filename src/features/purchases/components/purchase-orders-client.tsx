@@ -671,7 +671,7 @@ export function PurchaseOrdersClient({
   return (
     <div className="space-y-5">
       <PageHeader
-        title={mode === "purchase-orders" ? "Mua hàng" : "Nhận hàng"}
+        title={mode === "purchase-orders" ? "Đặt Nhập hàng" : "Nhận hàng"}
         actions={
           <Button
             disabled={!canReadPurchaseOrders && !canReadGoodsReceiptNotes}
@@ -798,7 +798,7 @@ export function PurchaseOrdersClient({
                 </form>
 
                 {purchaseOrdersQuery.isLoading ? (
-                  <TableSkeleton columns={5} />
+                  <TableSkeleton columns={6} />
                 ) : (
                   <PurchaseOrderTable
                     purchaseOrders={purchaseOrders}
@@ -1201,6 +1201,7 @@ function PurchaseOrderTable({
         <TableRow>
           <TableHead>Số đơn mua</TableHead>
           <TableHead>NCC</TableHead>
+          <TableHead>Mặt hàng</TableHead>
           <TableHead>Trạng thái</TableHead>
           <TableHead>Ngày tạo</TableHead>
           <TableHead className="w-36 text-right">Thao tác</TableHead>
@@ -1208,7 +1209,7 @@ function PurchaseOrderTable({
       </TableHeader>
       <TableBody>
         {purchaseOrders.length === 0 ? (
-          <EmptyRow colSpan={5} label="Chưa có đơn mua." />
+          <EmptyRow colSpan={6} label="Chưa có đơn mua." />
         ) : (
           purchaseOrders.map((purchaseOrder) => (
             <TableRow
@@ -1224,6 +1225,13 @@ function PurchaseOrderTable({
               </TableCell>
               <TableCell>
                 {getPurchaseOrderSupplierLabel(purchaseOrder)}
+              </TableCell>
+              <TableCell className="max-w-64">
+                <span className="line-clamp-2 text-sm text-muted-foreground">
+                  {purchaseOrder.items
+                    .map((item) => item.itemName || item.sku)
+                    .join(", ")}
+                </span>
               </TableCell>
               <TableCell>
                 <StatusBadge tone={statusTone(purchaseOrder.status)}>
