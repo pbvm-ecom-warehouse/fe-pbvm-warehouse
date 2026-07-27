@@ -25,6 +25,7 @@ Axios, SVG, Tailwind/shadcn, Vitest, Testing Library.
 ### Task 1: Domain contract và batch service
 
 **Files:**
+
 - Modify: `src/types/api.ts`
 - Modify: `src/features/warehouse-layout/services/warehouse-layout.service.ts`
 - Create: `src/features/warehouse-layout/utils/warehouse-layout-operations.ts`
@@ -32,6 +33,7 @@ Axios, SVG, Tailwind/shadcn, Vitest, Testing Library.
 - Create: `tests/unit/warehouse-layout-operations.test.ts`
 
 **Interfaces:**
+
 - Consumes: backend `GET/PATCH /location/layout`.
 - Produces: `fetchWarehouseLayout()`, `saveWarehouseLayout(request)`,
   `buildWarehouseLayoutOperations(base, draft)`.
@@ -64,11 +66,13 @@ Run:
 ### Task 2: Editor state và shell
 
 **Files:**
+
 - Create: `src/features/warehouse-layout/hooks/use-warehouse-editor.ts`
 - Modify: `src/features/warehouse-layout/components/warehouse-map-client.tsx`
 - Modify: `tests/unit/warehouse-map-client.test.tsx`
 
 **Interfaces:**
+
 - Consumes: service và diff từ Task 1.
 - Produces: draft editing, undo/redo, create/delete, save/conflict state.
 
@@ -98,11 +102,13 @@ Run: `pnpm test -- tests/unit/warehouse-map-client.test.tsx`
 ### Task 3: Canvas tools và inspector
 
 **Files:**
+
 - Modify: `src/features/warehouse-layout/components/warehouse-floor-plan.tsx`
 - Modify: `src/features/warehouse-layout/components/warehouse-layout-inspector.tsx`
 - Create: `tests/unit/warehouse-floor-plan.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `EditorTool`, `LayoutSelection`, draft layout.
 - Produces: `onCreate(kind, point)`, move/resize interactions, zoom/pan controls,
   patches for selection/canvas/template.
@@ -129,18 +135,22 @@ Run:
 ### Task 4: Route canonical và verification
 
 **Files:**
+
 - Modify: `src/app/(dashboard)/locations/page.tsx`
+- Modify: `src/app/(dashboard)/locations/map/page.tsx`
 - Delete if unreferenced: legacy warehouse-structure UI files only after `rg`
   proves no remaining imports.
 - Modify: editor tests as needed.
 
 **Interfaces:**
+
 - Consumes: Next.js server `redirect`.
-- Produces: `/locations` → `/locations/map`.
+- Produces: `/locations` render editor; `/locations/map` → `/locations`.
 
 - [ ] **Step 1: Redirect route**
 
-Use `redirect("/locations/map")` in the server page.
+Render `WarehouseMapClient` tại `/locations`; dùng `redirect("/locations")`
+trong page legacy `/locations/map`.
 
 - [ ] **Step 2: Search legacy UI**
 
@@ -155,12 +165,12 @@ Run: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`.
 
 - [ ] **Step 4: Browser verification**
 
-Start port 3101 and verify `/locations` redirects; editor fills the content
-area; tools, selection, move, resize, undo/redo and save are usable; no old
+Start port 3101 and verify `/locations` renders the editor while
+`/locations/map` redirects to `/locations`; the editor fills the content area;
+tools, selection, move, resize, undo/redo and save are usable; no old
 table/form/card remains.
 
 - [ ] **Step 5: Review diff**
 
 Run `git status --short` and `git diff --check`; confirm existing product files
 are untouched by this feature.
-

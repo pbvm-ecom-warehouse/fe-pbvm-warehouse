@@ -6,48 +6,128 @@ vi.mock("@/lib/api-client", () => ({
 
 import { apiClient } from "@/lib/api-client";
 import {
-  fetchRackTemplate,
   fetchWarehouseLayout,
+  mapWarehouseLayoutResponse,
+  saveWarehouseLayout,
 } from "@/features/warehouse-layout/services/warehouse-layout.service";
 
+const apiLayout = {
+  id: "single-warehouse-layout" as const,
+  revision: 7,
+  updatedAt: "2026-07-27T10:00:00.000Z",
+  canvas: { widthM: 40, heightM: 24, gridM: 0.5 },
+  zones: [
+    {
+      id: "z1",
+      code: "A",
+      name: "Zone A",
+      xM: 1,
+      yM: 1,
+      widthM: 16,
+      heightM: 22,
+      rotation: 0,
+    },
+  ],
+  racks: [
+    {
+      id: "r1",
+      zoneId: "z1",
+      code: "A1",
+      name: "Rack A1",
+      xM: 3,
+      yM: 3,
+      rotation: 0,
+      accessPointXM: 8,
+      accessPointYM: 6,
+    },
+  ],
+  shelves: [
+    { id: "s1", rackId: "r1", level: 1, code: "A1-T1", isStaging: false },
+  ],
+  aisles: [],
+  gates: [],
+  rackTemplate: { widthM: 10, depthM: 1.5, levelCount: 3, bayCount: 3 },
+};
+
 describe("fetchWarehouseLayout", () => {
-  it("map response BE sang WarehouseLayout, ráp kích thước rack từ rackTemplate dùng chung, tính canvas từ bounding box zone", async () => {
-    vi.mocked(apiClient.get).mockResolvedValue({
-      data: {
-        zones: [
-          { id: "z1", code: "A", name: "Zone A", xM: 1, yM: 1, widthM: 16, heightM: 22, rotation: 0 },
-        ],
-        racks: [
-          { id: "r1", zoneId: "z1", code: "A1", name: "Rack A1", xM: 3, yM: 3, rotation: 0, accessPointXM: 8, accessPointYM: 6 },
-        ],
-        aisles: [],
-        gates: [],
-        rackTemplate: { widthM: 10, depthM: 1.5, levelCount: 3, bayCount: 3 },
-      },
-    });
+  it("giữ snapshot canonical và ráp kích thước/shelfCodes của rack", async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: apiLayout });
 
     const layout = await fetchWarehouseLayout();
 
-    expect(layout.zones).toHaveLength(1);
-    expect(layout.racks[0].widthM).toBe(10);
-    expect(layout.racks[0].depthM).toBe(1.5);
-    expect(layout.racks[0].levelCount).toBe(3);
-    expect(layout.racks[0].bayCount).toBe(3);
-    expect(layout.canvas.widthM).toBeGreaterThanOrEqual(17); // 1 + 16
-    expect(layout.canvas.heightM).toBeGreaterThanOrEqual(23); // 1 + 22
+    expect(layout.racks[0]).toMatchObject({
+      widthM: 10,
+      depthM: 1.5,
+      levelCount: 3,
+      bayCount: 3,
+      shelfCodes: ["A1-T1"],
+    });
+    expect(layout.shelves).toEqual([
+      expect.objectContaining({ id: "s1", rackId: "r1" }),
+    ]);
+    expect(layout.canvas).toEqual({ widthM: 40, heightM: 24, gridM: 0.5 });
+    expect(layout.revision).toBe(7);
+    expect(layout.updatedAt).toBe("2026-07-27T10:00:00.000Z");
     expect(layout.status).toBe("PUBLISHED");
+  });
+
+  it("chặn snapshot legacy thiếu contract editor trước khi tạo draft", () => {
+    const legacyLayout = {
+      zones: [],
+      racks: [],
+      aisles: [],
+      gates: [],
+      rackTemplate: {
+        widthM: 10,
+        depthM: 1.5,
+        levelCount: 3,
+        bayCount: 3,
+      },
+    };
+
+    expect(() => mapWarehouseLayoutResponse(legacyLayout as never)).toThrow(
+      /canvas.*revision.*shelves/i,
+    );
+  });
+
+  it("chặn snapshot có canvas thiếu kích thước hoặc metadata canonical", () => {
+    const malformedLayout = {
+      ...apiLayout,
+      id: undefined,
+      updatedAt: undefined,
+      canvas: { widthM: 40, gridM: 0.5 },
+    };
+
+    expect(() => mapWarehouseLayoutResponse(malformedLayout)).toThrow(
+      /id.*updatedAt.*canvas\.heightM/i,
+    );
   });
 });
 
-describe("fetchRackTemplate", () => {
-  it("gọi GET /location/rack-template", async () => {
-    vi.mocked(apiClient.get).mockResolvedValue({
-      data: { widthM: 10, depthM: 1.5, levelCount: 3, bayCount: 3 },
+describe("saveWarehouseLayout", () => {
+  it("PATCH change-set và trả layout canonical mới", async () => {
+    vi.mocked(apiClient.patch).mockResolvedValue({
+      data: {
+        revision: 8,
+        idMap: { "tmp:00000000-0000-4000-8000-000000000001": "z1" },
+        layout: { ...apiLayout, revision: 8 },
+      },
     });
+    const request = {
+      expectedRevision: 7,
+      operations: [
+        {
+          op: "UPDATE" as const,
+          entity: "CANVAS" as const,
+          patch: { widthM: 40 },
+        },
+      ],
+    };
 
-    const template = await fetchRackTemplate();
+    const result = await saveWarehouseLayout(request);
 
-    expect(template.widthM).toBe(10);
-    expect(apiClient.get).toHaveBeenCalledWith("/location/rack-template");
+    expect(apiClient.patch).toHaveBeenCalledWith("/location/layout", request);
+    expect(result.revision).toBe(8);
+    expect(result.layout.revision).toBe(8);
   });
 });

@@ -2,361 +2,678 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  DoorOpen,
+  Hand,
+  LoaderCircle,
+  MousePointer2,
+  Redo2,
+  RefreshCw,
+  Route,
+  Rows3,
+  Save,
+  SquareDashed,
+  TriangleAlert,
+  Undo2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { getApiErrorMessage } from "@/lib/api-contract";
+import { getApiErrorCode, getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { useSessionUser } from "@/hooks/use-session-user";
+import type {
+  WarehouseLayout,
+  WarehouseLayoutGate,
+  WarehouseLayoutRack,
+  WarehouseLayoutRotation,
+  WarehouseLayoutZone,
+} from "@/types/api";
 
 import {
-  fetchRackTemplate,
   fetchWarehouseLayout,
-  patchAisle,
-  patchGate,
-  patchRack,
-  patchZone,
-  updateRackTemplate,
-  type RackTemplate,
+  saveWarehouseLayout,
 } from "../services/warehouse-layout.service";
+import { useWarehouseEditor } from "../hooks/use-warehouse-editor";
 import {
-  fetchShelfContents,
-  fetchShelvesForRacks,
-} from "../services/warehouse-shelves.service";
+  getZoneRect,
+  isRectInside,
+  snapToGrid,
+  validateWarehouseLayoutClient,
+} from "../utils/warehouse-layout";
 import {
   WarehouseFloorPlan,
   type LayoutElementKind,
   type LayoutSelection,
+  type WarehouseEditorTool,
 } from "./warehouse-floor-plan";
 import { WarehouseLayoutInspector } from "./warehouse-layout-inspector";
-import { WarehouseArchitectureScene } from "@/features/warehouse-navigation/components/warehouse-architecture-scene";
-import {
-  groupShelvesByRack,
-  layoutToWarehouseShelves,
-} from "@/features/warehouse-navigation/utils/putaway-navigation";
-import type { WarehouseShelf } from "@/types/api";
 
-const layoutKeys = {
-  detail: ["warehouse-layout"] as const,
-};
-const rackTemplateKeys = {
-  detail: ["rack-template"] as const,
+const layoutKey = ["warehouse-layout"] as const;
+
+type LayoutValidationIssue = {
+  entity: string;
+  id?: string;
+  clientId?: string;
+  field?: string;
+  code: string;
 };
 
-function RackTemplateForm({
-  canEdit,
-  onSaved,
-  template,
+const tools: Array<{
+  id: WarehouseEditorTool;
+  label: string;
+  icon: typeof MousePointer2;
+}> = [
+  { id: "select", label: "Chọn", icon: MousePointer2 },
+  { id: "pan", label: "Di chuyển", icon: Hand },
+  { id: "zone", label: "Khu vực", icon: SquareDashed },
+  { id: "rack", label: "Rack", icon: Rows3 },
+  { id: "aisle", label: "Lối đi", icon: Route },
+  { id: "gate", label: "Cổng", icon: DoorOpen },
+];
+
+function temporaryId() {
+  return `tmp:${crypto.randomUUID()}`;
+}
+
+function nextCode(prefix: string, codes: string[]) {
+  const used = new Set(codes.map((code) => code.toUpperCase()));
+  let index = 1;
+  while (used.has(`${prefix}-${String(index).padStart(2, "0")}`)) index += 1;
+  return `${prefix}-${String(index).padStart(2, "0")}`;
+}
+
+function clamp(value: number, minimum: number, maximum: number) {
+  return Math.min(Math.max(value, minimum), Math.max(minimum, maximum));
+}
+
+function getErrorDetails(error: unknown) {
+  return (
+    error as {
+      response?: {
+        data?: {
+          error?: {
+            details?: {
+              currentRevision?: number;
+              issues?: LayoutValidationIssue[];
+            };
+          };
+        };
+      };
+    }
+  ).response?.data?.error?.details;
+}
+
+function selectionExists(layout: WarehouseLayout, selection: LayoutSelection) {
+  if (!selection) return false;
+  const collection =
+    selection.kind === "zone"
+      ? layout.zones
+      : selection.kind === "rack"
+        ? layout.racks
+        : selection.kind === "aisle"
+          ? layout.aisles
+          : layout.gates;
+  return collection.some((item) => item.id === selection.id);
+}
+
+function WarehouseEditor({
+  initialLayout,
+  onReload,
 }: {
-  canEdit: boolean;
-  onSaved: () => void;
-  template: RackTemplate;
+  initialLayout: WarehouseLayout;
+  onReload: () => Promise<WarehouseLayout>;
 }) {
-  const [form, setForm] = useState(template);
+  const user = useSessionUser();
+  const canEdit = hasAnyRole(user?.roles, ["MANAGER", "ADMIN"]);
+  const queryClient = useQueryClient();
+  const editor = useWarehouseEditor(initialLayout);
+  const [tool, setTool] = useState<WarehouseEditorTool>("select");
+  const [selection, setSelection] = useState<LayoutSelection>(null);
+  const [conflictRevision, setConflictRevision] = useState<number | null>(null);
+  const [issues, setIssues] = useState<LayoutValidationIssue[]>([]);
+  const [clientErrors, setClientErrors] = useState<string[]>([]);
 
-  const isValid =
-    Number.isFinite(form.widthM) &&
-    form.widthM > 0 &&
-    Number.isFinite(form.depthM) &&
-    form.depthM > 0 &&
-    Number.isInteger(form.levelCount) &&
-    form.levelCount >= 1 &&
-    Number.isInteger(form.bayCount) &&
-    form.bayCount >= 1;
+  const invalidSelectionKeys = useMemo(
+    () =>
+      new Set(
+        issues.flatMap((issue) => {
+          const id = issue.id ?? issue.clientId;
+          return id ? [`${issue.entity.toLowerCase()}:${id}`] : [];
+        }),
+      ),
+    [issues],
+  );
 
-  const mutation = useMutation({
-    mutationFn: () => updateRackTemplate(form),
-    onError: (error) => toast.error(getApiErrorMessage(error)),
-    onSuccess: () => {
-      toast.success("Đã cập nhật kích thước rack cho toàn kho.");
-      onSaved();
+  const saveMutation = useMutation({
+    mutationFn: saveWarehouseLayout,
+    onSuccess: (result) => {
+      editor.reset(result.layout);
+      setIssues([]);
+      setClientErrors([]);
+      setConflictRevision(null);
+      if (!selectionExists(result.layout, selection)) setSelection(null);
+      queryClient.setQueryData(layoutKey, result.layout);
+      toast.success(`Đã lưu bản đồ kho · revision ${result.revision}.`);
+    },
+    onError: (error) => {
+      const code = getApiErrorCode(error);
+      const details = getErrorDetails(error);
+      if (code === "LAYOUT_REVISION_CONFLICT") {
+        setConflictRevision(details?.currentRevision ?? null);
+        return;
+      }
+      if (code === "LAYOUT_VALIDATION_FAILED") {
+        setIssues(details?.issues ?? []);
+        toast.error(
+          "Bản đồ còn vị trí chưa hợp lệ. Các phần tử lỗi đã được đánh dấu.",
+        );
+        return;
+      }
+      toast.error(getApiErrorMessage(error) ?? "Không thể lưu bản đồ kho.");
     },
   });
 
+  function updateElement(
+    target: NonNullable<LayoutSelection>,
+    patch: Record<string, unknown>,
+    live = false,
+  ) {
+    const updater = (layout: WarehouseLayout) => {
+      if (target.kind === "zone") {
+        layout.zones = layout.zones.map((item) =>
+          item.id === target.id ? { ...item, ...patch } : item,
+        ) as WarehouseLayoutZone[];
+      } else if (target.kind === "rack") {
+        layout.racks = layout.racks.map((item) => {
+          if (item.id !== target.id) return item;
+          const next = { ...item, ...patch } as WarehouseLayoutRack;
+          if (typeof patch.xM === "number") {
+            next.accessPoint = {
+              ...next.accessPoint,
+              xM: next.accessPoint.xM + patch.xM - item.xM,
+            };
+          }
+          if (typeof patch.yM === "number") {
+            next.accessPoint = {
+              ...next.accessPoint,
+              yM: next.accessPoint.yM + patch.yM - item.yM,
+            };
+          }
+          return next;
+        });
+      } else if (target.kind === "aisle") {
+        layout.aisles = layout.aisles.map((item) =>
+          item.id === target.id ? { ...item, ...patch } : item,
+        );
+      } else {
+        layout.gates = layout.gates.map((item) =>
+          item.id === target.id
+            ? ({ ...item, ...patch } as WarehouseLayoutGate)
+            : item,
+        );
+      }
+      return layout;
+    };
+
+    if (live) editor.updateLive(updater);
+    else editor.commit(updater);
+    setIssues([]);
+    setClientErrors([]);
+  }
+
+  function createElement(
+    kind: Exclude<LayoutElementKind, never>,
+    point: { xM: number; yM: number },
+  ) {
+    if (!canEdit) return;
+    const layout = editor.draftLayout;
+    const grid = layout.canvas.gridM;
+    const xM = snapToGrid(point.xM, grid);
+    const yM = snapToGrid(point.yM, grid);
+    const id = temporaryId();
+
+    if (kind === "zone") {
+      const widthM = Math.min(10, layout.canvas.widthM);
+      const heightM = Math.min(8, layout.canvas.heightM);
+      const zone: WarehouseLayoutZone = {
+        id,
+        code: nextCode(
+          "ZONE",
+          layout.zones.map((item) => item.code),
+        ),
+        name: `Khu vực ${layout.zones.length + 1}`,
+        xM: clamp(xM, 0, layout.canvas.widthM - widthM),
+        yM: clamp(yM, 0, layout.canvas.heightM - heightM),
+        widthM,
+        heightM,
+        rotation: 0,
+      };
+      editor.commit((next) => ({ ...next, zones: [...next.zones, zone] }));
+      setSelection({ kind, id });
+    } else if (kind === "rack") {
+      const zone =
+        (selection?.kind === "zone"
+          ? layout.zones.find((item) => item.id === selection.id)
+          : null) ??
+        layout.zones.find((item) =>
+          isRectInside(
+            { xM, yM, widthM: grid, heightM: grid },
+            getZoneRect(item),
+          ),
+        );
+      if (!zone) {
+        toast.error("Hãy chọn một khu vực hoặc đặt rack bên trong khu vực.");
+        return;
+      }
+      const template = layout.rackTemplate;
+      const zoneRect = getZoneRect(zone);
+      const code = nextCode(
+        "RACK",
+        layout.racks.map((item) => item.code),
+      );
+      const rackX = clamp(
+        xM,
+        zoneRect.xM,
+        zoneRect.xM + zoneRect.widthM - template.widthM,
+      );
+      const rackY = clamp(
+        yM,
+        zoneRect.yM,
+        zoneRect.yM + zoneRect.heightM - template.depthM,
+      );
+      const rack: WarehouseLayoutRack = {
+        id,
+        zoneId: zone.id,
+        code,
+        name: `Dãy kệ ${layout.racks.length + 1}`,
+        xM: rackX,
+        yM: rackY,
+        widthM: template.widthM,
+        depthM: template.depthM,
+        rotation: 0,
+        levelCount: template.levelCount,
+        bayCount: template.bayCount,
+        shelfCodes: Array.from(
+          { length: template.levelCount },
+          (_, index) => `${code}-T${index + 1}`,
+        ),
+        accessPoint: {
+          xM: rackX + template.widthM / 2,
+          yM: rackY + template.depthM + grid,
+        },
+      };
+      const shelves = rack.shelfCodes.map((shelfCode, index) => ({
+        id: temporaryId(),
+        rackId: id,
+        level: index + 1,
+        code: shelfCode,
+        isStaging: false,
+      }));
+      editor.commit((next) => ({
+        ...next,
+        racks: [...next.racks, rack],
+        shelves: [...next.shelves, ...shelves],
+      }));
+      setSelection({ kind, id });
+    } else if (kind === "aisle") {
+      const widthM = Math.min(8, layout.canvas.widthM);
+      const heightM = Math.min(2, layout.canvas.heightM);
+      const aisle = {
+        id,
+        code: nextCode(
+          "AISLE",
+          layout.aisles.map((item) => item.code),
+        ),
+        type: "RACK" as const,
+        xM: clamp(xM, 0, layout.canvas.widthM - widthM),
+        yM: clamp(yM, 0, layout.canvas.heightM - heightM),
+        widthM,
+        heightM,
+      };
+      editor.commit((next) => ({ ...next, aisles: [...next.aisles, aisle] }));
+      setSelection({ kind, id });
+    } else {
+      const gate = {
+        id,
+        code: nextCode(
+          "GATE",
+          layout.gates.map((item) => item.code),
+        ),
+        label: `Cổng ${layout.gates.length + 1}`,
+        xM: clamp(xM, 0, layout.canvas.widthM),
+        yM: clamp(yM, 0, layout.canvas.heightM),
+      };
+      editor.commit((next) => ({ ...next, gates: [...next.gates, gate] }));
+      setSelection({ kind, id });
+    }
+
+    setTool("select");
+    setIssues([]);
+    setConflictRevision(null);
+  }
+
+  function deleteSelection() {
+    if (!selection) return;
+    if (
+      selection.kind === "zone" &&
+      editor.draftLayout.racks.some((rack) => rack.zoneId === selection.id)
+    ) {
+      toast.error("Khu vực vẫn còn rack. Hãy xoá hoặc chuyển rack trước.");
+      return;
+    }
+    editor.commit((layout) => {
+      if (selection.kind === "zone") {
+        layout.zones = layout.zones.filter((item) => item.id !== selection.id);
+      } else if (selection.kind === "rack") {
+        layout.racks = layout.racks.filter((item) => item.id !== selection.id);
+        layout.shelves = layout.shelves.filter(
+          (item) => item.rackId !== selection.id,
+        );
+      } else if (selection.kind === "aisle") {
+        layout.aisles = layout.aisles.filter(
+          (item) => item.id !== selection.id,
+        );
+      } else {
+        layout.gates = layout.gates.filter((item) => item.id !== selection.id);
+      }
+      return layout;
+    });
+    setSelection(null);
+    setIssues([]);
+  }
+
+  function rotateSelection() {
+    if (!selection || (selection.kind !== "zone" && selection.kind !== "rack"))
+      return;
+    const item =
+      selection.kind === "zone"
+        ? editor.draftLayout.zones.find((entry) => entry.id === selection.id)
+        : editor.draftLayout.racks.find((entry) => entry.id === selection.id);
+    if (!item) return;
+    updateElement(selection, {
+      rotation: (item.rotation === 0 ? 90 : 0) as WarehouseLayoutRotation,
+    });
+  }
+
+  function patchCanvas(patch: Record<string, number>) {
+    editor.commit((layout) => ({
+      ...layout,
+      canvas: { ...layout.canvas, ...patch },
+    }));
+    setIssues([]);
+  }
+
+  function patchRackTemplate(patch: Record<string, number>) {
+    editor.commit((layout) => {
+      const template = { ...layout.rackTemplate, ...patch };
+      return {
+        ...layout,
+        rackTemplate: template,
+        racks: layout.racks.map((rack) => ({
+          ...rack,
+          widthM: template.widthM,
+          depthM: template.depthM,
+          levelCount: template.levelCount,
+          bayCount: template.bayCount,
+        })),
+      };
+    });
+    setIssues([]);
+  }
+
+  function save() {
+    const errors = validateWarehouseLayoutClient(editor.draftLayout);
+    setClientErrors(errors);
+    if (errors.length > 0) {
+      toast.error("Hãy sửa các lỗi bố trí trước khi lưu.");
+      return;
+    }
+    if (editor.operations.length === 0) return;
+    setConflictRevision(null);
+    saveMutation.mutate({
+      expectedRevision: editor.baseLayout.revision,
+      operations: editor.operations,
+    });
+  }
+
+  async function reloadCanonical() {
+    const layout = await onReload();
+    editor.reset(layout);
+    setSelection(null);
+    setIssues([]);
+    setClientErrors([]);
+    setConflictRevision(null);
+    toast.success("Đã tải bản đồ mới nhất từ máy chủ.");
+  }
+
   return (
-    <div className="grid gap-3 border border-slate-300 bg-white p-4">
-      <h3 className="text-sm font-semibold">
-        Kích thước rack chuẩn (áp dụng toàn kho)
-      </h3>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="grid gap-1.5">
-          <Label className="text-xs">Rộng (m)</Label>
-          <Input
-            aria-label="Rộng (m)"
-            disabled={!canEdit}
-            min={0.1}
-            onChange={(event) =>
-              setForm({ ...form, widthM: Number(event.target.value) })
-            }
-            step={0.5}
-            type="number"
-            value={form.widthM}
-          />
+    <div className="flex h-[calc(100dvh-7.25rem)] min-h-[640px] flex-col overflow-hidden bg-slate-100">
+      <header className="flex min-h-16 items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h1 className="truncate text-lg font-semibold text-slate-950">
+              Bản đồ kho 2D
+            </h1>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-600">
+              rev {editor.baseLayout.revision}
+            </span>
+            <span
+              className={
+                editor.isDirty
+                  ? "rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700"
+                  : "rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700"
+              }
+            >
+              {editor.isDirty
+                ? `${editor.operations.length} thay đổi chưa lưu`
+                : "Đã đồng bộ"}
+            </span>
+          </div>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Chọn công cụ, đặt phần tử lên lưới rồi lưu toàn bộ thay đổi một lần.
+          </p>
         </div>
-        <div className="grid gap-1.5">
-          <Label className="text-xs">Sâu (m)</Label>
-          <Input
-            aria-label="Sâu (m)"
-            disabled={!canEdit}
-            min={0.1}
-            onChange={(event) =>
-              setForm({ ...form, depthM: Number(event.target.value) })
-            }
-            step={0.1}
-            type="number"
-            value={form.depthM}
-          />
+
+        <div className="flex items-center gap-2">
+          <Button
+            aria-label="Hoàn tác"
+            disabled={!canEdit || !editor.canUndo || saveMutation.isPending}
+            onClick={() => {
+              editor.undo();
+              setIssues([]);
+            }}
+            size="icon"
+            variant="outline"
+          >
+            <Undo2 />
+          </Button>
+          <Button
+            aria-label="Làm lại"
+            disabled={!canEdit || !editor.canRedo || saveMutation.isPending}
+            onClick={() => {
+              editor.redo();
+              setIssues([]);
+            }}
+            size="icon"
+            variant="outline"
+          >
+            <Redo2 />
+          </Button>
+          <Button
+            aria-label="Lưu thay đổi"
+            disabled={!canEdit || !editor.isDirty || saveMutation.isPending}
+            onClick={save}
+          >
+            {saveMutation.isPending ? (
+              <LoaderCircle className="animate-spin" data-icon="inline-start" />
+            ) : (
+              <Save data-icon="inline-start" />
+            )}
+            Lưu thay đổi
+          </Button>
         </div>
-        <div className="grid gap-1.5">
-          <Label className="text-xs">Số tầng</Label>
-          <Input
-            aria-label="Số tầng"
-            disabled={!canEdit}
-            min={1}
-            onChange={(event) =>
-              setForm({ ...form, levelCount: Number(event.target.value) })
-            }
-            step={1}
-            type="number"
-            value={form.levelCount}
-          />
+      </header>
+
+      {conflictRevision !== null ? (
+        <div className="flex items-center justify-between gap-4 border-b border-amber-200 bg-amber-50 px-5 py-2.5 text-sm text-amber-950">
+          <span>
+            Bản đồ đã được cập nhật ở phiên khác
+            {conflictRevision ? ` (revision ${conflictRevision})` : ""}. Draft
+            của bạn vẫn được giữ.
+          </span>
+          <Button
+            aria-label="Tải bản mới"
+            onClick={() => void reloadCanonical()}
+            size="sm"
+            variant="outline"
+          >
+            <RefreshCw data-icon="inline-start" />
+            Tải bản mới
+          </Button>
         </div>
-        <div className="grid gap-1.5">
-          <Label className="text-xs">Số khoang</Label>
-          <Input
-            aria-label="Số khoang"
-            disabled={!canEdit}
-            min={1}
-            onChange={(event) =>
-              setForm({ ...form, bayCount: Number(event.target.value) })
-            }
-            step={1}
-            type="number"
-            value={form.bayCount}
-          />
+      ) : null}
+
+      {clientErrors.length > 0 ? (
+        <div className="border-b border-red-200 bg-red-50 px-5 py-2 text-xs text-red-800">
+          {clientErrors.slice(0, 3).join(" · ")}
         </div>
+      ) : null}
+
+      <div className="flex min-h-0 flex-1">
+        <nav
+          aria-label="Công cụ bản đồ kho"
+          className="flex w-[84px] shrink-0 flex-col gap-1 border-r border-slate-200 bg-white p-2"
+        >
+          {tools.map((item) => {
+            const Icon = item.icon;
+            const active = item.id === tool;
+            return (
+              <button
+                aria-label={item.label}
+                aria-pressed={active}
+                className={
+                  active
+                    ? "flex h-14 flex-col items-center justify-center gap-1 rounded-lg bg-blue-50 text-blue-700 ring-1 ring-blue-200"
+                    : "flex h-14 flex-col items-center justify-center gap-1 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                }
+                disabled={!canEdit && item.id !== "select" && item.id !== "pan"}
+                key={item.id}
+                onClick={() => setTool(item.id)}
+                type="button"
+              >
+                <Icon className="size-4" />
+                <span className="text-[11px] font-medium">{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <main className="relative min-w-0 flex-1 p-4">
+          <WarehouseFloorPlan
+            className="h-full rounded-xl border-slate-300 bg-white shadow-sm"
+            editable={canEdit}
+            invalidSelectionKeys={invalidSelectionKeys}
+            layout={editor.draftLayout}
+            onCreate={createElement}
+            onInteractionEnd={editor.endInteraction}
+            onInteractionStart={editor.beginInteraction}
+            onMoveElement={(target, position) =>
+              updateElement(target, position, true)
+            }
+            onResizeElement={(target, size) =>
+              updateElement(target, size, true)
+            }
+            onSelect={setSelection}
+            selection={selection}
+            tool={tool}
+          />
+        </main>
+
+        <WarehouseLayoutInspector
+          canEdit={canEdit}
+          issues={issues}
+          layout={editor.draftLayout}
+          onDelete={deleteSelection}
+          onPatch={(patch) => selection && updateElement(selection, patch)}
+          onPatchCanvas={patchCanvas}
+          onPatchRackTemplate={patchRackTemplate}
+          onRotate={rotateSelection}
+          selection={selection}
+        />
       </div>
-      <Button
-        disabled={!canEdit || !isValid || mutation.isPending}
-        onClick={() => mutation.mutate()}
-      >
-        Áp dụng cho toàn bộ rack
-      </Button>
     </div>
   );
 }
 
 export function WarehouseMapClient() {
-  const user = useSessionUser();
-  const canEdit = hasAnyRole(user?.roles, ["MANAGER", "ADMIN"]);
-  const queryClient = useQueryClient();
-  const [selection, setSelection] = useState<LayoutSelection>(null);
-  const [sceneMode, setSceneMode] = useState<"map" | "rack">("map");
-  const [selectedRackCode, setSelectedRackCode] = useState<string | null>(
-    null,
-  );
-  const [selectedShelfCode, setSelectedShelfCode] = useState<string | null>(
-    null,
-  );
-
   const layoutQuery = useQuery({
-    queryKey: layoutKeys.detail,
+    queryKey: layoutKey,
     queryFn: fetchWarehouseLayout,
   });
 
-  const rackTemplateQuery = useQuery({
-    queryKey: rackTemplateKeys.detail,
-    queryFn: fetchRackTemplate,
-  });
-
-  const rackIds = useMemo(
-    () => layoutQuery.data?.racks.map((rack) => rack.id) ?? [],
-    [layoutQuery.data],
-  );
-
-  const shelvesQuery = useQuery({
-    queryKey: ["warehouse-shelves", rackIds],
-    queryFn: () => fetchShelvesForRacks(rackIds),
-    enabled: rackIds.length > 0,
-  });
-
-  const shelves: WarehouseShelf[] = useMemo(() => {
-    if (!layoutQuery.data || !shelvesQuery.data) return [];
-    return layoutToWarehouseShelves(layoutQuery.data, shelvesQuery.data);
-  }, [layoutQuery.data, shelvesQuery.data]);
-
-  const rackGroup = useMemo(() => {
-    if (!selectedRackCode) return null;
+  if (layoutQuery.isLoading) {
     return (
-      groupShelvesByRack(shelves, { rackCode: selectedRackCode })[0] ?? null
-    );
-  }, [shelves, selectedRackCode]);
-
-  const contentsQuery = useQuery({
-    queryKey: ["shelf-contents", selectedShelfCode],
-    queryFn: () => {
-      const shelf = shelves.find((s) => s.code === selectedShelfCode);
-      if (!shelf) return Promise.resolve([]);
-      return fetchShelfContents(shelf.id);
-    },
-    enabled: sceneMode === "rack" && Boolean(selectedShelfCode),
-  });
-
-  const patchMutation = useMutation({
-    mutationFn: async (params: {
-      kind: LayoutElementKind;
-      id: string;
-      patch: Record<string, unknown>;
-    }) => {
-      if (params.kind === "zone") return patchZone(params.id, params.patch);
-      if (params.kind === "rack") return patchRack(params.id, params.patch);
-      if (params.kind === "aisle") return patchAisle(params.id, params.patch);
-      return patchGate(params.id, params.patch);
-    },
-    onError: (error) => toast.error(getApiErrorMessage(error)),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: layoutKeys.detail });
-    },
-  });
-
-  function handlePatch(patch: Record<string, unknown>) {
-    if (!selection) return;
-    patchMutation.mutate({ kind: selection.kind, id: selection.id, patch });
-  }
-
-  function handleOpenRack(rackCode: string, shelfCode: string) {
-    setSelectedRackCode(rackCode);
-    const shelfCodeIsReal = shelves.some((s) => s.code === shelfCode);
-    const resolvedShelfCode = shelfCodeIsReal
-      ? shelfCode
-      : (groupShelvesByRack(shelves, { rackCode })[0]?.shelves[0]?.code ??
-        null);
-    setSelectedShelfCode(resolvedShelfCode);
-    setSceneMode("rack");
-  }
-
-  if (layoutQuery.isLoading || rackTemplateQuery.isLoading) {
-    return (
-      <div className="p-6 text-sm text-muted-foreground">
-        Đang tải sơ đồ kho…
+      <div className="grid h-[calc(100dvh-7.25rem)] place-items-center bg-slate-100 text-sm text-slate-500">
+        <div className="flex items-center gap-2">
+          <LoaderCircle className="size-4 animate-spin" />
+          Đang tải bản đồ kho…
+        </div>
       </div>
     );
   }
 
-  if (layoutQuery.isError || !layoutQuery.data || !rackTemplateQuery.data) {
+  if (layoutQuery.isError || !layoutQuery.data) {
+    const contractError = layoutQuery.error as
+      | { code?: string; missingFields?: string[] }
+      | undefined;
+    const backendIsOutdated =
+      contractError?.code === "WAREHOUSE_LAYOUT_API_OUTDATED";
+
     return (
-      <div className="p-6 text-sm text-destructive">
-        Không tải được sơ đồ kho.
+      <div className="grid h-[calc(100dvh-7.25rem)] place-items-center bg-slate-100">
+        <div className="max-w-lg rounded-xl border border-red-200 bg-white p-6 text-center shadow-sm">
+          {backendIsOutdated ? (
+            <>
+              <TriangleAlert className="mx-auto size-7 text-amber-600" />
+              <h1 className="mt-3 text-base font-semibold text-slate-950">
+                Backend WMS chưa có API editor 2D
+              </h1>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Snapshot đang thiếu: {contractError.missingFields?.join(", ")}.
+                Cần deploy bản BE có GET/PATCH
+                <span className="font-mono"> /location/layout</span> trước khi
+                mở editor.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm font-medium text-red-700">
+              Không tải được bản đồ kho.
+            </p>
+          )}
+          <Button
+            className="mt-3"
+            onClick={() => void layoutQuery.refetch()}
+            size="sm"
+            variant="outline"
+          >
+            <RefreshCw data-icon="inline-start" />
+            Thử lại
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="grid gap-4 p-6 lg:grid-cols-[1fr_320px]">
-      <div className="grid gap-4">
-        <RackTemplateForm
-          canEdit={canEdit}
-          key={JSON.stringify(rackTemplateQuery.data)}
-          onSaved={() => {
-            void queryClient.invalidateQueries({
-              queryKey: rackTemplateKeys.detail,
-            });
-            void queryClient.invalidateQueries({ queryKey: layoutKeys.detail });
-          }}
-          template={rackTemplateQuery.data}
-        />
-
-        {sceneMode === "map" ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Sơ đồ kho</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <WarehouseFloorPlan
-                editable={canEdit}
-                layout={layoutQuery.data}
-                onMoveElement={(target, position) =>
-                  patchMutation.mutate({
-                    kind: target.kind,
-                    id: target.id,
-                    patch: position,
-                  })
-                }
-                onOpenRack={handleOpenRack}
-                onResizeElement={(target, size) =>
-                  patchMutation.mutate({
-                    kind: target.kind,
-                    id: target.id,
-                    patch: size,
-                  })
-                }
-                onSelect={setSelection}
-                selectedRackCode={selectedRackCode}
-                selection={selection}
-              />
-            </CardContent>
-          </Card>
-        ) : (
-          <WarehouseArchitectureScene
-            contentsByShelf={{
-              [selectedShelfCode ?? ""]: contentsQuery.data ?? [],
-            }}
-            erroredShelfCodes={new Set()}
-            layout={layoutQuery.data}
-            layoutSource="api"
-            loadingShelfCodes={
-              contentsQuery.isLoading && selectedShelfCode
-                ? new Set([selectedShelfCode])
-                : new Set()
-            }
-            onBackToMap={() => setSceneMode("map")}
-            onOpenRack={handleOpenRack}
-            onRetryShelf={() => void contentsQuery.refetch()}
-            onSelectShelf={setSelectedShelfCode}
-            rackGroup={rackGroup}
-            route={null}
-            sceneMode={sceneMode}
-            selectedRackCode={selectedRackCode}
-            selectedShelfCode={selectedShelfCode}
-            suggestions={[]}
-            suggestedShelfCodes={new Set()}
-            unsupportedShelfCodes={new Set()}
-          />
-        )}
-      </div>
-
-      <WarehouseLayoutInspector
-        canEdit={canEdit}
-        layout={layoutQuery.data}
-        onDelete={() => {
-          // Xoá qua bản đồ không nằm trong scope task này (xem ghi chú trong
-          // brief) — báo rõ cho người dùng thay vì im lặng không làm gì.
-          toast.info(
-            "Chưa hỗ trợ xoá phần tử qua bản đồ — vui lòng dùng trang quản lý vị trí.",
-          );
-        }}
-        onPatch={handlePatch}
-        onRotate={() => {
-          if (!selection) return;
-          const current =
-            selection.kind === "zone"
-              ? layoutQuery.data.zones.find((z) => z.id === selection.id)
-              : selection.kind === "rack"
-                ? layoutQuery.data.racks.find((r) => r.id === selection.id)
-                : null;
-          if (!current) return;
-          handlePatch({ rotation: current.rotation === 0 ? 90 : 0 });
-        }}
-        selection={selection}
-      />
-    </div>
+    <WarehouseEditor
+      initialLayout={layoutQuery.data}
+      key={layoutQuery.data.revision}
+      onReload={async () => {
+        const result = await layoutQuery.refetch();
+        if (!result.data) throw new Error("Không tải được bản đồ kho.");
+        return result.data;
+      }}
+    />
   );
 }

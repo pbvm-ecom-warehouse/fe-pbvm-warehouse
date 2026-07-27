@@ -91,8 +91,6 @@ export type WmsRootResponse =
       [key: string]: unknown;
     };
 
-export type WarehouseType = "CENTRAL" | "BRANCH";
-
 export type MoveType =
   | "RECEIVE"
   | "PUTAWAY"
@@ -102,14 +100,6 @@ export type MoveType =
   | "PRINT_CONSUME"
   | "PRINT_OUTPUT"
   | "RETURN_IN";
-
-export type Warehouse = TenantScoped & {
-  id: string;
-  name: string;
-  type: WarehouseType;
-  address: string;
-  isActive: boolean;
-};
 
 export type WarehouseLayoutStatus = "DRAFT" | "PUBLISHED";
 export type WarehouseLayoutRotation = 0 | 90;
@@ -165,93 +155,37 @@ export type WarehouseLayoutGate = {
   yM: number;
 };
 
-export type WarehouseLayout = {
-  id?: string;
-  revision: number;
-  status: WarehouseLayoutStatus;
-  canvas: WarehouseLayoutCanvas;
-  zones: WarehouseLayoutZone[];
-  racks: WarehouseLayoutRack[];
-  aisles: WarehouseLayoutAisle[];
-  gates: WarehouseLayoutGate[];
-  updatedAt?: string;
+export type WarehouseRackTemplate = {
+  widthM: number;
+  depthM: number;
+  levelCount: number;
+  bayCount: number;
 };
 
-export type WarehouseShelf = {
+export type WarehouseLayoutShelf = {
   id: string;
-  zoneCode: string;
-  zoneName: string;
-  rackCode: string;
-  rackName: string;
+  rackId: string;
   level: number;
   code: string;
-  barcode: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
   innerDepth?: number;
   innerWidth?: number;
   innerHeight?: number;
-  fillFactor?: number;
-  isStaging?: boolean;
+  fillFactor?: number | null;
+  isStaging: boolean;
 };
 
-export type WarehouseRoutePoint = {
-  code: string;
-  label: string;
-  x: number;
-  y: number;
-};
-
-export type WarehouseRoute = {
-  from: WarehouseRoutePoint;
-  to: WarehouseRoutePoint;
-  waypoints: WarehouseRoutePoint[];
-  distanceMeters?: number;
-  estimatedSeconds?: number;
-  instructions?: string[];
-};
-
-export type PutawaySuggestion = {
-  shelf: WarehouseShelf;
-  capacity: number;
-  reason: string;
-  advisory: boolean;
-  pathLabel: string;
-  route?: WarehouseRoute;
-};
-
-export type ShelfContentPlacement = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  z?: number;
-  depth?: number;
-  rotationDeg?: number;
-  label?: string;
-};
-
-export type ShelfContentDimensions = {
-  widthCm?: number;
-  depthCm?: number;
-  heightCm?: number;
-};
-
-export type ShelfContentItem = {
+export type WarehouseLayout = {
   id: string;
-  sku: string;
-  itemName: string;
-  quantity: number;
-  unit: string;
-  lotNumber?: string | null;
-  expiryDate?: string | null;
-  barcode?: string;
-  containerType?: "box" | "crate" | "pallet" | "bag";
-  dimensions?: ShelfContentDimensions | null;
-  placement?: ShelfContentPlacement | null;
-  status?: "AVAILABLE" | "RESERVED" | "EXPIRED";
+  revision: number;
+  status: WarehouseLayoutStatus;
+  canvas: WarehouseLayoutCanvas;
+  rackTemplate: WarehouseRackTemplate;
+  zones: WarehouseLayoutZone[];
+  racks: WarehouseLayoutRack[];
+  shelves: WarehouseLayoutShelf[];
+  aisles: WarehouseLayoutAisle[];
+  gates: WarehouseLayoutGate[];
+  updatedAt: string;
 };
 
 export type Product = TenantScoped & {

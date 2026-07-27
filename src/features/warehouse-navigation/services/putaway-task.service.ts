@@ -63,14 +63,6 @@ export async function listPutawayTasks(input: QueryPutawayTasksInput = {}) {
   return normalizePutawayTaskListResponse(response.data);
 }
 
-export async function getPutawayTask(taskId: string) {
-  const response = await apiClient.get<ApiEnvelope<PutawayTask> | PutawayTask>(
-    `/putaway-tasks/${encodeURIComponent(taskId)}`,
-  );
-
-  return unwrapApiData(response.data);
-}
-
 export async function confirmPutawayLine(
   taskId: string,
   input: ConfirmPutawayLineInput,

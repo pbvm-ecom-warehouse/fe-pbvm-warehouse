@@ -55,7 +55,3 @@ export async function listPutawaySuggestionResult(
     throw error;
   }
 }
-
-export async function listPutawaySuggestions(input: PutawaySuggestionInput) {
-  return (await listPutawaySuggestionResult(input)).suggestions;
-}

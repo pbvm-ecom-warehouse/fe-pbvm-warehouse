@@ -1,5 +1,5 @@
-import { LocationStructureClient } from "@/features/warehouse-structure/components/location-structure-client";
+import { WarehouseMapClient } from "@/features/warehouse-layout/components/warehouse-map-client";
 
 export default function LocationsPage() {
-  return <LocationStructureClient />;
+  return <WarehouseMapClient />;
 }

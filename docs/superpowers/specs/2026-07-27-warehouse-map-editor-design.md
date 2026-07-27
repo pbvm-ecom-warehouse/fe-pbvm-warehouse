@@ -8,10 +8,10 @@ kéo thả, thay đổi kích thước, xoay, hoàn tác và lưu toàn bộ cha
 
 ## Điều hướng
 
-- `/locations` là alias và redirect server-side sang `/locations/map`.
+- `/locations` render `WarehouseMapClient` và là URL canonical của editor.
 - Sidebar `Kho` tiếp tục dùng URL `/locations`; người dùng được đưa thẳng vào
   editor, không còn thấy bảng `Kho tổng`.
-- `/locations/map` render `WarehouseMapClient`.
+- `/locations/map` là URL legacy và redirect server-side về `/locations`.
 - Component danh sách `LocationStructureClient` không còn nằm trong luồng Kho.
 
 ## Bố cục
@@ -75,13 +75,14 @@ và selection không còn tồn tại.
 
 ## Quyền
 
-- `MANAGER` và `ADMIN` được chỉnh sửa/lưu.
+- `MANAGER` và `ADMIN` được chỉnh sửa/lưu. Endpoint khai
+  `@Roles(MANAGER)` và `RolesGuard` của dự án cho `ADMIN` bypass.
 - Vai trò khác xem canvas ở chế độ read-only; tool tạo, inspector input và nút
   lưu bị vô hiệu.
 
 ## Ngoài phạm vi
 
 - Không mở rộng kích thước Gate; gate vẫn là marker x/y.
-- Không thay đổi luồng điều hướng put-away/rack elevation.
+- Xóa UI bản đồ put-away/rack elevation legacy đã không còn route/import; giữ
+  nguyên các service put-away nghiệp vụ vẫn đang được dashboard và GRN sử dụng.
 - Không thay đổi code sản phẩm đang có trong worktree.
-

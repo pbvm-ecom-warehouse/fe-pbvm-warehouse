@@ -12,7 +12,11 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { SheetClose } from "@/components/ui/sheet";
-import { dashboardRoutes, ROUTE_GROUPS, type RouteGroupKey } from "@/constants/routes";
+import {
+  dashboardRoutes,
+  ROUTE_GROUPS,
+  type RouteGroupKey,
+} from "@/constants/routes";
 import { useSessionUser } from "@/hooks/use-session-user";
 import { getAllowedRoutes, getDefaultRoleFocus, ROLE_LABELS } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
@@ -34,6 +38,7 @@ function NavLink({
 }) {
   const link = (
     <Link
+      aria-current={active ? "page" : undefined}
       className={cn(
         "group flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-sidebar-foreground/72 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
         active &&
@@ -63,7 +68,8 @@ function groupRoutes(routes: readonly DashboardRoute[]) {
   )[] = [];
 
   for (const route of routes) {
-    const groupKey = "group" in route ? (route.group as RouteGroupKey) : undefined;
+    const groupKey =
+      "group" in route ? (route.group as RouteGroupKey) : undefined;
     const last = items[items.length - 1];
 
     if (groupKey && last?.kind === "group" && last.key === groupKey) {
@@ -98,6 +104,8 @@ export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
 
   const warehouseLabel = "Mô hình vận hành";
   const warehouseName = "Kho trung tâm";
+  const isRouteActive = (href: string) =>
+    pathname === href || pathname.startsWith(`${href}/`);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-sidebar px-4 py-5 text-sidebar-foreground">
@@ -111,7 +119,7 @@ export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
         {items.map((item) => {
           if (item.kind === "route") {
             const route = item.route;
-            const active = pathname === route.href;
+            const active = isRouteActive(route.href);
             const Icon = route.icon;
 
             return (
@@ -134,8 +142,8 @@ export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
 
           const groupMeta = ROUTE_GROUPS[item.key];
           const GroupIcon = groupMeta.icon;
-          const groupActive = item.routes.some(
-            (route) => pathname === route.href,
+          const groupActive = item.routes.some((route) =>
+            isRouteActive(route.href),
           );
 
           return (
@@ -143,8 +151,7 @@ export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
               <CollapsibleTrigger
                 className={cn(
                   "group/trigger flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-sidebar-foreground/72 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                  groupActive &&
-                    "text-sidebar-accent-foreground",
+                  groupActive && "text-sidebar-accent-foreground",
                 )}
               >
                 <GroupIcon
@@ -158,7 +165,7 @@ export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
               </CollapsibleTrigger>
               <CollapsibleContent className="space-y-1 py-1 pl-4">
                 {item.routes.map((route) => {
-                  const active = pathname === route.href;
+                  const active = isRouteActive(route.href);
                   const Icon = route.icon;
 
                   return (
