@@ -534,6 +534,7 @@ export function WarehouseItemsClient() {
           canManage={canManage}
           item={viewingItem}
           key={viewingItem.id}
+          onPreviewImage={setPreviewImage}
           onEdit={() => {
             setViewingItem(null);
             setEditingItem(viewingItem);
@@ -552,6 +553,7 @@ export function WarehouseItemsClient() {
           canManage={canManage}
           item={editingItem}
           key={editingItem.id}
+          onPreviewImage={setPreviewImage}
           onOpenChange={(open) => {
             if (!open) {
               setEditingItem(null);
@@ -603,15 +605,26 @@ function WarehouseItemImageViewer({
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
     }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [onClose]);
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[60] flex items-center justify-center">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm">
+      <button
+        aria-label="Đóng xem ảnh"
+        className="absolute inset-0 cursor-zoom-out"
+        type="button"
+        onClick={onClose}
+      />
       <Button
         aria-label="Đóng xem ảnh"
-        className="pointer-events-auto fixed right-4 top-4 z-[61]"
+        className="fixed right-4 top-4 z-[101]"
         onClick={onClose}
         size="icon-sm"
         type="button"
@@ -621,7 +634,7 @@ function WarehouseItemImageViewer({
       </Button>
       <img
         alt="Ảnh mặt hàng phóng to"
-        className={`pointer-events-auto max-h-[96dvh] max-w-[96vw] select-none object-contain ${scale > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"}`}
+        className={`relative z-[101] max-h-[96dvh] max-w-[96vw] select-none object-contain shadow-2xl ${scale > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"}`}
         draggable={false}
         src={imageUrl}
         style={{
@@ -648,6 +661,13 @@ function WarehouseItemImageViewer({
         }}
         onPointerCancel={() => {
           dragOrigin.current = null;
+        }}
+        onClick={() => {
+          setScale((current) => {
+            const next = current === 1 ? 2 : 1;
+            if (next === 1) setOffset({ x: 0, y: 0 });
+            return next;
+          });
         }}
         onWheel={(event) => {
           event.preventDefault();
@@ -920,11 +940,13 @@ function ItemDetailDialog({
   item,
   onEdit,
   onOpenChange,
+  onPreviewImage,
 }: {
   canManage: boolean;
   item: WarehouseItem;
   onEdit: () => void;
   onOpenChange: (open: boolean) => void;
+  onPreviewImage: (imageUrl: string) => void;
 }) {
   const dimensions = [item.depth, item.width, item.height]
     .map((value) => value ?? "-")
@@ -961,22 +983,6 @@ function ItemDetailDialog({
             </div>
           </section>
 
-          <section
-            className="space-y-3 border-t pt-4"
-            aria-labelledby="item-images-title"
-          >
-            <h3
-              id="item-images-title"
-              className="text-sm font-semibold text-foreground"
-            >
-              Ảnh mặt hàng
-            </h3>
-            <EvidenceImageGallery
-              emptyLabel="Chưa có ảnh mặt hàng."
-              images={item.images}
-              label=""
-            />
-          </section>
           <section
             className="space-y-3 border-t pt-4"
             aria-labelledby="item-barcode-title"
@@ -1021,6 +1027,25 @@ function ItemDetailDialog({
                 }
               />
             </div>
+          </section>
+
+          <section
+            className="space-y-3 border-t pt-4"
+            aria-labelledby="item-images-title"
+          >
+            <h3
+              id="item-images-title"
+              className="text-center text-sm font-semibold text-foreground"
+            >
+              Ảnh mặt hàng
+            </h3>
+            <EvidenceImageGallery
+              className="mx-auto flex w-72 max-w-full justify-center sm:w-96"
+              emptyLabel="Chưa có ảnh mặt hàng."
+              images={item.images}
+              label=""
+              onPreview={onPreviewImage}
+            />
           </section>
 
           <section
@@ -1084,12 +1109,14 @@ function ItemEditDialog({
   item,
   onOpenChange,
   onSave,
+  onPreviewImage,
 }: {
   busy: boolean;
   canManage: boolean;
   item: WarehouseItem;
   onOpenChange: (open: boolean) => void;
   onSave: (form: ItemForm) => void;
+  onPreviewImage: (imageUrl: string) => void;
 }) {
   const [form, setForm] = useState(() => itemToForm(item));
 
@@ -1121,13 +1148,25 @@ function ItemEditDialog({
             </div>
           </div>
 
-          <div className="rounded-lg border bg-muted/20 p-3">
-            <EvidenceImageGallery
-              emptyLabel="Chưa có ảnh mặt hàng."
-              images={item.images}
-              label="Ảnh mặt hàng"
-            />
-          </div>
+          <section
+            className="space-y-3 border-t pt-4"
+            aria-labelledby="edit-item-barcode-title"
+          >
+            <h3
+              id="edit-item-barcode-title"
+              className="text-sm font-semibold text-foreground"
+            >
+              Mã vạch nội bộ
+            </h3>
+            <div className="rounded-lg border bg-muted/20 p-3">
+              {item.barcode ? (
+                <Barcode value={item.barcode} />
+              ) : (
+                <div className="text-sm text-muted-foreground">Chưa có</div>
+              )}
+            </div>
+          </section>
+
           <ItemFormFields
             busy={busy}
             canManage={canManage}
@@ -1136,6 +1175,25 @@ function ItemEditDialog({
             onChange={setForm}
             onSubmit={handleSubmit}
           />
+
+          <section
+            className="space-y-3 border-t pt-4"
+            aria-labelledby="edit-item-images-title"
+          >
+            <h3
+              id="edit-item-images-title"
+              className="text-center text-sm font-semibold text-foreground"
+            >
+              Ảnh mặt hàng
+            </h3>
+            <EvidenceImageGallery
+              className="mx-auto flex w-72 max-w-full justify-center sm:w-96"
+              emptyLabel="Chưa có ảnh mặt hàng."
+              images={item.images}
+              label=""
+              onPreview={onPreviewImage}
+            />
+          </section>
         </div>
       </DialogContent>
     </Dialog>
