@@ -8,6 +8,7 @@ import {
   Pencil,
   ImageOff,
   LoaderCircle,
+  Minus,
   PackageSearch,
   Plus,
   RefreshCw,
@@ -601,6 +602,13 @@ function WarehouseItemImageViewer({
   const [scale, setScale] = useState(1);
   const dragOrigin = useRef<{ x: number; y: number } | null>(null);
 
+  function updateScale(nextScale: number) {
+    setScale(Math.min(3, Math.max(1, nextScale)));
+    if (nextScale <= 1) {
+      setOffset({ x: 0, y: 0 });
+    }
+  }
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
@@ -632,6 +640,29 @@ function WarehouseItemImageViewer({
       >
         <X />
       </Button>
+      <div className="fixed bottom-4 left-1/2 z-[101] flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/65 px-2 py-2 backdrop-blur">
+        <Button
+          aria-label="Thu nhỏ ảnh"
+          onClick={() => updateScale(scale - 0.25)}
+          size="icon-sm"
+          type="button"
+          variant="secondary"
+        >
+          <Minus />
+        </Button>
+        <span className="min-w-12 text-center text-sm font-medium text-white">
+          {Math.round(scale * 100)}%
+        </span>
+        <Button
+          aria-label="Phóng to ảnh"
+          onClick={() => updateScale(scale + 0.25)}
+          size="icon-sm"
+          type="button"
+          variant="secondary"
+        >
+          <Plus />
+        </Button>
+      </div>
       <img
         alt="Ảnh mặt hàng phóng to"
         className={`relative z-[101] max-h-[96dvh] max-w-[96vw] select-none object-contain shadow-2xl ${scale > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"}`}
@@ -663,22 +694,11 @@ function WarehouseItemImageViewer({
           dragOrigin.current = null;
         }}
         onClick={() => {
-          setScale((current) => {
-            const next = current === 1 ? 2 : 1;
-            if (next === 1) setOffset({ x: 0, y: 0 });
-            return next;
-          });
+          updateScale(scale === 1 ? 2 : 1);
         }}
         onWheel={(event) => {
           event.preventDefault();
-          setScale((current) => {
-            const next = Math.min(
-              3,
-              Math.max(0.5, current + (event.deltaY < 0 ? 0.1 : -0.1)),
-            );
-            if (next <= 1) setOffset({ x: 0, y: 0 });
-            return next;
-          });
+          updateScale(scale + (event.deltaY < 0 ? 0.1 : -0.1));
         }}
       />
     </div>
@@ -1167,15 +1187,6 @@ function ItemEditDialog({
             </div>
           </section>
 
-          <ItemFormFields
-            busy={busy}
-            canManage={canManage}
-            form={form}
-            submitLabel="Lưu mặt hàng"
-            onChange={setForm}
-            onSubmit={handleSubmit}
-          />
-
           <section
             className="space-y-3 border-t pt-4"
             aria-labelledby="edit-item-images-title"
@@ -1194,6 +1205,15 @@ function ItemEditDialog({
               onPreview={onPreviewImage}
             />
           </section>
+
+          <ItemFormFields
+            busy={busy}
+            canManage={canManage}
+            form={form}
+            submitLabel="Lưu mặt hàng"
+            onChange={setForm}
+            onSubmit={handleSubmit}
+          />
         </div>
       </DialogContent>
     </Dialog>
