@@ -10,7 +10,6 @@ import {
   RotateCcw,
   ShoppingCart,
   SlidersHorizontal,
-  Server,
   Truck,
   UsersRound,
 } from "lucide-react";
@@ -90,12 +89,6 @@ export const dashboardRoutes = [
     label: "In ly",
     icon: Repeat2,
     allowedRoles: getRouteAllowedRoles("/print-jobs"),
-  },
-  {
-    href: "/settings",
-    label: "Hệ thống",
-    icon: Server,
-    allowedRoles: getRouteAllowedRoles("/settings"),
   },
   {
     href: "/staff",

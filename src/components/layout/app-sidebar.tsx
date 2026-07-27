@@ -60,7 +60,6 @@ export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
     return null;
   }
 
-  const settingsIndex = routes.findIndex((route) => route.href === "/settings");
   const warehouseLabel = "Mô hình vận hành";
   const warehouseName = "Kho trung tâm";
 
@@ -76,13 +75,9 @@ export function SidebarContent({ closeOnNavigate }: SidebarContentProps) {
         {routes.map((route) => {
           const active = pathname === route.href;
           const Icon = route.icon;
-          const addDivider = route.href === "/settings" && settingsIndex > 0;
 
           return (
             <React.Fragment key={route.href}>
-              {addDivider ? (
-                <div className="my-4 h-px bg-sidebar-border" />
-              ) : null}
               <NavLink
                 active={active}
                 closeOnNavigate={closeOnNavigate}

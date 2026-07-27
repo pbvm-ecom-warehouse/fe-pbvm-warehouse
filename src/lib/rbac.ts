@@ -70,7 +70,6 @@ export const ROUTE_ACCESS_BY_HREF = {
   "/print-jobs": ["ADMIN", "MANAGER", "PRINTER"],
   "/cup-conversions": ["ADMIN", "MANAGER", "PRINTER"],
   "/reports": ["ADMIN", "MANAGER"],
-  "/settings": ["ADMIN", "MANAGER"],
   "/staff": ["ADMIN", "MANAGER"],
   "/login": ALL_STAFF_ROLES,
 } as const satisfies Record<string, readonly WmsRole[]>;
@@ -86,7 +85,6 @@ export const MODULE_PRIMARY_ACTION_ROLES = {
   suppliers: ["ADMIN", "MANAGER"],
   reports: ["ADMIN", "MANAGER"],
   "print-jobs": ["ADMIN", "MANAGER", "PRINTER"],
-  settings: ["ADMIN", "MANAGER"],
   staff: ["ADMIN", "MANAGER"],
 } as const satisfies Record<string, readonly WmsRole[]>;
 

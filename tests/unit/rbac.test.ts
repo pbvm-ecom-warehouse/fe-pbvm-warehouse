@@ -32,7 +32,6 @@ describe("WMS RBAC helpers", () => {
 
   it("lets ADMIN bypass role checks", () => {
     expect(hasAnyRole(["ADMIN"], ["COUNTER"])).toBe(true);
-    expect(hasRouteAccess("/settings", ["ADMIN"])).toBe(true);
   });
 
   it("unions permissions for multi-role users", () => {
@@ -57,7 +56,6 @@ describe("WMS RBAC helpers", () => {
     expect(receiverRoutes).not.toContain("/suppliers");
     expect(receiverRoutes).toContain("/goods-returns");
     expect(receiverRoutes).not.toContain("/transfers");
-    expect(receiverRoutes).not.toContain("/settings");
     expect(receiverRoutes).not.toContain("/staff");
     expect(printerRoutes).not.toContain("/staff");
     expect(printerRoutes).not.toContain("/transfers");

@@ -134,18 +134,6 @@ const moduleSummaries = {
         "Nhân viên in quét SKU, quét vị trí, in ly và xác nhận hoàn thành.",
     },
   },
-  settings: {
-    title: "Hệ thống",
-    description: "Theo dõi trạng thái dịch vụ và kết nối WMS.",
-    action: "Làm mới",
-    highlights: ["MongoDB", "Redis", "Kết nối WMS"],
-    tableTitle: "Trạng thái hệ thống",
-    columns: ["Nhóm", "Giá trị", "Trạng thái"],
-    roleNotes: {
-      ADMIN: "Quản trị viên theo dõi tình trạng hệ thống.",
-      MANAGER: "Quản lý xem trạng thái hệ thống liên quan điều phối.",
-    },
-  },
 } as const;
 
 type ModuleKey = keyof typeof moduleSummaries;
