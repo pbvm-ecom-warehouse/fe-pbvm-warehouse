@@ -130,7 +130,7 @@ export function WarehouseLayoutInspector({
   onPatch,
   onPatchCanvas,
   onPatchRackTemplate,
-  onPatchShelf,
+  onSetStagingRack,
   onRotate,
   selection,
 }: {
@@ -141,7 +141,7 @@ export function WarehouseLayoutInspector({
   onPatch: (patch: Record<string, unknown>) => void;
   onPatchCanvas: (patch: Record<string, number>) => void;
   onPatchRackTemplate: (patch: Record<string, number>) => void;
-  onPatchShelf: (shelfId: string, patch: Record<string, unknown>) => void;
+  onSetStagingRack: (rackId: string) => void;
   onRotate: () => void;
   selection: LayoutSelection;
 }) {
@@ -168,6 +168,8 @@ export function WarehouseLayoutInspector({
           .filter((shelf) => shelf.rackId === item.id)
           .sort((left, right) => left.level - right.level)
       : [];
+  const isStagingRack =
+    rackShelves.length > 0 && rackShelves.every((shelf) => shelf.isStaging);
 
   return (
     <aside className="w-[320px] shrink-0 overflow-y-auto border-l border-slate-200 bg-white">
@@ -317,39 +319,52 @@ export function WarehouseLayoutInspector({
           ) : null}
 
           {selection.kind === "rack" ? (
-            <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <div className="text-xs font-semibold text-slate-700">
-                Tầng kệ của rack
-              </div>
-              <p className="text-[11px] leading-4 text-slate-500">
-                Đây là nơi hàng mới nhập được đặt tạm trước khi chuyển vào kệ
-                chính.
-              </p>
-              {rackShelves.map((shelf) => (
-                <div
-                  className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2"
-                  key={shelf.id}
-                >
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-slate-800">
-                      {shelf.code}
-                    </div>
-                    <div className="text-[11px] text-slate-500">
-                      Tầng {shelf.level}
-                    </div>
-                  </div>
-                  <Button
-                    disabled={!canEdit}
-                    onClick={() =>
-                      onPatchShelf(shelf.id, { isStaging: !shelf.isStaging })
-                    }
-                    size="sm"
-                    variant={shelf.isStaging ? "default" : "outline"}
-                  >
-                    {shelf.isStaging ? "Đang nhận tạm" : "Chọn nhận tạm"}
-                  </Button>
+            <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div>
+                <div className="text-xs font-semibold text-slate-700">
+                  Kệ nhận tạm
                 </div>
-              ))}
+                <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                  Chọn theo cả rack. Tất cả tầng của rack này dùng để nhận tạm;
+                  mọi rack còn lại vẫn luôn là vị trí lưu trữ.
+                </p>
+              </div>
+              <Button
+                disabled={!canEdit || rackShelves.length === 0}
+                onClick={() => onSetStagingRack(item.id)}
+                size="sm"
+                variant={isStagingRack ? "default" : "outline"}
+              >
+                {isStagingRack
+                  ? `Đang nhận tạm · ${rackShelves.length} tầng`
+                  : "Chọn cả rack làm kệ nhận tạm"}
+              </Button>
+              <div className="grid gap-1.5">
+                {rackShelves.map((shelf) => (
+                  <div
+                    className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2"
+                    key={shelf.id}
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-slate-800">
+                        {shelf.code}
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        Tầng {shelf.level}
+                      </div>
+                    </div>
+                    <span
+                      className={
+                        isStagingRack
+                          ? "rounded-full bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-700"
+                          : "rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700"
+                      }
+                    >
+                      {isStagingRack ? "Nhận tạm" : "Lưu trữ"}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
 

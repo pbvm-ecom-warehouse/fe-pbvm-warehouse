@@ -156,7 +156,14 @@ describe("supplier API service", () => {
       supplierId: "sup-1",
     });
 
-    expect(mockedGet).toHaveBeenCalledWith("/supplier/items/by-supplier/sup-1");
+    expect(mockedGet).toHaveBeenCalledWith("/supplier/items", {
+      params: {
+        itemId: undefined,
+        limit: 100,
+        page: undefined,
+        supplierId: "sup-1",
+      },
+    });
     expect(mockedPost).toHaveBeenCalledWith("/supplier/items", {
       itemId: "item-1",
       purchasePrice: 15000,

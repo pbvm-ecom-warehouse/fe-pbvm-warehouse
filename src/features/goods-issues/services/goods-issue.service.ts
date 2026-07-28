@@ -1,9 +1,9 @@
 import { apiClient } from "@/lib/api-client";
 import { normalizeApiList, type ApiListLike } from "@/lib/api-list";
 import { type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
+import type { NavigationPath } from "@/features/warehouse-navigation/services/putaway-navigation.service";
 
 export const GOODS_ISSUE_STATUSES = ["PENDING", "CONFIRMED"] as const;
-
 export type GoodsIssueStatus = (typeof GOODS_ISSUE_STATUSES)[number];
 
 export type GoodsIssueItem = {
@@ -11,6 +11,7 @@ export type GoodsIssueItem = {
   sku: string;
   quantity: number;
   remainingQty: number;
+  packageCount?: number;
   unit?: string;
 };
 
@@ -32,16 +33,26 @@ export type QueryGoodsIssuesInput = {
 export type PickSuggestion = {
   shelfId: string;
   shelfCode: string;
+  cellId: string;
+  cellCode: string;
+  rackId: string;
+  level: number;
+  bay: number;
+  path: NavigationPath;
   lotId?: string | null;
   lotNumber?: string | null;
   expiryDate?: string | null;
   quantity: number;
+  packageCount: number;
+  packageFactor?: number;
 };
 
 export type ConfirmGoodsIssueLineInput = {
   itemBarcode: string;
-  shelfCode: string;
-  quantity: number;
+  cellBarcode: string;
+  packageCount: number;
+  packageFactor?: number;
+  suggestedCellId?: string;
   lotId?: string;
 };
 
@@ -63,7 +74,6 @@ export async function listGoodsIssues(input: QueryGoodsIssuesInput = {}) {
       },
     },
   );
-
   return normalizeGoodsIssueListResponse(response.data);
 }
 
@@ -71,7 +81,6 @@ export async function getGoodsIssue(goodsIssueId: string) {
   const response = await apiClient.get<ApiEnvelope<GoodsIssue> | GoodsIssue>(
     `/goods-issues/${encodeURIComponent(goodsIssueId)}`,
   );
-
   return unwrapApiData(response.data);
 }
 
@@ -89,7 +98,6 @@ export async function listGoodsIssuePickSuggestions({
       itemId,
     )}/suggestions`,
   );
-
   return unwrapApiData(response.data);
 }
 
@@ -101,6 +109,5 @@ export async function confirmGoodsIssueLine(
     `/goods-issues/${encodeURIComponent(goodsIssueId)}/confirm-line`,
     input,
   );
-
   return unwrapApiData(response.data);
 }

@@ -89,14 +89,17 @@ import {
   PURCHASE_ORDER_STATUSES,
   type CreatePurchaseOrderItemInput,
   type PurchaseOrder,
+  type PurchaseOrderPackageSpec,
   type PurchaseOrderStatus,
   type ReceivingPurchaseOrder,
 } from "../services/purchase-order.service";
 import {
   approveGoodsReceiptNote,
   confirmGoodsReceiptNote,
+  rejectGoodsReceiptNote,
   createGoodsReceiptNote,
   listGoodsReceiptNotes,
+  updateGoodsReceiptNoteItems,
   uploadGoodsReceiptNoteImage,
   type CreateGoodsReceiptNoteItemInput,
   type GoodsReceiptNote,
@@ -125,6 +128,11 @@ const purchaseKeys = {
 type PurchaseOrderItemForm = {
   expectedQty: string;
   itemId: string;
+  packageDepthCm: string;
+  packageFactor: string;
+  packageHeightCm: string;
+  packageUnit: string;
+  packageWidthCm: string;
   sku: string;
   unit: string;
   unitPrice: string;
@@ -138,6 +146,8 @@ type GoodsReceiptItemForm = {
   itemName: string;
   lotNumber: string;
   note: string;
+  packageCount: string;
+  packageSpec?: PurchaseOrderPackageSpec;
   sku: string;
   unit: string;
 };
@@ -145,6 +155,11 @@ type GoodsReceiptItemForm = {
 const defaultItemForm: PurchaseOrderItemForm = {
   expectedQty: "1",
   itemId: "",
+  packageDepthCm: "",
+  packageFactor: "1",
+  packageHeightCm: "",
+  packageUnit: "thùng",
+  packageWidthCm: "",
   sku: "",
   unit: "cái",
   unitPrice: "0",
@@ -227,8 +242,22 @@ function toPurchaseOrderItems(
       itemId: form.itemId.trim(),
       unit: form.unit.trim() || "cái",
       unitPrice: parsePositiveNumber(form.unitPrice, 0),
+      packageSpec: {
+        unit: form.packageUnit.trim() || "thùng",
+        factor: parsePositiveNumber(form.packageFactor, 0),
+        depthCm: parsePositiveNumber(form.packageDepthCm, 0),
+        widthCm: parsePositiveNumber(form.packageWidthCm, 0),
+        heightCm: parsePositiveNumber(form.packageHeightCm, 0),
+      },
     }))
-    .filter((item) => item.expectedQty > 0);
+    .filter(
+      (item) =>
+        item.expectedQty > 0 &&
+        item.packageSpec.factor > 0 &&
+        item.packageSpec.depthCm > 0 &&
+        item.packageSpec.widthCm > 0 &&
+        item.packageSpec.heightCm > 0,
+    );
 }
 
 function toGoodsReceiptItems(
@@ -243,6 +272,7 @@ function toGoodsReceiptItems(
       itemId: form.itemId.trim(),
       lotNumber: optionalText(form.lotNumber),
       note: optionalText(form.note),
+      packageCount: parsePositiveNumber(form.packageCount, 0),
       unit: form.unit.trim() || "cái",
     }))
     .filter((item) => item.actualQty > 0);
@@ -265,12 +295,17 @@ function buildGoodsReceiptForms(
       itemName: item.itemName,
       lotNumber: "",
       note: "",
+      packageCount: String(
+        item.packageSpec?.factor
+          ? item.remainingQty / item.packageSpec.factor
+          : item.remainingQty,
+      ),
+      packageSpec: item.packageSpec,
       sku: item.sku,
       unit: item.unit,
     })) ?? []
   );
 }
-
 function ErrorBanner({ error }: { error: unknown }) {
   return (
     <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
@@ -344,6 +379,7 @@ export function PurchaseOrdersClient({
   const [grnPurchaseOrderId, setGrnPurchaseOrderId] = useState("");
   const [grnItemForms, setGrnItemForms] = useState<GoodsReceiptItemForm[]>([]);
   const [grnImages, setGrnImages] = useState<File[]>([]);
+  const [grnEditTarget, setGrnEditTarget] = useState<GoodsReceiptNote>();
 
   const purchaseOrdersQuery = useQuery({
     enabled: canReadPurchaseOrders,
@@ -514,10 +550,13 @@ export function PurchaseOrdersClient({
 
   const createGrnMutation = useMutation({
     mutationFn: async () => {
-      let goodsReceiptNote = await createGoodsReceiptNote({
-        items: toGoodsReceiptItems(grnItemForms),
-        purchaseOrderId: grnPurchaseOrderId,
-      });
+      const items = toGoodsReceiptItems(grnItemForms);
+      let goodsReceiptNote = grnEditTarget
+        ? await updateGoodsReceiptNoteItems(grnEditTarget.id, items)
+        : await createGoodsReceiptNote({
+            items,
+            purchaseOrderId: grnPurchaseOrderId,
+          });
 
       for (const image of grnImages) {
         goodsReceiptNote = await uploadGoodsReceiptNoteImage(
@@ -533,10 +572,13 @@ export function PurchaseOrdersClient({
       setGrnItemForms([]);
       setGrnPurchaseOrderId("");
       setGrnImages([]);
+      setGrnEditTarget(undefined);
       setGrnDialogOpen(false);
       void queryClient.invalidateQueries({ queryKey: ["goods-receipt-notes"] });
       void queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
-      toast.success("Đã tạo phiếu nhập");
+      toast.success(
+        grnEditTarget ? "Đã cập nhật phiếu nhập" : "Đã tạo phiếu nhập",
+      );
     },
   });
   const confirmGrnMutation = useMutation({
@@ -550,6 +592,15 @@ export function PurchaseOrdersClient({
     },
   });
 
+  const rejectGrnMutation = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      rejectGoodsReceiptNote(id, reason),
+    onError: (error) => toast.error(formatError(error)),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["goods-receipt-notes"] });
+      toast.success("Đã từ chối phiếu nhập và gửi lý do cho Receiver");
+    },
+  });
   const approveGrnMutation = useMutation({
     mutationFn: (goodsReceiptNoteId: string) =>
       approveGoodsReceiptNote(goodsReceiptNoteId),
@@ -596,11 +647,36 @@ export function PurchaseOrdersClient({
     createGrnMutation.mutate();
   }
 
-  function openGrnDialog() {
-    const purchaseOrder = receivingPurchaseOrders[0];
+  async function openGrnDialog() {
+    setGrnImages([]);
+    setGrnEditTarget(undefined);
+    setGrnDialogOpen(true);
+
+    const result = await receivingPurchaseOrdersQuery.refetch();
+    const purchaseOrder = result.data?.data?.[0] ?? receivingPurchaseOrders[0];
     setGrnPurchaseOrderId(purchaseOrder?.id ?? "");
     setGrnItemForms(
       buildGoodsReceiptForms(purchaseOrder, isPerishableByItemId),
+    );
+  }
+
+  function openEditGrnDialog(grn: GoodsReceiptNote) {
+    setGrnEditTarget(grn);
+    setGrnPurchaseOrderId(grn.purchaseOrderId);
+    setGrnItemForms(
+      grn.items.map((item) => ({
+        actualQty: String(item.actualQty),
+        expiryDate: item.expiryDate ?? "",
+        isPerishable: item.isPerishable ?? false,
+        itemId: item.itemId,
+        itemName: item.itemName ?? item.sku,
+        lotNumber: item.lotNumber ?? "",
+        note: item.note ?? "",
+        packageCount: String(item.packageCount ?? 0),
+        packageSpec: item.packageSpec,
+        sku: item.sku,
+        unit: item.unit,
+      })),
     );
     setGrnImages([]);
     setGrnDialogOpen(true);
@@ -610,7 +686,7 @@ export function PurchaseOrdersClient({
   // selection hien tai khong con hop le thi can tu dong bo sang PO dau tien hop le. Day la
   // sync tu external query cache vao local form state, nen chap nhan setState trong effect.
   useEffect(() => {
-    if (grnDialogOpen && receivingPurchaseOrders.length > 0) {
+    if (grnDialogOpen && !grnEditTarget && receivingPurchaseOrders.length > 0) {
       const exists = receivingPurchaseOrders.some(
         (po) => po.id === grnPurchaseOrderId,
       );
@@ -625,6 +701,7 @@ export function PurchaseOrdersClient({
     }
   }, [
     grnDialogOpen,
+    grnEditTarget,
     grnPurchaseOrderId,
     receivingPurchaseOrders,
     isPerishableByItemId,
@@ -866,10 +943,19 @@ export function PurchaseOrdersClient({
             onApprove={(goodsReceiptNoteId) =>
               approveGrnMutation.mutate(goodsReceiptNoteId)
             }
+            onReject={(goodsReceiptNoteId, reason) =>
+              rejectGrnMutation.mutate({ id: goodsReceiptNoteId, reason })
+            }
+            rejectBusyId={
+              rejectGrnMutation.isPending
+                ? rejectGrnMutation.variables?.id
+                : undefined
+            }
             onConfirm={(goodsReceiptNoteId) =>
               confirmGrnMutation.mutate(goodsReceiptNoteId)
             }
             onCreate={openGrnDialog}
+            onEdit={openEditGrnDialog}
             onSelect={setSelectedGoodsReceiptNote}
           />
         </TabsContent>
@@ -981,7 +1067,15 @@ export function PurchaseOrdersClient({
                   !canCreatePurchaseOrder ||
                   !createForm.supplierId ||
                   itemForms.some(
-                    (item) => !item.itemId || !item.sku || !item.unit,
+                    (item) =>
+                      !item.itemId ||
+                      !item.sku ||
+                      !item.unit ||
+                      !item.packageUnit.trim() ||
+                      parsePositiveNumber(item.packageFactor, 0) <= 0 ||
+                      parsePositiveNumber(item.packageDepthCm, 0) <= 0 ||
+                      parsePositiveNumber(item.packageWidthCm, 0) <= 0 ||
+                      parsePositiveNumber(item.packageHeightCm, 0) <= 0,
                   ) ||
                   createMutation.isPending
                 }
@@ -1036,6 +1130,7 @@ export function PurchaseOrdersClient({
             setGrnImages([]);
             setGrnItemForms([]);
             setGrnPurchaseOrderId("");
+            setGrnEditTarget(undefined);
           }
         }}
       >
@@ -1044,9 +1139,13 @@ export function PurchaseOrdersClient({
           className="grid max-h-[90dvh] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0"
         >
           <DialogHeader className="gap-1 border-b px-5 py-4">
-            <DialogTitle>Tạo phiếu nhập</DialogTitle>
+            <DialogTitle>
+              {grnEditTarget ? "Chỉnh sửa phiếu nhập" : "Tạo phiếu nhập"}
+            </DialogTitle>
             <DialogDescription>
-              Chọn đơn mua rồi nhập số lượng hàng thực nhận.
+              {grnEditTarget
+                ? `Cập nhật ${grnEditTarget.grnNumber} theo lý do từ chối rồi gửi duyệt lại.`
+                : "Chọn đơn mua rồi nhập số lượng hàng thực nhận."}
             </DialogDescription>
           </DialogHeader>
           <form
@@ -1058,6 +1157,7 @@ export function PurchaseOrdersClient({
                 <SelectField
                   disabled={
                     !canCreateGoodsReceiptNote ||
+                    Boolean(grnEditTarget) ||
                     createGrnMutation.isPending ||
                     receivingPurchaseOrdersQuery.isLoading ||
                     receivingPurchaseOrders.length === 0
@@ -1157,6 +1257,12 @@ export function PurchaseOrdersClient({
                   }
                   onChange={setGrnImages}
                 />
+                {grnEditTarget?.images?.length ? (
+                  <p className="text-xs text-muted-foreground">
+                    Phiếu đang có {grnEditTarget.images.length} ảnh đã lưu. Ảnh
+                    chọn ở đây sẽ được bổ sung thêm.
+                  </p>
+                ) : null}
                 {grnPurchaseOrder ? (
                   <p className="text-xs text-muted-foreground">
                     Ảnh sẽ được lưu vào phiếu nhập tạo từ{" "}
@@ -1184,7 +1290,7 @@ export function PurchaseOrdersClient({
                 ) : (
                   <Save data-icon="inline-start" />
                 )}
-                Tạo phiếu nhập
+                {grnEditTarget ? "Lưu chỉnh sửa" : "Tạo phiếu nhập"}
               </Button>
             </DialogFooter>
           </form>
@@ -1348,10 +1454,21 @@ function PurchaseOrderItemFields({
           selectedSku={item.sku}
           onSelect={(stockItem) => {
             const supplierItem = supplierItemByItemId.get(stockItem.id);
+            const packageUnit =
+              stockItem.altUnits?.find((candidate) =>
+                candidate.unit.toLocaleLowerCase("vi").includes("thùng"),
+              ) ?? stockItem.altUnits?.[0];
             onChange({
               ...item,
               expectedQty: String(Math.max(1, supplierItem?.minOrderQty ?? 1)),
               itemId: stockItem.id,
+              packageDepthCm: stockItem.depth ? String(stockItem.depth) : "",
+              packageFactor: String(
+                packageUnit?.factor ?? packageUnit?.quantity ?? 1,
+              ),
+              packageHeightCm: stockItem.height ? String(stockItem.height) : "",
+              packageUnit: packageUnit?.unit ?? "thùng",
+              packageWidthCm: stockItem.width ? String(stockItem.width) : "",
               sku: stockItem.sku,
               unit: stockItem.unit,
               unitPrice: String(supplierItem?.purchasePrice ?? 0),
@@ -1419,6 +1536,86 @@ function PurchaseOrderItemFields({
           <Trash2 />
         </Button>
       </div>
+      <div className="border-t pt-3 sm:col-span-2 lg:col-span-12">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Quy cách thùng bắt buộc
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+          <PackageField
+            id={`${itemId}-package-unit`}
+            label="Đơn vị thùng"
+            value={item.packageUnit}
+            onChange={(value) => onChange({ ...item, packageUnit: value })}
+          />
+          <PackageField
+            id={`${itemId}-package-factor`}
+            label="Số đơn vị / thùng"
+            numeric
+            value={item.packageFactor}
+            onChange={(value) => onChange({ ...item, packageFactor: value })}
+          />
+          <PackageField
+            id={`${itemId}-package-depth`}
+            label="Sâu (cm)"
+            numeric
+            value={item.packageDepthCm}
+            onChange={(value) => onChange({ ...item, packageDepthCm: value })}
+          />
+          <PackageField
+            id={`${itemId}-package-width`}
+            label="Rộng (cm)"
+            numeric
+            value={item.packageWidthCm}
+            onChange={(value) => onChange({ ...item, packageWidthCm: value })}
+          />
+          <PackageField
+            id={`${itemId}-package-height`}
+            label="Cao (cm)"
+            numeric
+            value={item.packageHeightCm}
+            onChange={(value) => onChange({ ...item, packageHeightCm: value })}
+          />
+          <div className="space-y-2">
+            <Label>Thể tích / thùng</Label>
+            <div className="flex h-8 items-center rounded-md border bg-muted/40 px-2.5 text-sm font-medium">
+              {(
+                parsePositiveNumber(item.packageDepthCm, 0) *
+                parsePositiveNumber(item.packageWidthCm, 0) *
+                parsePositiveNumber(item.packageHeightCm, 0)
+              ).toLocaleString("vi-VN")}{" "}
+              cm³
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PackageField({
+  id,
+  label,
+  numeric = false,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  numeric?: boolean;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        min={numeric ? "1" : undefined}
+        required
+        type={numeric ? "number" : "text"}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
     </div>
   );
 }
@@ -1608,6 +1805,26 @@ function GoodsReceiptItemFields({
           </span>
         ) : null}
       </div>
+      {item.packageSpec ? (
+        <div className="border-b bg-blue-50/70 px-3 py-2 text-xs text-blue-900">
+          <span className="font-semibold">Quy cách:</span>{" "}
+          {item.packageSpec.unit} × {item.packageSpec.factor} {item.unit} ·{" "}
+          {item.packageSpec.depthCm} × {item.packageSpec.widthCm} ×{" "}
+          {item.packageSpec.heightCm} cm ·{" "}
+          {(
+            item.packageSpec.volumeCm3 ??
+            item.packageSpec.depthCm *
+              item.packageSpec.widthCm *
+              item.packageSpec.heightCm
+          ).toLocaleString("vi-VN")}{" "}
+          cm³/thùng
+        </div>
+      ) : (
+        <div className="border-b bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+          PO chưa có quy cách thùng. Hãy sửa master data hoặc tạo PO mới trước
+          khi gửi duyệt.
+        </div>
+      )}
       <div className="grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-12">
         <div className="min-w-0 space-y-2 lg:col-span-3">
           <Label htmlFor={`${fieldId}-quantity`}>Số lượng thực nhập</Label>
@@ -1623,6 +1840,28 @@ function GoodsReceiptItemFields({
           />
         </div>
         <div className="min-w-0 space-y-2 lg:col-span-2">
+          <Label htmlFor={`${fieldId}-packages`}>Số thùng</Label>
+          <Input
+            aria-label={`Số thùng thực nhập dòng ${index + 1}`}
+            id={`${fieldId}-packages`}
+            min="0"
+            type="number"
+            value={item.packageCount}
+            onChange={(event) => {
+              const packageCount = event.target.value;
+              const parsedCount = Number(packageCount);
+              onChange({
+                ...item,
+                packageCount,
+                actualQty:
+                  item.packageSpec?.factor && Number.isFinite(parsedCount)
+                    ? String(parsedCount * item.packageSpec.factor)
+                    : item.actualQty,
+              });
+            }}
+          />
+        </div>
+        <div className="min-w-0 space-y-2 lg:col-span-2">
           <Label htmlFor={`${fieldId}-unit`}>Đơn vị</Label>
           <Input
             aria-label={`Đơn vị phiếu nhập dòng ${index + 1}`}
@@ -1635,7 +1874,10 @@ function GoodsReceiptItemFields({
         </div>
         <div className="min-w-0 space-y-2 lg:col-span-3">
           <Label htmlFor={`${fieldId}-lot`}>
-            Mã lô{item.isPerishable ? <span className="text-destructive"> *</span> : null}
+            Mã lô
+            {item.isPerishable ? (
+              <span className="text-destructive"> *</span>
+            ) : null}
           </Label>
           <Input
             aria-label={`Mã lô phiếu nhập dòng ${index + 1}`}
@@ -1650,7 +1892,10 @@ function GoodsReceiptItemFields({
         </div>
         <div className="min-w-0 space-y-2 lg:col-span-4">
           <Label htmlFor={`${fieldId}-expiry`}>
-            Hạn sử dụng{item.isPerishable ? <span className="text-destructive"> *</span> : null}
+            Hạn sử dụng
+            {item.isPerishable ? (
+              <span className="text-destructive"> *</span>
+            ) : null}
           </Label>
           <Input
             aria-label={`Hạn sử dụng phiếu nhập dòng ${index + 1}`}

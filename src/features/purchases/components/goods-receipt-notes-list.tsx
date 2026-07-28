@@ -1,11 +1,15 @@
 "use client";
 
+import { useState } from "react";
+
 import {
   CheckCircle2,
   ClipboardCheck,
   Eye,
   LoaderCircle,
+  Pencil,
   Plus,
+  XCircle,
 } from "lucide-react";
 
 import { EvidenceImageGallery } from "@/components/evidence-images";
@@ -21,6 +25,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -32,6 +37,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/features/admin-shell/components/operations-ui";
 import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
 
@@ -68,7 +75,10 @@ export function GoodsReceiptNotesList({
   onApprove,
   onConfirm,
   onCreate,
+  onEdit,
+  onReject,
   onSelect,
+  rejectBusyId,
 }: {
   approveBusyId?: string;
   canApprove: boolean;
@@ -77,134 +87,231 @@ export function GoodsReceiptNotesList({
   confirmBusyId?: string;
   grns: GoodsReceiptNote[];
   loading: boolean;
+  rejectBusyId?: string;
   onApprove: (grnId: string) => void;
   onConfirm: (grnId: string) => void;
   onCreate: () => void;
+  onEdit: (grn: GoodsReceiptNote) => void;
+  onReject: (grnId: string, reason: string) => void;
   onSelect: (grn: GoodsReceiptNote) => void;
 }) {
+  const [rejectTarget, setRejectTarget] = useState<GoodsReceiptNote>();
+  const [rejectReason, setRejectReason] = useState("");
+
   return (
-    <Card>
-      <CardHeader className="border-b bg-muted/20">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1.5">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ClipboardCheck className="size-4 text-primary" />
-              Phiếu nhập
-            </CardTitle>
-            <CardDescription>{grns.length} bản ghi</CardDescription>
+    <>
+      <Card>
+        <CardHeader className="border-b bg-muted/20">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1.5">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ClipboardCheck className="size-4 text-primary" />
+                Phiếu nhập
+              </CardTitle>
+              <CardDescription>{grns.length} bản ghi</CardDescription>
+            </div>
+            {canCreate ? (
+              <Button onClick={onCreate} type="button">
+                <Plus data-icon="inline-start" />
+                Tạo phiếu nhập
+              </Button>
+            ) : null}
           </div>
-          {canCreate ? (
-            <Button onClick={onCreate} type="button">
-              <Plus data-icon="inline-start" />
-              Tạo phiếu nhập
-            </Button>
-          ) : null}
-        </div>
-      </CardHeader>
-      <CardContent className="pt-4">
-        {loading ? (
-          <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />
-            Đang tải phiếu nhập...
-          </div>
-        ) : (
-          <Table scrollable>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Số phiếu nhập</TableHead>
-                <TableHead>Số đơn mua</TableHead>
-                <TableHead>Trạng thái</TableHead>
-                <TableHead>Ngày tạo</TableHead>
-                <TableHead className="w-72 text-right">Thao tác</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {grns.length === 0 ? (
+        </CardHeader>
+        <CardContent className="pt-4">
+          {loading ? (
+            <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-muted-foreground">
+              <LoaderCircle className="size-4 animate-spin" />
+              Đang tải phiếu nhập...
+            </div>
+          ) : (
+            <Table scrollable>
+              <TableHeader>
                 <TableRow>
-                  <TableCell
-                    className="h-24 text-center text-muted-foreground"
-                    colSpan={5}
-                  >
-                    Chưa có phiếu nhập.
-                  </TableCell>
+                  <TableHead>Số phiếu nhập</TableHead>
+                  <TableHead>Số đơn mua</TableHead>
+                  <TableHead>Trạng thái</TableHead>
+                  <TableHead>Ngày tạo</TableHead>
+                  <TableHead className="w-72 text-right">Thao tác</TableHead>
                 </TableRow>
-              ) : (
-                grns.map((grn) => (
-                  <TableRow key={grn.id}>
-                    <TableCell className="font-medium">
-                      {grn.grnNumber}
+              </TableHeader>
+              <TableBody>
+                {grns.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      className="h-24 text-center text-muted-foreground"
+                      colSpan={5}
+                    >
+                      Chưa có phiếu nhập.
                     </TableCell>
-                    <TableCell>
-                      {grn.purchaseOrderNumber ?? grn.purchaseOrderId}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge tone={statusTone(grn.status)}>
-                        {statusLabel(grn.status)}
-                      </StatusBadge>
-                    </TableCell>
-                    <TableCell>{formatDate(grn.createdAt)}</TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          aria-label={`Xem chi tiết phiếu nhập ${grn.grnNumber}`}
-                          onClick={() => onSelect(grn)}
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                        >
-                          <Eye data-icon="inline-start" />
-                          Xem chi tiết
-                        </Button>
-                        {canConfirm && grn.status === "DRAFT" ? (
+                  </TableRow>
+                ) : (
+                  grns.map((grn) => (
+                    <TableRow key={grn.id}>
+                      <TableCell className="font-medium">
+                        {grn.grnNumber}
+                      </TableCell>
+                      <TableCell>
+                        {grn.purchaseOrderNumber ?? grn.purchaseOrderId}
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge tone={statusTone(grn.status)}>
+                          {statusLabel(grn.status)}
+                        </StatusBadge>
+                      </TableCell>
+                      <TableCell>{formatDate(grn.createdAt)}</TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-2">
                           <Button
-                            disabled={confirmBusyId === grn.id}
-                            onClick={() => onConfirm(grn.id)}
+                            aria-label={`Xem chi tiết phiếu nhập ${grn.grnNumber}`}
+                            onClick={() => onSelect(grn)}
                             size="sm"
                             type="button"
                             variant="outline"
                           >
-                            {confirmBusyId === grn.id ? (
-                              <LoaderCircle
-                                className="animate-spin"
-                                data-icon="inline-start"
-                              />
-                            ) : (
-                              <CheckCircle2 data-icon="inline-start" />
-                            )}
-                            Xác nhận
+                            <Eye data-icon="inline-start" />
+                            Xem chi tiết
                           </Button>
-                        ) : null}
-                        {canApprove && grn.status === "CONFIRMED" ? (
-                          <Button
-                            disabled={approveBusyId === grn.id}
-                            onClick={() => onApprove(grn.id)}
-                            size="sm"
-                            type="button"
-                          >
-                            {approveBusyId === grn.id ? (
-                              <LoaderCircle
-                                className="animate-spin"
-                                data-icon="inline-start"
-                              />
-                            ) : (
-                              <ClipboardCheck data-icon="inline-start" />
-                            )}
-                            Duyệt
-                          </Button>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
+                          {canConfirm &&
+                          (grn.status === "DRAFT" ||
+                            grn.status === "REJECTED") ? (
+                            <>
+                              {grn.status === "REJECTED" ? (
+                                <Button
+                                  onClick={() => onEdit(grn)}
+                                  size="sm"
+                                  type="button"
+                                  variant="outline"
+                                >
+                                  <Pencil data-icon="inline-start" />
+                                  Chỉnh sửa
+                                </Button>
+                              ) : null}
+                              <Button
+                                disabled={confirmBusyId === grn.id}
+                                onClick={() => onConfirm(grn.id)}
+                                size="sm"
+                                type="button"
+                                variant="outline"
+                              >
+                                {confirmBusyId === grn.id ? (
+                                  <LoaderCircle
+                                    className="animate-spin"
+                                    data-icon="inline-start"
+                                  />
+                                ) : (
+                                  <CheckCircle2 data-icon="inline-start" />
+                                )}
+                                Gửi duyệt
+                              </Button>
+                            </>
+                          ) : null}
+                          {canApprove && grn.status === "PENDING_APPROVAL" ? (
+                            <>
+                              <Button
+                                disabled={rejectBusyId === grn.id}
+                                onClick={() => {
+                                  setRejectTarget(grn);
+                                  setRejectReason("");
+                                }}
+                                size="sm"
+                                type="button"
+                                variant="destructive"
+                              >
+                                <XCircle data-icon="inline-start" />
+                                Từ chối
+                              </Button>
+                              <Button
+                                disabled={approveBusyId === grn.id}
+                                onClick={() => onApprove(grn.id)}
+                                size="sm"
+                                type="button"
+                              >
+                                {approveBusyId === grn.id ? (
+                                  <LoaderCircle
+                                    className="animate-spin"
+                                    data-icon="inline-start"
+                                  />
+                                ) : (
+                                  <ClipboardCheck data-icon="inline-start" />
+                                )}
+                                Duyệt
+                              </Button>
+                            </>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+      <Dialog
+        open={Boolean(rejectTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRejectTarget(undefined);
+            setRejectReason("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Từ chối phiếu nhập</DialogTitle>
+            <DialogDescription>
+              Ghi rõ lý do để Receiver chỉnh sửa và gửi duyệt lại
+              {rejectTarget ? ` cho ${rejectTarget.grnNumber}.` : "."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="grn-rejection-reason">Lý do từ chối</Label>
+            <Textarea
+              id="grn-rejection-reason"
+              onChange={(event) => setRejectReason(event.target.value)}
+              placeholder="Ví dụ: ảnh biên nhận chưa rõ, số thùng không khớp PO..."
+              rows={4}
+              value={rejectReason}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => setRejectTarget(undefined)}
+              type="button"
+              variant="outline"
+            >
+              Hủy
+            </Button>
+            <Button
+              disabled={
+                rejectReason.trim().length < 3 ||
+                rejectBusyId === rejectTarget?.id
+              }
+              onClick={() => {
+                if (!rejectTarget) return;
+                onReject(rejectTarget.id, rejectReason.trim());
+              }}
+              type="button"
+              variant="destructive"
+            >
+              {rejectBusyId === rejectTarget?.id ? (
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
+              ) : (
+                <XCircle data-icon="inline-start" />
               )}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
+              Xác nhận từ chối
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
-
 export function GoodsReceiptNoteDetailDialog({
   grn,
   onOpenChange,
@@ -230,7 +337,28 @@ export function GoodsReceiptNoteDetailDialog({
           <Info label="Ngày tạo" value={formatDate(grn.createdAt)} />
           <Info label="Ngày cập nhật" value={formatDate(grn.updatedAt)} />
           <Info label="Số dòng" value={String(grn.items.length)} />
+          <Info
+            label="Tổng số thùng"
+            value={String(grn.totalPackageCount ?? "—")}
+          />
+          <Info
+            label="Tổng thể tích"
+            value={
+              grn.totalVolumeCm3 == null
+                ? "—"
+                : `${(grn.totalVolumeCm3 / 1_000_000).toLocaleString("vi-VN", {
+                    maximumFractionDigits: 3,
+                  })} m³`
+            }
+          />
         </div>
+
+        {grn.rejectionReason ? (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
+            <div className="font-semibold text-destructive">Lý do từ chối</div>
+            <p className="mt-1 text-muted-foreground">{grn.rejectionReason}</p>
+          </div>
+        ) : null}
 
         <Table scrollable>
           <TableHeader>
@@ -257,7 +385,9 @@ export function GoodsReceiptNoteDetailDialog({
         <div className="space-y-2">
           <h3 className="text-sm font-semibold">
             Ảnh minh chứng{" "}
-            {grn.purchaseOrderNumber ? `cho ${grn.purchaseOrderNumber}` : "nhận hàng"}
+            {grn.purchaseOrderNumber
+              ? `cho ${grn.purchaseOrderNumber}`
+              : "nhận hàng"}
           </h3>
           <EvidenceImageGallery
             emptyLabel="Chưa có ảnh minh chứng"
@@ -334,4 +464,3 @@ function GoodsReceiptItemRow({ item }: { item: GoodsReceiptNoteItem }) {
     </TableRow>
   );
 }
-

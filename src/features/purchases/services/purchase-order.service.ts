@@ -12,6 +12,15 @@ export const PURCHASE_ORDER_STATUSES = [
 
 export type PurchaseOrderStatus = (typeof PURCHASE_ORDER_STATUSES)[number];
 
+export type PurchaseOrderPackageSpec = {
+  unit: string;
+  factor: number;
+  depthCm: number;
+  widthCm: number;
+  heightCm: number;
+  volumeCm3?: number;
+};
+
 export type PurchaseOrderItem = {
   itemId: string;
   sku: string;
@@ -19,6 +28,7 @@ export type PurchaseOrderItem = {
   expectedQty: number;
   unit: string;
   unitPrice: number;
+  packageSpec?: PurchaseOrderPackageSpec;
 };
 
 export type PurchaseOrderSupplierSummary = {
@@ -62,6 +72,7 @@ export type CreatePurchaseOrderItemInput = {
   expectedQty: number;
   unit: string;
   unitPrice?: number;
+  packageSpec?: Omit<PurchaseOrderPackageSpec, "volumeCm3">;
 };
 
 export type CreatePurchaseOrderInput = {
@@ -156,6 +167,7 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput) {
       expectedQty: item.expectedQty,
       unit: item.unit,
       unitPrice: item.unitPrice,
+      packageSpec: item.packageSpec,
     })),
   };
   const response = await apiClient.post<
@@ -173,6 +185,14 @@ export type ReceivingPurchaseOrderItem = {
   expectedQty: number;
   receivedQty: number;
   remainingQty: number;
+  packageSpec?: {
+    unit: string;
+    factor: number;
+    depthCm: number;
+    widthCm: number;
+    heightCm: number;
+    volumeCm3: number;
+  };
 };
 
 export type ReceivingPurchaseOrder = {

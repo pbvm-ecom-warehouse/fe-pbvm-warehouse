@@ -11,6 +11,79 @@ import type {
   WarehouseLayoutZone,
 } from "@/types/api";
 
+/**
+ * Đồng bộ số tầng vật lý với rack template. Tầng mới nhận kích thước usable
+ * theo template để backend có thể sinh khoang và tính gợi ý ngay sau khi lưu.
+ */
+export function reconcileRackShelves(
+  layout: WarehouseLayout,
+  createId: () => string = () => `tmp:${crypto.randomUUID()}`,
+): WarehouseLayout {
+  const template = layout.rackTemplate;
+  const shelves: WarehouseLayoutShelf[] = [];
+  const racks = layout.racks.map((rack) => {
+    const current = layout.shelves
+      .filter((shelf) => shelf.rackId === rack.id)
+      .sort((left, right) => left.level - right.level);
+    const isStagingRack =
+      current.length > 0 && current.every((shelf) => shelf.isStaging);
+    const byLevel = new Map(current.map((shelf) => [shelf.level, shelf]));
+    const rackShelves = Array.from(
+      { length: template.levelCount },
+      (_, index) => {
+        const level = index + 1;
+        const existing = byLevel.get(level);
+        if (existing) {
+          return {
+            ...existing,
+            innerDepth: existing.innerDepth ?? template.depthM * 100,
+            innerWidth: existing.innerWidth ?? template.widthM * 100,
+            innerHeight: existing.innerHeight ?? 100,
+          };
+        }
+        return {
+          id: createId(),
+          rackId: rack.id,
+          level,
+          code: `${rack.code}-T${level}`,
+          innerDepth: template.depthM * 100,
+          innerWidth: template.widthM * 100,
+          innerHeight: 100,
+          isStaging: isStagingRack,
+        };
+      },
+    );
+    shelves.push(...rackShelves);
+    return {
+      ...rack,
+      widthM: template.widthM,
+      depthM: template.depthM,
+      levelCount: template.levelCount,
+      bayCount: template.bayCount,
+      shelfCodes: rackShelves.map((shelf) => shelf.code),
+    };
+  });
+
+  return { ...layout, racks, shelves };
+}
+
+/**
+ * Chọn nhận tạm theo rack, không theo một tầng rời rạc. Mọi tầng của rack
+ * nhận tạm được loại khỏi kho lưu trữ; mọi rack còn lại luôn trở về storage.
+ */
+export function setStagingRack(
+  layout: WarehouseLayout,
+  rackId: string | null,
+): WarehouseLayout {
+  return {
+    ...layout,
+    shelves: layout.shelves.map((shelf) => ({
+      ...shelf,
+      isStaging: rackId !== null && shelf.rackId === rackId,
+    })),
+  };
+}
+
 function isTemporaryId(id: string) {
   return id.startsWith("tmp:");
 }

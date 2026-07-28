@@ -2,10 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LoaderCircle, MapPinned, Save } from "lucide-react";
+import { LoaderCircle, MapPinned } from "lucide-react";
 import { toast } from "sonner";
-
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -13,7 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -32,6 +29,7 @@ import {
   listPutawayTasks,
   type PutawayTaskItem,
 } from "@/features/warehouse-navigation/services/putaway-task.service";
+import { WarehouseOperationWorkspace } from "@/features/warehouse-navigation/components/warehouse-operation-workspace";
 
 type PutawayLine = {
   taskId: string;
@@ -45,72 +43,70 @@ export function GoodsReceiptPutawayPanel({ grn }: { grn: GoodsReceiptNote }) {
   const queryClient = useQueryClient();
   const canPutAway = hasAnyRole(user?.roles, ["ADMIN", "RECEIVER"]);
   const [selectedKey, setSelectedKey] = useState("");
-  const [itemBarcode, setItemBarcode] = useState("");
-  const [shelfCode, setShelfCode] = useState("");
-  const [quantity, setQuantity] = useState("");
-
   const tasksQuery = useQuery({
-    enabled: grn.status !== "DRAFT",
+    enabled: grn.status === "APPROVED",
     queryFn: () => listPutawayTasks({ grnId: grn.id, limit: 100, page: 1 }),
     queryKey: ["putaway-tasks", grn.id],
   });
-
   const lines = useMemo<PutawayLine[]>(
     () =>
       (tasksQuery.data?.data ?? []).flatMap((task) =>
         task.items
-          .filter((line) => (line.remainingQty ?? line.quantity) > 0)
+          .filter(
+            (line) =>
+              (line.remainingPackageCount ?? line.packageCount ?? 0) > 0,
+          )
           .map((line) => {
             const grnItem = grn.items.find(
               (item) => item.itemId === line.itemId,
             );
             const sku = grnItem?.sku ?? line.sku ?? "Chưa có SKU";
+            const remaining =
+              line.remainingPackageCount ?? line.packageCount ?? 0;
             return {
               taskId: task.id,
               line,
               sku,
-              label: `${sku} · còn ${line.remainingQty ?? line.quantity} ${grnItem?.unit ?? ""}`,
+              label: `${sku} · còn ${remaining} thùng`,
             };
           }),
       ),
     [grn.items, tasksQuery.data?.data],
   );
-
   const selected = lines.find(
-    (line) =>
-      `${line.taskId}:${line.line.itemId}:${line.line.lotId ?? "none"}` ===
+    (entry) =>
+      `${entry.taskId}:${entry.line.itemId}:${entry.line.lotId ?? "none"}` ===
       selectedKey,
   );
+  const remainingPackageCount =
+    selected?.line.remainingPackageCount ?? selected?.line.packageCount ?? 0;
   const suggestionQuery = useQuery({
     enabled: Boolean(selected),
     queryFn: () =>
       listPutawaySuggestionResult({
         sku: selected!.sku,
-        quantity: selected!.line.remainingQty ?? selected!.line.quantity,
+        packageCount: remainingPackageCount || 1,
+        lotId: selected!.line.lotId ?? undefined,
+        packageSpec: selected!.line.packageSpec,
       }),
     queryKey: [
       "putaway-suggestions",
       selected?.sku,
-      selected?.line.remainingQty,
+      selected?.line.lotId,
+      remainingPackageCount,
+      selected?.line.packageSpec?.volumeCm3,
     ],
   });
-
   const confirmMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (input: {
+      itemBarcode: string;
+      cellBarcode: string;
+      packageCount: number;
+      suggestedCellId?: string;
+    }) => {
       if (!selected) throw new Error("Chọn dòng cần cất hàng.");
-      const parsedQuantity = Number(quantity);
-      if (
-        !itemBarcode.trim() ||
-        !shelfCode.trim() ||
-        !Number.isFinite(parsedQuantity) ||
-        parsedQuantity <= 0
-      ) {
-        throw new Error("Quét mã hàng, mã kệ và nhập số lượng hợp lệ.");
-      }
       return confirmPutawayLine(selected.taskId, {
-        itemBarcode: itemBarcode.trim(),
-        shelfCode: shelfCode.trim(),
-        quantity: parsedQuantity,
+        ...input,
         ...(selected.line.lotId ? { lotId: selected.line.lotId } : {}),
       });
     },
@@ -119,159 +115,107 @@ export function GoodsReceiptPutawayPanel({ grn }: { grn: GoodsReceiptNote }) {
         getApiErrorMessage(error) ??
           (error instanceof Error ? error.message : "Không thể lưu cất hàng."),
       ),
-    onSuccess: () => {
-      toast.success("Đã lưu vị trí cất hàng.");
-      setItemBarcode("");
-      setShelfCode("");
-      setQuantity("");
-      void queryClient.invalidateQueries({
-        queryKey: ["putaway-tasks", grn.id],
-      });
+    onSuccess: async () => {
+      toast.success("Đã lưu đúng khoang cất hàng.");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["putaway-tasks", grn.id] }),
+        queryClient.invalidateQueries({ queryKey: ["goods-receipt-notes"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["warehouse-operation", "rack-cells"],
+        }),
+      ]);
     },
   });
 
-  if (grn.status === "DRAFT") {
+  if (grn.status !== "APPROVED")
     return (
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Cất hàng</CardTitle>
           <CardDescription>
-            Xác nhận nhận hàng trước; hệ thống sẽ sinh task cất hàng ngay sau
-            đó.
+            Chỉ khi Admin hoặc Manager duyệt phiếu, hệ thống mới ghi hàng vào
+            khu nhận tạm và sinh phiếu cất hàng.
           </CardDescription>
         </CardHeader>
       </Card>
     );
-  }
-
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <MapPinned className="size-4 text-primary" />
-          Cất hàng theo phiếu nhập
-        </CardTitle>
-        <CardDescription>
-          {canPutAway
-            ? "Chọn dòng, quét mã hàng và mã kệ để lưu vị trí."
-            : "Bạn chỉ có thể theo dõi gợi ý và tiến độ cất hàng."}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {tasksQuery.isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />
-            Đang tải task cất hàng...
-          </div>
-        ) : null}
-        {!tasksQuery.isLoading && lines.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Không còn dòng nào chờ cất hàng.
-          </p>
-        ) : null}
-        {lines.length > 0 ? (
-          <div className="space-y-2">
-            <Label>Dòng phiếu nhập</Label>
-            <Select
-              value={selectedKey}
-              onValueChange={(value) => {
-                setSelectedKey(value);
-                setQuantity("");
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Chọn dòng cần cất" />
-              </SelectTrigger>
-              <SelectContent>
-                {lines.map((line) => {
-                  const key = `${line.taskId}:${line.line.itemId}:${line.line.lotId ?? "none"}`;
-                  return (
-                    <SelectItem key={key} value={key}>
-                      {line.label}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          </div>
-        ) : null}
-        {selected ? (
-          <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
-            <div className="text-sm font-medium">Gợi ý kệ từ WMS</div>
-            {suggestionQuery.isLoading ? (
-              <div className="text-sm text-muted-foreground">
-                Đang lấy gợi ý...
-              </div>
-            ) : null}
-            {suggestionQuery.data?.warning ? (
-              <div className="text-sm text-amber-700">
-                Cảnh báo: {suggestionQuery.data.warning}
-              </div>
-            ) : null}
-            <div className="grid gap-2 sm:grid-cols-2">
-              {suggestionQuery.data?.suggestions.map((suggestion) => (
-                <button
-                  className="rounded-md border p-3 text-left text-sm hover:bg-muted"
-                  key={suggestion.shelfCode}
-                  onClick={() => setShelfCode(suggestion.shelfCode)}
-                  type="button"
-                >
-                  <div className="font-medium">{suggestion.shelfCode}</div>
-                  <div className="text-muted-foreground">
-                    Sức chứa còn lại: {suggestion.capacity}
-                  </div>
-                </button>
-              ))}
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <MapPinned className="size-4 text-primary" />
+            Bắt đầu cất hàng
+          </CardTitle>
+          <CardDescription>
+            {canPutAway
+              ? "Chọn dòng hàng để xem đường đi, mở rack và quét xác nhận khoang."
+              : "Bạn có thể xem tiến độ nhưng không có quyền xác nhận cất hàng."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {tasksQuery.isLoading ? (
+            <div className="text-sm text-muted-foreground">
+              <LoaderCircle className="mr-2 inline size-4 animate-spin" />
+              Đang tải phiếu cất hàng...
             </div>
-          </div>
-        ) : null}
-        {selected && canPutAway ? (
-          <div className="grid gap-3 sm:grid-cols-3">
+          ) : lines.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Tất cả dòng đã được cất xong.
+            </p>
+          ) : (
             <div className="space-y-2">
-              <Label>Mã hàng quét</Label>
-              <Input
-                onChange={(event) => setItemBarcode(event.target.value)}
-                placeholder="Quét barcode mặt hàng"
-                value={itemBarcode}
-              />
+              <Label>Dòng hàng cần cất</Label>
+              <Select value={selectedKey} onValueChange={setSelectedKey}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn SKU/lô cần cất" />
+                </SelectTrigger>
+                <SelectContent>
+                  {lines.map((entry) => {
+                    const key = `${entry.taskId}:${entry.line.itemId}:${entry.line.lotId ?? "none"}`;
+                    return (
+                      <SelectItem key={key} value={key}>
+                        {entry.label}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Mã kệ quét</Label>
-              <Input
-                onChange={(event) => setShelfCode(event.target.value)}
-                placeholder="Quét barcode kệ"
-                value={shelfCode}
-              />
+          )}
+        </CardContent>
+      </Card>
+      {selected ? (
+        <>
+          <WarehouseOperationWorkspace
+            key={selectedKey}
+            operation="PUTAWAY"
+            sku={selected.sku}
+            remainingPackageCount={remainingPackageCount}
+            suggestions={(suggestionQuery.data?.suggestions ?? []).map(
+              (item) => ({ ...item }),
+            )}
+            suggestionsLoading={suggestionQuery.isLoading}
+            suggestionsError={suggestionQuery.error}
+            pending={confirmMutation.isPending}
+            onConfirm={async (value) => {
+              if (!canPutAway)
+                throw new Error("Bạn không có quyền xác nhận cất hàng.");
+              await confirmMutation.mutateAsync({
+                itemBarcode: value.itemBarcode,
+                cellBarcode: value.cellBarcode,
+                packageCount: value.packageCount,
+                suggestedCellId: value.suggestedCellId,
+              });
+            }}
+          />
+          {suggestionQuery.data?.warning ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              Cảnh báo gợi ý: {suggestionQuery.data.warning}
             </div>
-            <div className="space-y-2">
-              <Label>Số lượng</Label>
-              <Input
-                min="1"
-                onChange={(event) => setQuantity(event.target.value)}
-                type="number"
-                value={quantity}
-              />
-            </div>
-            <div className="sm:col-span-3">
-              <Button
-                disabled={confirmMutation.isPending}
-                onClick={() => confirmMutation.mutate()}
-                type="button"
-              >
-                {confirmMutation.isPending ? (
-                  <LoaderCircle
-                    className="animate-spin"
-                    data-icon="inline-start"
-                  />
-                ) : (
-                  <Save data-icon="inline-start" />
-                )}
-                Lưu vị trí cất
-              </Button>
-            </div>
-          </div>
-        ) : null}
-      </CardContent>
-    </Card>
+          ) : null}
+        </>
+      ) : null}
+    </div>
   );
 }

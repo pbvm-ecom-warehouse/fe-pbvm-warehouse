@@ -58,6 +58,7 @@ vi.mock(
       confirmGoodsReceiptNote: vi.fn(),
       createGoodsReceiptNote: vi.fn(),
       listGoodsReceiptNotes: vi.fn(),
+      updateGoodsReceiptNoteItems: vi.fn(),
       uploadGoodsReceiptNoteImage: vi.fn(),
     };
   },
@@ -265,6 +266,14 @@ describe("purchase and supplier UX", () => {
               expectedQty: 10,
               receivedQty: 0,
               remainingQty: 10,
+              packageSpec: {
+                unit: "thùng",
+                factor: 5,
+                depthCm: 40,
+                widthCm: 30,
+                heightCm: 25,
+                volumeCm3: 30000,
+              },
             },
           ],
         },
@@ -300,6 +309,7 @@ describe("purchase and supplier UX", () => {
       sku: "SKU-001",
       type: "CUP_BLANK",
       unit: "cái",
+      width: 30,
       updatedAt: "2026-07-23T00:00:00.000Z",
     });
     mockedListWarehouseItems.mockResolvedValue({
@@ -371,6 +381,9 @@ describe("purchase and supplier UX", () => {
     renderWithQueryClient(<SupplierItemsClient />);
 
     fireEvent.click(
+      await screen.findByRole("button", { name: "Thêm mặt hàng NCC" }),
+    );
+    fireEvent.click(
       await screen.findByRole("combobox", { name: "Nhà cung cấp" }),
     );
     fireEvent.click(
@@ -430,6 +443,9 @@ describe("purchase and supplier UX", () => {
     mockedGetWarehouseItem.mockImplementation(async (itemId) => ({
       createdAt: "2026-07-01T00:00:00.000Z",
       id: itemId,
+      altUnits: [{ unit: "thùng", factor: 24 }],
+      depth: 40,
+      height: 25,
       isActive: true,
       isPerishable: false,
       name:
@@ -439,6 +455,7 @@ describe("purchase and supplier UX", () => {
       sku: itemId === "item-inactive" ? "SKU-INACTIVE" : "SKU-001",
       type: "CUP_BLANK",
       unit: "cái",
+      width: 30,
       updatedAt: "2026-07-23T00:00:00.000Z",
     }));
 
@@ -488,12 +505,17 @@ describe("purchase and supplier UX", () => {
     expect(screen.getByLabelText("Số lượng dòng 1")).toHaveValue(24);
     expect(screen.getByLabelText("Đơn vị dòng 1")).toHaveValue("cái");
     expect(screen.getByLabelText("Đơn giá dòng 1")).toHaveValue(15000);
+    expect(screen.getByLabelText("Số đơn vị / thùng")).toHaveValue(24);
+    expect(screen.getByLabelText("Sâu (cm)")).toHaveValue(40);
+    expect(screen.getByLabelText("Rộng (cm)")).toHaveValue(30);
+    expect(screen.getByLabelText("Cao (cm)")).toHaveValue(25);
+    expect(screen.getByText("30.000 cm³")).toBeVisible();
     expect(mockedListWarehouseItems).not.toHaveBeenCalled();
   });
 
   it("keeps PO detail read-only and gives managers only GRN approval", async () => {
     mockedListGrns.mockResolvedValue({
-      data: [goodsReceiptNote],
+      data: [{ ...goodsReceiptNote, status: "PENDING_APPROVAL" }],
       limit: 50,
       page: 1,
       total: 1,
@@ -527,7 +549,7 @@ describe("purchase and supplier UX", () => {
       screen.queryByRole("button", { name: "Tạo phiếu nhập" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Xác nhận" }),
+      screen.queryByRole("button", { name: "Gửi duyệt" }),
     ).not.toBeInTheDocument();
   });
 
@@ -549,26 +571,35 @@ describe("purchase and supplier UX", () => {
     );
 
     expect(
-      await screen.findByRole("button", { name: "Xác nhận" }),
+      await screen.findByRole("button", { name: "Gửi duyệt" }),
     ).toBeVisible();
     expect(
       screen.queryByRole("button", { name: "Duyệt" }),
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Tạo phiếu nhập" }));
 
-    expect(screen.getByText("Đơn mua", { selector: "label" })).toBeVisible();
+    const createGrnDialog = await screen.findByRole("dialog", {
+      name: "Tạo phiếu nhập",
+    });
     expect(
-      await screen.findByText("Tên mặt hàng", { selector: "label" }),
+      within(createGrnDialog).getByText("Đơn mua", { selector: "label" }),
     ).toBeVisible();
-    expect(screen.getByLabelText("Tên mặt hàng phiếu nhập dòng 1")).toHaveValue(
-      "Ly nhựa 500 ml",
-    );
-    expect(screen.getByText("SKU", { selector: "label" })).toBeVisible();
+    expect(within(createGrnDialog).getByText("Ly nhựa 500 ml")).toBeVisible();
+    expect(within(createGrnDialog).getByText("SKU-001")).toBeVisible();
     expect(
-      screen.getByText("Số lượng thực nhập", { selector: "label" }),
+      within(createGrnDialog).getByText("Số lượng thực nhập", {
+        selector: "label",
+      }),
     ).toBeVisible();
-    expect(screen.getByText("Đơn vị", { selector: "label" })).toBeVisible();
-    expect(screen.getByText("Mã lô", { selector: "label" })).toBeVisible();
+    expect(
+      within(createGrnDialog).getByText("Số thùng", { selector: "label" }),
+    ).toBeVisible();
+    expect(
+      within(createGrnDialog).getByText("Đơn vị", { selector: "label" }),
+    ).toBeVisible();
+    expect(
+      within(createGrnDialog).getByText("Mã lô", { selector: "label" }),
+    ).toBeVisible();
     // isPerishable chỉ tra được sau khi getWarehouseItem (query riêng, enabled khi dialog mở)
     // resolve xong — chờ input trở thành required thay vì assert ngay lập tức.
     await waitFor(() =>
@@ -624,11 +655,49 @@ describe("purchase and supplier UX", () => {
       await screen.findByRole("button", { name: "Tạo phiếu nhập" }),
     ).toBeVisible();
     expect(
-      await screen.findByRole("button", { name: "Xác nhận" }),
+      await screen.findByRole("button", { name: "Gửi duyệt" }),
     ).toBeVisible();
     expect(
       screen.queryByRole("button", { name: "Duyệt" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("lets receivers edit package counts on a rejected GRN before resubmitting", async () => {
+    sessionRoleState.roles = ["RECEIVER"];
+    mockedListGrns.mockResolvedValue({
+      data: [
+        {
+          ...goodsReceiptNote,
+          rejectionReason: "Số thùng chưa khớp ảnh",
+          status: "REJECTED",
+          items: [
+            {
+              ...goodsReceiptNote.items[0],
+              packageCount: 2,
+            },
+          ],
+        },
+      ],
+      limit: 50,
+      page: 1,
+      total: 1,
+    });
+
+    renderWithQueryClient(<PurchaseOrdersClient />);
+    const grnTab = await screen.findByRole("tab", { name: "Phiếu nhập" });
+    fireEvent.mouseDown(grnTab, { button: 0, ctrlKey: false });
+    fireEvent.click(grnTab);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Chỉnh sửa" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Chỉnh sửa phiếu nhập",
+    });
+    expect(
+      within(dialog).getByLabelText("Số thùng thực nhập dòng 1"),
+    ).toHaveValue(2);
+    expect(
+      within(dialog).getByRole("button", { name: "Lưu chỉnh sửa" }),
+    ).toBeVisible();
   });
 
   it("shows PO and supplier context around GRN evidence and uploads images after creating the GRN", async () => {
