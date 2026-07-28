@@ -45,29 +45,31 @@ export function GoodsReceiptPutawayPanel({ grn }: { grn: GoodsReceiptNote }) {
   const [selectedKey, setSelectedKey] = useState("");
   const tasksQuery = useQuery({
     enabled: grn.status === "APPROVED",
-    queryFn: () => listPutawayTasks({ grnId: grn.id, limit: 100, page: 1 }),
+    queryFn: () => listPutawayTasks({ status: "PENDING", limit: 100, page: 1 }),
     queryKey: ["putaway-tasks", grn.id],
   });
   const lines = useMemo<PutawayLine[]>(
     () =>
-      (tasksQuery.data?.data ?? []).flatMap((task) =>
-        task.items
-          .filter((line) => (line.remainingQty ?? line.quantity ?? 0) > 0)
-          .map((line) => {
-            const grnItem = grn.items.find(
-              (item) => item.itemId === line.itemId,
-            );
-            const sku = grnItem?.sku ?? line.sku ?? "Chưa có SKU";
-            const remaining = line.remainingQty ?? line.quantity ?? 0;
-            return {
-              taskId: task.id,
-              line,
-              sku,
-              label: `${sku} · còn ${remaining} thùng`,
-            };
-          }),
-      ),
-    [grn.items, tasksQuery.data?.data],
+      (tasksQuery.data?.data ?? [])
+        .filter((task) => task.grnId === grn.id)
+        .flatMap((task) =>
+          task.items
+            .filter((line) => (line.remainingQty ?? line.quantity ?? 0) > 0)
+            .map((line) => {
+              const grnItem = grn.items.find(
+                (item) => item.itemId === line.itemId,
+              );
+              const sku = grnItem?.sku ?? line.sku ?? "Chưa có SKU";
+              const remaining = line.remainingQty ?? line.quantity ?? 0;
+              return {
+                taskId: task.id,
+                line,
+                sku,
+                label: `${sku} · còn ${remaining} thùng`,
+              };
+            }),
+        ),
+    [grn.id, grn.items, tasksQuery.data?.data],
   );
   const selected = lines.find(
     (entry) =>
@@ -202,6 +204,7 @@ export function GoodsReceiptPutawayPanel({ grn }: { grn: GoodsReceiptNote }) {
             operation="PUTAWAY"
             sku={selected.sku}
             remainingPackageCount={remainingPackageCount}
+            packageSpec={selected.line.packageSpec}
             suggestions={(suggestionQuery.data?.suggestions ?? []).map(
               (item) => ({ ...item }),
             )}

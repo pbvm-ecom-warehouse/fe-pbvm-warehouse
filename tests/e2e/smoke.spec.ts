@@ -1137,7 +1137,7 @@ test("picker follows the suggested cell and confirms whole-package issue", async
   expect(confirmBody).toMatchObject({
     itemBarcode: "2000000000015",
     cellBarcode: "R01-T1-B1",
-    packageCount: 2,
+    quantity: 2,
     suggestedCellId: "cell-1",
     lotId: "lot-1",
   });

@@ -38,7 +38,6 @@ export type QueryPutawayTasksInput = {
   status?: PutawayTaskStatus | "ALL";
   page?: number;
   limit?: number;
-  grnId?: string;
 };
 
 export type ConfirmPutawayLineInput = {
@@ -65,7 +64,6 @@ export async function listPutawayTasks(input: QueryPutawayTasksInput = {}) {
         page: input.page,
         status:
           input.status && input.status !== "ALL" ? input.status : undefined,
-        grnId: input.grnId,
       },
     },
   );

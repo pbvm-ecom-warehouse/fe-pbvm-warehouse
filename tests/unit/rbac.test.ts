@@ -53,6 +53,9 @@ describe("WMS RBAC helpers", () => {
     );
 
     expect(receiverRoutes).toContain("/goods-receipt-notes");
+    expect(receiverRoutes).toContain("/putaway-tasks");
+    expect(hasRouteAccess("/putaway-tasks", ["MANAGER"])).toBe(true);
+    expect(hasRouteAccess("/putaway-tasks", ["PICKER"])).toBe(false);
     expect(receiverRoutes).not.toContain("/suppliers");
     expect(receiverRoutes).toContain("/goods-returns");
     expect(receiverRoutes).not.toContain("/transfers");

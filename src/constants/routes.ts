@@ -5,6 +5,7 @@ import {
   Home,
   MapPinned,
   PackageCheck,
+  PackagePlus,
   PackageOpen,
   Repeat2,
   RotateCcw,
@@ -73,6 +74,12 @@ export const dashboardRoutes = [
     label: "Nhận hàng",
     icon: ClipboardCheck,
     allowedRoles: getRouteAllowedRoles("/goods-receipt-notes"),
+  },
+  {
+    href: "/putaway-tasks",
+    label: "Cất hàng",
+    icon: PackagePlus,
+    allowedRoles: getRouteAllowedRoles("/putaway-tasks"),
   },
   {
     href: "/goods-issues",
