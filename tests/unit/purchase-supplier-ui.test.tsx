@@ -443,7 +443,7 @@ describe("purchase and supplier UX", () => {
     mockedGetWarehouseItem.mockImplementation(async (itemId) => ({
       createdAt: "2026-07-01T00:00:00.000Z",
       id: itemId,
-      altUnits: [{ unit: "thùng", factor: 24 }],
+      altUnits: [{ unit: "cái", factor: 24 }],
       depth: 40,
       height: 25,
       isActive: true,
@@ -454,7 +454,7 @@ describe("purchase and supplier UX", () => {
           : "Ly nhựa 500 ml",
       sku: itemId === "item-inactive" ? "SKU-INACTIVE" : "SKU-001",
       type: "CUP_BLANK",
-      unit: "cái",
+      unit: "thùng",
       width: 30,
       updatedAt: "2026-07-23T00:00:00.000Z",
     }));
@@ -470,7 +470,9 @@ describe("purchase and supplier UX", () => {
     );
     expect(screen.getByText("Mặt hàng", { selector: "label" })).toBeVisible();
     expect(screen.getByText("SKU", { selector: "label" })).toBeVisible();
-    expect(screen.getByText("Số lượng", { selector: "label" })).toBeVisible();
+    expect(
+      screen.getByText("Số thùng đặt", { selector: "label" }),
+    ).toBeVisible();
     expect(screen.getByText("Đơn vị", { selector: "label" })).toBeVisible();
     expect(screen.getByText("Đơn giá", { selector: "label" })).toBeVisible();
     expect(screen.getByLabelText("Ngày dự kiến").parentElement).not.toHaveClass(
@@ -502,14 +504,15 @@ describe("purchase and supplier UX", () => {
       screen.getByRole("combobox", { name: "Mặt hàng dòng 1" }),
     ).toHaveTextContent("Ly nhựa 500 ml");
     expect(screen.getByLabelText("SKU dòng 1")).toHaveValue("SKU-001");
-    expect(screen.getByLabelText("Số lượng dòng 1")).toHaveValue(24);
-    expect(screen.getByLabelText("Đơn vị dòng 1")).toHaveValue("cái");
+    expect(screen.getByLabelText("Số thùng đặt dòng 1")).toHaveValue(24);
+    expect(screen.getByLabelText("Đơn vị dòng 1")).toHaveValue("thùng");
     expect(screen.getByLabelText("Đơn giá dòng 1")).toHaveValue(15000);
-    expect(screen.getByLabelText("Số đơn vị / thùng")).toHaveValue(24);
-    expect(screen.getByLabelText("Sâu (cm)")).toHaveValue(40);
-    expect(screen.getByLabelText("Rộng (cm)")).toHaveValue(30);
-    expect(screen.getByLabelText("Cao (cm)")).toHaveValue(25);
-    expect(screen.getByText("30.000 cm³")).toBeVisible();
+    expect(
+      screen.queryByLabelText("Số đơn vị / thùng"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Sâu (cm)")).not.toBeInTheDocument();
+    expect(screen.getByText(/1 thùng = 24 cái/)).toBeVisible();
+    expect(screen.getByText(/40 × 30 × 25 cm/)).toBeVisible();
     expect(mockedListWarehouseItems).not.toHaveBeenCalled();
   });
 
@@ -587,16 +590,16 @@ describe("purchase and supplier UX", () => {
     expect(within(createGrnDialog).getByText("Ly nhựa 500 ml")).toBeVisible();
     expect(within(createGrnDialog).getByText("SKU-001")).toBeVisible();
     expect(
-      within(createGrnDialog).getByText("Số lượng thực nhập", {
+      within(createGrnDialog).getByText("Số thùng thực nhập", {
         selector: "label",
       }),
     ).toBeVisible();
     expect(
-      within(createGrnDialog).getByText("Số thùng", { selector: "label" }),
-    ).toBeVisible();
+      within(createGrnDialog).queryByLabelText("Số lượng thực nhập dòng 1"),
+    ).not.toBeInTheDocument();
     expect(
-      within(createGrnDialog).getByText("Đơn vị", { selector: "label" }),
-    ).toBeVisible();
+      within(createGrnDialog).queryByLabelText("Đơn vị phiếu nhập dòng 1"),
+    ).not.toBeInTheDocument();
     expect(
       within(createGrnDialog).getByText("Mã lô", { selector: "label" }),
     ).toBeVisible();

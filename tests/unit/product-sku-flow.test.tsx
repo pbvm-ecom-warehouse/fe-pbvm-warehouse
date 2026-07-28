@@ -436,4 +436,34 @@ describe("product SKU creation", () => {
     expect(screen.getByLabelText(/Ảnh mặt hàng/)).toBeVisible();
     expect(screen.getByRole("button", { name: "Tạo mặt hàng" })).toBeDisabled();
   });
+
+  it("uses thùng as the base unit and still allows cái as an alternate unit", async () => {
+    mockedGetSkuTemplate.mockResolvedValue({
+      fields: [],
+      itemType: "CUP_BLANK",
+      kind: "template",
+      templateId: "CUP_BLANK",
+    });
+
+    renderWithQueryClient(
+      <CreateWarehouseItemPanel canManage onCreated={vi.fn()} />,
+    );
+
+    expect(
+      screen.getByRole("combobox", { name: "Đơn vị cơ sở" }),
+    ).toHaveTextContent("thùng");
+
+    fireEvent.click(screen.getByRole("button", { name: "Thêm đơn vị" }));
+
+    const alternateUnitSelect = screen.getByRole("combobox", {
+      name: "Đơn vị",
+    });
+    expect(alternateUnitSelect).toHaveTextContent("cái");
+    expect(screen.getByLabelText("Số cái trong 1 thùng")).toBeVisible();
+
+    fireEvent.click(alternateUnitSelect);
+    expect(screen.getByRole("option", { name: "kg" })).toBeVisible();
+    expect(screen.getByRole("option", { name: "lít" })).toBeVisible();
+    expect(screen.getByRole("option", { name: "ml" })).toBeVisible();
+  });
 });

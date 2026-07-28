@@ -24,7 +24,6 @@ import {
   validateEvidenceImageFiles,
 } from "@/components/evidence-images";
 import { Barcode } from "@/components/barcode";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Command,
   CommandEmpty,
@@ -124,7 +123,7 @@ function initialForm(): CreateForm {
     nearExpiryDays: "",
     selections: {},
     type: "CUP_BLANK",
-    unit: "cái",
+    unit: "thùng",
     width: "",
   };
 }
@@ -427,13 +426,9 @@ export function CreateWarehouseItemPanel({
             <SelectField
               label="Đơn vị cơ sở"
               value={form.unit}
-              onChange={(unit) => setForm((current) => ({ ...current, unit }))}
+              onChange={() => undefined}
             >
-              {WAREHOUSE_UNITS.map((unit) => (
-                <SelectItem key={unit} value={unit}>
-                  {unit}
-                </SelectItem>
-              ))}
+              <SelectItem value="thùng">thùng</SelectItem>
             </SelectField>
           </div>
         </section>
@@ -978,7 +973,7 @@ function AltUnitsEditor({
           size="sm"
           type="button"
           variant="outline"
-          onClick={() => onChange([...value, { factor: "", unit: "thùng" }])}
+          onClick={() => onChange([...value, { factor: "", unit: "cái" }])}
         >
           <Plus data-icon="inline-start" /> Thêm đơn vị
         </Button>
@@ -1004,7 +999,7 @@ function AltUnitsEditor({
           </SelectField>
           <NumericField
             id={`create-alt-factor-${index}`}
-            label="Hệ số quy đổi"
+            label={`Số ${row.unit} trong 1 thùng`}
             value={row.factor}
             onChange={(factor) =>
               onChange(
