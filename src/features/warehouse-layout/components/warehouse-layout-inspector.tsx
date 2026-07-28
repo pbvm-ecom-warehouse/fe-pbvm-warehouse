@@ -283,8 +283,7 @@ export function WarehouseLayoutInspector({
             />
           </div>
 
-          {(selection.kind === "zone" || selection.kind === "aisle") &&
-          "heightM" in item ? (
+          {selection.kind === "zone" && "heightM" in item ? (
             <div className="grid grid-cols-2 gap-3">
               <NumberField
                 disabled={!canEdit}
@@ -295,10 +294,45 @@ export function WarehouseLayoutInspector({
               />
               <NumberField
                 disabled={!canEdit}
-                label="Cao (m)"
+                label="Dài (m)"
                 min={0.1}
                 onChange={(heightM) => onPatch({ heightM })}
                 value={item.heightM}
+              />
+            </div>
+          ) : null}
+
+          {selection.kind === "aisle" && "heightM" in item ? (
+            <div className="grid grid-cols-2 gap-3">
+              <NumberField
+                disabled={!canEdit}
+                label="Dài (m)"
+                min={0.1}
+                onChange={(lengthM) =>
+                  onPatch(
+                    item.widthM >= item.heightM
+                      ? { widthM: lengthM }
+                      : { heightM: lengthM },
+                  )
+                }
+                value={
+                  item.widthM >= item.heightM ? item.widthM : item.heightM
+                }
+              />
+              <NumberField
+                disabled={!canEdit}
+                label="Rộng (m)"
+                min={0.1}
+                onChange={(widthM) =>
+                  onPatch(
+                    item.widthM >= item.heightM
+                      ? { heightM: widthM }
+                      : { widthM },
+                  )
+                }
+                value={
+                  item.widthM >= item.heightM ? item.heightM : item.widthM
+                }
               />
             </div>
           ) : null}
