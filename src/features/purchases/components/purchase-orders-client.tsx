@@ -964,12 +964,27 @@ export function PurchaseOrdersClient({
           size="5xl"
           className="max-h-[90dvh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-0"
         >
-          <DialogHeader className="border-b px-6 py-4 pr-12">
+          <DialogHeader className="sr-only">
             <DialogTitle>Tạo đơn mua</DialogTitle>
             <DialogDescription>
               Thêm đơn đặt hàng mới vào hệ thống.
             </DialogDescription>
           </DialogHeader>
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b bg-muted/30 px-6 py-5 pr-14 sm:px-8 sm:py-6 sm:pr-16">
+            <div className="flex items-center gap-3">
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <ShoppingCart className="size-5" />
+              </div>
+              <div>
+                <div className="text-lg font-bold tracking-tight">
+                  ĐƠN ĐẶT HÀNG
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Đơn mới — mã đơn sẽ được cấp sau khi lưu
+                </div>
+              </div>
+            </div>
+          </div>
           <form
             className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden"
             onSubmit={handleCreate}
@@ -978,28 +993,36 @@ export function PurchaseOrdersClient({
               className="min-h-0 space-y-4 overflow-x-hidden overflow-y-auto px-6 py-4"
               data-testid="purchase-order-dialog-body"
             >
-              <div className="grid gap-3 md:grid-cols-2">
-                <SelectField
-                  disabled={!canCreatePurchaseOrder}
-                  label="Nhà cung cấp"
-                  value={createForm.supplierId}
-                  onChange={(supplierId) => {
-                    setCreateForm((current) => ({
-                      ...current,
-                      supplierId,
-                    }));
-                    setItemForms([defaultItemForm]);
-                  }}
-                >
-                  {suppliers.map((supplier) => (
-                    <SelectItem key={supplier.id} value={supplier.id}>
-                      {supplier.name}
-                    </SelectItem>
-                  ))}
-                </SelectField>
+              <div className="grid gap-6 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="po-expected-date">Ngày dự kiến</Label>
+                  <SelectField
+                    disabled={!canCreatePurchaseOrder}
+                    label="Nhà cung cấp"
+                    value={createForm.supplierId}
+                    onChange={(supplierId) => {
+                      setCreateForm((current) => ({
+                        ...current,
+                        supplierId,
+                      }));
+                      setItemForms([defaultItemForm]);
+                    }}
+                  >
+                    {suppliers.map((supplier) => (
+                      <SelectItem key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                      </SelectItem>
+                    ))}
+                  </SelectField>
+                </div>
+                <div className="space-y-2 sm:justify-self-end sm:text-right">
+                  <Label
+                    className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    htmlFor="po-expected-date"
+                  >
+                    Ngày dự kiến
+                  </Label>
                   <Input
+                    className="sm:ml-auto sm:max-w-[220px]"
                     id="po-expected-date"
                     type="date"
                     value={createForm.expectedDate}
@@ -1013,23 +1036,11 @@ export function PurchaseOrdersClient({
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="po-note">Ghi chú</Label>
-                <Textarea
-                  id="po-note"
-                  value={createForm.note}
-                  onChange={(event) =>
-                    setCreateForm((current) => ({
-                      ...current,
-                      note: event.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              <div className="space-y-3">
+              <div className="space-y-3 border-t pt-4">
                 <div className="flex items-center justify-between gap-3">
-                  <Label>Hàng đặt</Label>
+                  <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Hàng đặt
+                  </Label>
                   <Button
                     onClick={addItemRow}
                     size="sm"
@@ -1040,20 +1051,82 @@ export function PurchaseOrdersClient({
                     Thêm dòng
                   </Button>
                 </div>
-                {itemForms.map((item, index) => (
-                  <PurchaseOrderItemFields
-                    availableItems={supplierWarehouseItems}
-                    disabled={!createForm.supplierId}
-                    index={index}
-                    item={item}
-                    key={index}
-                    loadError={supplierWarehouseItemsError}
-                    loading={supplierWarehouseItemsLoading}
-                    onChange={(next) => updateItemForm(index, next)}
-                    onRemove={() => removeItemRow(index)}
-                    supplierItemByItemId={supplierItemByItemId}
-                  />
-                ))}
+                <div className="overflow-hidden rounded-lg border">
+                  <Table scrollable>
+                    <TableHeader>
+                      <TableRow className="bg-muted/40 hover:bg-muted/40">
+                        <TableHead className="w-10">#</TableHead>
+                        <TableHead>Mặt hàng</TableHead>
+                        <TableHead className="w-28">SKU</TableHead>
+                        <TableHead className="w-24 text-right">SL</TableHead>
+                        <TableHead className="w-20 text-center">
+                          Đơn vị
+                        </TableHead>
+                        <TableHead className="w-32 text-right">
+                          Đơn giá
+                        </TableHead>
+                        <TableHead className="w-32 text-right">
+                          Thành tiền
+                        </TableHead>
+                        <TableHead className="w-10" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {itemForms.map((item, index) => (
+                        <PurchaseOrderItemFields
+                          availableItems={supplierWarehouseItems}
+                          disabled={!createForm.supplierId}
+                          index={index}
+                          item={item}
+                          key={index}
+                          loadError={supplierWarehouseItemsError}
+                          loading={supplierWarehouseItemsLoading}
+                          onChange={(next) => updateItemForm(index, next)}
+                          onRemove={() => removeItemRow(index)}
+                          supplierItemByItemId={supplierItemByItemId}
+                        />
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <div className="flex justify-end">
+                  <div className="flex w-full max-w-xs items-center justify-between rounded-lg border bg-muted/20 px-4 py-3">
+                    <span className="text-sm font-medium text-muted-foreground">
+                      Tổng cộng
+                    </span>
+                    <span className="text-base font-bold text-primary">
+                      {formatCurrency(
+                        itemForms.reduce(
+                          (sum, item) =>
+                            sum +
+                            (Number(item.expectedQty) || 0) *
+                              (Number(item.unitPrice) || 0),
+                          0,
+                        ),
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2 border-t pt-4">
+                <Label
+                  className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                  htmlFor="po-note"
+                >
+                  Ghi chú
+                </Label>
+                <Textarea
+                  id="po-note"
+                  placeholder="Ghi chú thêm cho đơn hàng này (không bắt buộc)"
+                  value={createForm.note}
+                  onChange={(event) =>
+                    setCreateForm((current) => ({
+                      ...current,
+                      note: event.target.value,
+                    }))
+                  }
+                />
               </div>
             </div>
 
@@ -1425,11 +1498,15 @@ function PurchaseOrderItemFields({
   supplierItemByItemId: Map<string, SupplierItem>;
 }) {
   const itemId = `purchase-item-${index}`;
+  const lineTotal =
+    (Number(item.expectedQty) || 0) * (Number(item.unitPrice) || 0);
 
   return (
-    <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-12">
-      <div className="min-w-0 space-y-2 sm:col-span-2 lg:col-span-3">
-        <Label htmlFor={`${itemId}-picker`}>Mặt hàng</Label>
+    <TableRow>
+      <TableCell className="align-middle text-muted-foreground">
+        {index + 1}
+      </TableCell>
+      <TableCell className="min-w-52 align-middle">
         <WarehouseItemCombobox
           disabled={disabled}
           id={`${itemId}-picker`}
@@ -1463,23 +1540,29 @@ function PurchaseOrderItemFields({
             });
           }}
         />
-      </div>
-      <div className="min-w-0 space-y-2 lg:col-span-3">
-        <Label htmlFor={`${itemId}-sku`}>SKU</Label>
+        {item.sku ? (
+          <div className="mt-1 text-xs text-muted-foreground">
+            1 thùng = {item.packageFactor || "1"} {item.packageUnit || "cái"}{" "}
+            · {item.itemDepth ?? "—"} × {item.itemWidth ?? "—"} ×{" "}
+            {item.itemHeight ?? "—"} cm
+          </div>
+        ) : null}
+      </TableCell>
+      <TableCell className="w-28 align-middle">
         <Input
           aria-label={`SKU dòng ${index + 1}`}
-          className="bg-muted/50 font-mono text-muted-foreground"
+          className="bg-muted/50 font-mono text-xs text-muted-foreground"
           id={`${itemId}-sku`}
           placeholder="SKU"
           readOnly
           required
           value={item.sku}
         />
-      </div>
-      <div className="min-w-0 space-y-2 lg:col-span-2">
-        <Label htmlFor={`${itemId}-quantity`}>Số thùng đặt</Label>
+      </TableCell>
+      <TableCell className="w-24 align-middle">
         <Input
           aria-label={`Số thùng đặt dòng ${index + 1}`}
+          className="text-right"
           id={`${itemId}-quantity`}
           min="1"
           required
@@ -1490,21 +1573,20 @@ function PurchaseOrderItemFields({
             onChange({ ...item, expectedQty: event.target.value })
           }
         />
-      </div>
-      <div className="min-w-0 space-y-2 lg:col-span-1">
-        <Label htmlFor={`${itemId}-unit`}>Đơn vị</Label>
+      </TableCell>
+      <TableCell className="w-20 align-middle">
         <Input
           aria-label={`Đơn vị dòng ${index + 1}`}
-          className="bg-muted/50 text-muted-foreground"
+          className="bg-muted/50 text-center text-muted-foreground"
           id={`${itemId}-unit`}
           readOnly
           value={item.unit}
         />
-      </div>
-      <div className="min-w-0 space-y-2 lg:col-span-2">
-        <Label htmlFor={`${itemId}-price`}>Đơn giá</Label>
+      </TableCell>
+      <TableCell className="w-32 align-middle">
         <Input
           aria-label={`Đơn giá dòng ${index + 1}`}
+          className="text-right"
           id={`${itemId}-price`}
           min="0"
           type="number"
@@ -1513,29 +1595,25 @@ function PurchaseOrderItemFields({
             onChange({ ...item, unitPrice: event.target.value })
           }
         />
-      </div>
-      <div className="flex items-end justify-end lg:col-span-1">
+      </TableCell>
+      <TableCell className="w-32 py-1 align-middle text-right font-medium">
+        <div className="flex h-9 items-center justify-end px-3">
+          {formatCurrency(lineTotal)}
+        </div>
+      </TableCell>
+      <TableCell className="w-10 align-middle text-center">
         <Button
           aria-label={`Xóa dòng ${index + 1}`}
           onClick={onRemove}
           size="icon-sm"
           type="button"
-          variant="destructive"
+          variant="ghost"
+          className="text-muted-foreground hover:text-destructive"
         >
           <Trash2 />
         </Button>
-      </div>
-      <div className="border-t pt-3 sm:col-span-2 lg:col-span-12">
-        <div className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">
-            Quy cách mặt hàng:
-          </span>{" "}
-          1 thùng = {item.packageFactor || "1"} {item.packageUnit || "cái"} ·{" "}
-          {item.itemDepth ?? "—"} × {item.itemWidth ?? "—"} ×{" "}
-          {item.itemHeight ?? "—"} cm
-        </div>
-      </div>
-    </div>
+      </TableCell>
+    </TableRow>
   );
 }
 
