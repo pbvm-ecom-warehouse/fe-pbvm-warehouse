@@ -111,6 +111,7 @@ const grn = {
     {
       actualQty: 10,
       itemId: "item-1",
+      manufacturedDate: "2026-07-28",
       sku: "CUP-BLANK-500",
       unit: "cái",
     },
@@ -450,7 +451,11 @@ describe("Swagger-backed WMS services", () => {
       purchaseOrderId: "po-1",
       status: "DRAFT",
     });
+    const proofImage = new File(["proof"], "proof.jpg", {
+      type: "image/jpeg",
+    });
     await createGoodsReceiptNote({
+      images: [proofImage],
       items: grn.items,
       purchaseOrderId: "po-1",
     });
@@ -468,18 +473,23 @@ describe("Swagger-backed WMS services", () => {
     });
     // sku KHÔNG được gửi lên — BE tự denormalize từ PO theo itemId (ValidationPipe
     // whitelist:true, forbidNonWhitelisted:true sẽ 400 nếu item còn field sku).
-    expect(mockedPost).toHaveBeenCalledWith("/goods-receipt-notes", {
-      items: [
-        {
-          actualQty: 10,
-          itemId: "item-1",
-          lotNumber: undefined,
-          expiryDate: undefined,
-          note: undefined,
-        },
-      ],
-      purchaseOrderId: "po-1",
-    });
+    const createRequest = mockedPost.mock.calls.find(
+      ([url]) => url === "/goods-receipt-notes",
+    )?.[1];
+    expect(createRequest).toBeInstanceOf(FormData);
+    const createFormData = createRequest as FormData;
+    expect(createFormData.get("purchaseOrderId")).toBe("po-1");
+    expect(JSON.parse(String(createFormData.get("items")))).toEqual([
+      {
+        actualQty: 10,
+        itemId: "item-1",
+        lotNumber: undefined,
+        manufacturedDate: "2026-07-28",
+        expiryDate: undefined,
+        note: undefined,
+      },
+    ]);
+    expect(createFormData.getAll("images")).toEqual([proofImage]);
     expect(mockedPatch).toHaveBeenCalledWith(
       "/goods-receipt-notes/grn-1/items",
       {
@@ -488,6 +498,7 @@ describe("Swagger-backed WMS services", () => {
             actualQty: 10,
             itemId: "item-1",
             lotNumber: undefined,
+            manufacturedDate: "2026-07-28",
             expiryDate: undefined,
             note: undefined,
           },

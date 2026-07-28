@@ -68,11 +68,13 @@ export type CreateGoodsReceiptNoteItemInput = {
   itemId: string;
   actualQty: number;
   lotNumber?: string;
+  manufacturedDate: string;
   expiryDate?: string;
   note?: string;
 };
 
 export type CreateGoodsReceiptNoteInput = {
+  images: File[];
   purchaseOrderId: string;
   purchaseOrderNumber?: string;
   supplierName?: string;
@@ -124,19 +126,24 @@ export async function createGoodsReceiptNote(
   // đúng field CreateGoodsReceiptNoteDto chấp nhận. purchaseOrderNumber/supplierName chỉ
   // dùng hiển thị ở FE. sku KHÔNG được gửi trong từng item — BE tự denormalize từ PO
   // theo itemId, gửi thừa sẽ bị 400.
-  const payload = {
-    purchaseOrderId: input.purchaseOrderId,
-    items: input.items?.map((item) => ({
-      itemId: item.itemId,
-      actualQty: item.actualQty,
-      lotNumber: item.lotNumber,
-      expiryDate: item.expiryDate,
-      note: item.note,
-    })),
-  };
+  const items = input.items?.map((item) => ({
+    itemId: item.itemId,
+    actualQty: item.actualQty,
+    lotNumber: item.lotNumber,
+    manufacturedDate: item.manufacturedDate,
+    expiryDate: item.expiryDate,
+    note: item.note,
+  }));
+  const formData = new FormData();
+  formData.append("purchaseOrderId", input.purchaseOrderId);
+  if (items) {
+    formData.append("items", JSON.stringify(items));
+  }
+  appendEvidenceImages(formData, input.images, "images");
+
   const response = await apiClient.post<
     ApiEnvelope<GoodsReceiptNote> | GoodsReceiptNote
-  >("/goods-receipt-notes", payload);
+  >("/goods-receipt-notes", formData);
 
   return unwrapApiData(response.data);
 }
@@ -152,6 +159,7 @@ export async function updateGoodsReceiptNoteItems(
       itemId: item.itemId,
       actualQty: item.actualQty,
       lotNumber: item.lotNumber,
+      manufacturedDate: item.manufacturedDate,
       expiryDate: item.expiryDate,
       note: item.note,
     })),

@@ -295,7 +295,7 @@ export function PutawayTasksClient() {
                 </div>
                 <div className="mt-1 flex items-center gap-1.5 text-sm font-medium">
                   <CalendarDays className="size-3.5 text-primary" />
-                  {selected.manufacturedDate ?? "—"}
+                  {formatDate(selected.manufacturedDate)}
                 </div>
               </div>
             </CardContent>
@@ -425,7 +425,9 @@ export function PutawayTasksClient() {
                           </StatusBadge>
                         </TableCell>
                         <TableCell>{item.remainingQty} thùng</TableCell>
-                        <TableCell>{formatDate(item.manufacturedDate)}</TableCell>
+                        <TableCell>
+                          {formatDate(item.manufacturedDate)}
+                        </TableCell>
                         <TableCell>
                           <div className="flex justify-end">
                             <Button

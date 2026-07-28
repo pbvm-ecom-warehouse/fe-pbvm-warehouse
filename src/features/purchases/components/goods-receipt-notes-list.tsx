@@ -265,17 +265,15 @@ export function GoodsReceiptNotesList({
                           (grn.status === "DRAFT" ||
                             grn.status === "REJECTED") ? (
                             <>
-                              {grn.status === "REJECTED" ? (
-                                <Button
-                                  onClick={() => onEdit(grn)}
-                                  size="sm"
-                                  type="button"
-                                  variant="outline"
-                                >
-                                  <Pencil data-icon="inline-start" />
-                                  Chỉnh sửa
-                                </Button>
-                              ) : null}
+                              <Button
+                                onClick={() => onEdit(grn)}
+                                size="sm"
+                                type="button"
+                                variant="outline"
+                              >
+                                <Pencil data-icon="inline-start" />
+                                Chỉnh sửa
+                              </Button>
                               <Button
                                 disabled={submitBusyId === grn.id}
                                 onClick={() => onSubmit(grn.id)}

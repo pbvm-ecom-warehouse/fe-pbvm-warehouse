@@ -469,9 +469,9 @@ describe("purchase and supplier UX", () => {
     expect(dialogScope.getByText("SL", { selector: "th" })).toBeVisible();
     expect(dialogScope.getByText("Đơn vị", { selector: "th" })).toBeVisible();
     expect(dialogScope.getByText("Đơn giá", { selector: "th" })).toBeVisible();
-    expect(dialogScope.getByLabelText("Ngày dự kiến").parentElement).not.toHaveClass(
-      "md:col-span-2",
-    );
+    expect(
+      dialogScope.getByLabelText("Ngày dự kiến").parentElement,
+    ).not.toHaveClass("md:col-span-2");
 
     fireEvent.click(screen.getByRole("combobox", { name: "Nhà cung cấp" }));
     fireEvent.click(
@@ -571,6 +571,9 @@ describe("purchase and supplier UX", () => {
       await screen.findByRole("button", { name: "Gửi duyệt" }),
     ).toBeVisible();
     expect(
+      await screen.findByRole("button", { name: "Chỉnh sửa" }),
+    ).toBeVisible();
+    expect(
       screen.queryByRole("button", { name: "Duyệt" }),
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Tạo phiếu nhập" }));
@@ -620,9 +623,7 @@ describe("purchase and supplier UX", () => {
     expect(
       within(createGrnDialog).getByText("Ghi chú", { selector: "label" }),
     ).toBeVisible();
-    expect(
-      within(createGrnDialog).getByText("Tổng cộng"),
-    ).toBeVisible();
+    expect(within(createGrnDialog).getByText("Tổng cộng")).toBeVisible();
   });
 
   it("BE luôn trả sẵn supplier trong PO response — không cần fallback getSupplier theo supplierId", async () => {
@@ -767,6 +768,7 @@ describe("purchase and supplier UX", () => {
     await waitFor(() =>
       expect(mockedCreateGrn).toHaveBeenCalledWith(
         expect.objectContaining({
+          images: [expect.any(File)],
           items: [
             expect.objectContaining({
               lotNumber: "LOT-260728-001",
@@ -776,14 +778,6 @@ describe("purchase and supplier UX", () => {
         }),
       ),
     );
-    await waitFor(() =>
-      expect(mockedUploadGrnImage).toHaveBeenCalledWith(
-        "grn-created",
-        expect.any(File),
-      ),
-    );
-    expect(mockedCreateGrn.mock.invocationCallOrder[0]).toBeLessThan(
-      mockedUploadGrnImage.mock.invocationCallOrder[0],
-    );
+    expect(mockedUploadGrnImage).not.toHaveBeenCalled();
   });
 });

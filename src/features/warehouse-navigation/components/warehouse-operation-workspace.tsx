@@ -4,13 +4,22 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
-  Boxes,
+  ArrowLeft,
   LoaderCircle,
+  Map,
   MapPinned,
   Route,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { fetchWarehouseLayout } from "@/features/warehouse-layout/services/warehouse-layout.service";
 import { getApiErrorMessage } from "@/lib/api-contract";
 import { cn } from "@/lib/utils";
@@ -83,6 +92,8 @@ export function WarehouseOperationWorkspace({
   const firstSuggestion = suggestions[0];
   const [chosenRackId, setChosenRackId] = useState("");
   const [chosenCellId, setChosenCellId] = useState("");
+  const [mapOpen, setMapOpen] = useState(false);
+  const [rackOpen, setRackOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [scanCell, setScanCell] = useState<StorageCellView>();
   const selectedRackId = chosenRackId || firstSuggestion?.rackId || "";
@@ -148,23 +159,35 @@ export function WarehouseOperationWorkspace({
   return (
     <div className="space-y-4">
       <Card className="overflow-hidden">
-        <CardHeader className="border-b bg-slate-950 text-white">
+        <CardHeader className="border-b bg-muted/20">
           <CardTitle className="flex items-center justify-between gap-3 text-base">
             <span className="flex items-center gap-2">
-              <MapPinned className="size-4 text-amber-400" />
+              <MapPinned className="size-4 text-primary" />
               {operation === "PUTAWAY"
                 ? "Hướng dẫn cất hàng"
                 : "Hướng dẫn lấy hàng"}
             </span>
-            <Badge className="border-slate-700 bg-slate-900 font-mono text-white">
+            <Badge className="font-mono" variant="secondary">
               {sku} · còn {remainingPackageCount} thùng
             </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 pt-4">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Route className="size-4 text-blue-700" />
-            Vị trí đề xuất
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Route className="size-4 text-primary" />
+              Vị trí đề xuất
+            </div>
+            <Button
+              disabled={!layoutQuery.data}
+              onClick={() => setMapOpen(true)}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              <Map data-icon="inline-start" />
+              Mở bản đồ kho
+            </Button>
           </div>
           {suggestionsLoading ? (
             <div className="text-sm text-muted-foreground">
@@ -193,7 +216,7 @@ export function WarehouseOperationWorkspace({
                 className={cn(
                   "rounded-lg border p-3 text-left transition hover:border-blue-400 hover:bg-blue-50",
                   selectedCellId === suggestion.cellId
-                    ? "border-blue-600 bg-blue-50 ring-2 ring-blue-100"
+                    ? "border-primary bg-primary/5"
                     : "bg-white",
                 )}
                 onClick={() => chooseSuggestion(suggestion)}
@@ -233,53 +256,115 @@ export function WarehouseOperationWorkspace({
           </div>
         </CardContent>
       </Card>
-      {layoutQuery.isLoading ? (
-        <div className="grid h-64 place-items-center rounded-xl border">
-          <LoaderCircle className="size-5 animate-spin text-blue-700" />
-        </div>
-      ) : layoutQuery.data ? (
-        <WarehouseRouteMap
-          layout={layoutQuery.data}
-          path={path}
-          selectedRackId={selectedRackId}
-          onSelectRack={(rackId) => {
-            setChosenRackId(rackId);
-            setChosenCellId("");
-          }}
-        />
-      ) : (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-          Không tải được sơ đồ kho.
-        </div>
-      )}
-      {selectedRackId ? (
-        cellsQuery.isLoading ? (
-          <div className="grid h-72 place-items-center rounded-xl border">
-            <LoaderCircle className="size-5 animate-spin text-blue-700" />
+      <Dialog open={mapOpen} onOpenChange={setMapOpen}>
+        <DialogContent
+          className="flex h-[92dvh] max-h-[92dvh] flex-col gap-0 overflow-hidden p-0"
+          size="5xl"
+        >
+          <DialogHeader className="shrink-0 border-b px-5 py-4 pr-14">
+            <DialogTitle>Bản đồ đường đi trong kho</DialogTitle>
+            <DialogDescription>
+              Chọn rack để xem đường đi, sau đó bấm Xem mặt kệ.
+            </DialogDescription>
+          </DialogHeader>
+          {layoutQuery.isLoading ? (
+            <div className="grid h-[60dvh] place-items-center">
+              <LoaderCircle className="size-5 animate-spin text-primary" />
+            </div>
+          ) : layoutQuery.data ? (
+            <WarehouseRouteMap
+              layout={layoutQuery.data}
+              path={path}
+              selectedRackId={selectedRackId}
+              onSelectRack={(rackId) => {
+                setChosenRackId(rackId);
+                setChosenCellId("");
+              }}
+            />
+          ) : (
+            <div className="m-5 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+              Không tải được sơ đồ kho.
+            </div>
+          )}
+          <div className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-t bg-muted/20 px-5 py-3">
+            <div className="text-sm">
+              {chosenRackId && selectedRack ? (
+                <>
+                  Đã chọn{" "}
+                  <span className="font-mono font-semibold">
+                    {selectedRack.code}
+                  </span>
+                  . Kiểm tra đường đi rồi mở mặt kệ khi đã sẵn sàng.
+                </>
+              ) : (
+                <span className="text-muted-foreground">
+                  Nhấn vào rack để xem đường đi đến đúng vị trí.
+                </span>
+              )}
+            </div>
+            <Button
+              disabled={!chosenRackId || !selectedRack}
+              onClick={() => {
+                setMapOpen(false);
+                setRackOpen(true);
+              }}
+              type="button"
+            >
+              <Map data-icon="inline-start" />
+              {selectedRack ? `Xem mặt kệ ${selectedRack.code}` : "Xem mặt kệ"}
+            </Button>
           </div>
-        ) : (
-          <RackCellViewer
-            rackCode={selectedRack?.code}
-            cells={cells}
-            selectedCellId={selectedCell?.id}
-            onSelectCell={(cell) => {
-              setChosenRackId(selectedRackId);
-              setChosenCellId(cell.id);
-            }}
-            onActivateCell={activateCell}
-            operation={operation}
-            packageSpec={packageSpec}
-            suggestedCellIds={suggestions.map(
-              (suggestion) => suggestion.cellId,
+        </DialogContent>
+      </Dialog>
+      <Dialog open={rackOpen} onOpenChange={setRackOpen}>
+        <DialogContent
+          className="max-h-[92dvh] gap-0 overflow-hidden p-0"
+          size="5xl"
+        >
+          <DialogHeader className="border-b px-5 py-4 pr-14">
+            <DialogTitle>Mặt kệ {selectedRack?.code ?? "đã chọn"}</DialogTitle>
+            <DialogDescription>
+              Xem sức chứa rồi nhấn vào khoang hợp lệ để quét mã.
+            </DialogDescription>
+            <Button
+              className="mt-1 w-fit"
+              onClick={() => {
+                setRackOpen(false);
+                setMapOpen(true);
+              }}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              <ArrowLeft data-icon="inline-start" />
+              Quay lại bản đồ
+            </Button>
+          </DialogHeader>
+          <div className="min-h-0 overflow-y-auto p-4">
+            {cellsQuery.isLoading ? (
+              <div className="grid h-[55dvh] place-items-center">
+                <LoaderCircle className="size-5 animate-spin text-primary" />
+              </div>
+            ) : (
+              <RackCellViewer
+                rackCode={selectedRack?.code}
+                cells={cells}
+                selectedCellId={selectedCell?.id}
+                onSelectCell={(cell) => {
+                  setChosenRackId(selectedRackId);
+                  setChosenCellId(cell.id);
+                }}
+                onActivateCell={activateCell}
+                operation={operation}
+                packageSpec={packageSpec}
+                suggestedCellIds={suggestions.map(
+                  (suggestion) => suggestion.cellId,
+                )}
+              />
             )}
-          />
-        )
-      ) : (
-        <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-          <Boxes className="mx-auto mb-2 size-5" />
-          Chọn rack trên bản đồ để mở mặt kệ.
-        </div>
-      )}
+          </div>
+        </DialogContent>
+      </Dialog>
       <BarcodeScanDialog
         open={scanOpen}
         onOpenChange={setScanOpen}

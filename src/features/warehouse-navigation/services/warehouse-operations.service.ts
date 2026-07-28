@@ -10,6 +10,9 @@ export type StorageCellContent = {
   quantity: number;
   packageFactor?: number | null;
   packageVolumeCm3Snapshot?: number | null;
+  packageDepthCm?: number | null;
+  packageWidthCm?: number | null;
+  packageHeightCm?: number | null;
   lotNumber?: string | null;
   expiryDate?: string | null;
 };
