@@ -19,6 +19,7 @@ const {
     rackTemplate: {
       widthM: 6,
       depthM: 1.5,
+      heightM: 2,
       levelCount: 2,
       bayCount: 3,
     },
@@ -69,12 +70,20 @@ vi.mock("@/features/warehouse-layout/components/warehouse-floor-plan", () => ({
       <button
         aria-label="Sơ đồ kho"
         onClick={() => {
-          if (tool === "zone") onCreate?.("zone", { xM: 2, yM: 2 });
+          if (
+            tool === "zone" ||
+            tool === "rack" ||
+            tool === "aisle" ||
+            tool === "gate"
+          ) {
+            onCreate?.(tool, { xM: 2, yM: 2 });
+          }
         }}
       >
         canvas
       </button>
       <output aria-label="Số zone">{layout.zones.length}</output>
+      <output aria-label="Số rack">{layout.racks.length}</output>
       {layout.zones.map((zone) => (
         <button
           aria-label={`Chọn zone ${zone.code}`}
@@ -137,6 +146,10 @@ describe("WarehouseMapClient", () => {
     expect(
       screen.queryByText("Áp dụng cho toàn bộ rack"),
     ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Cao toàn kệ (m)")).toHaveValue(2);
+    expect(screen.getByLabelText("Kích thước mỗi khoang")).toHaveTextContent(
+      "200 × 150 × 100 cm",
+    );
   });
 
   it("giữ thao tác ở draft và chỉ gọi PATCH batch khi bấm lưu", async () => {
@@ -160,6 +173,18 @@ describe("WarehouseMapClient", () => {
     );
   });
 
+  it("không tạo rack khi chưa có lối đi kết nối", async () => {
+    renderWithClient();
+    await screen.findByText("Bản đồ kho 2D");
+
+    fireEvent.click(screen.getByRole("button", { name: "Khu vực" }));
+    fireEvent.click(screen.getByLabelText("Sơ đồ kho"));
+    fireEvent.click(screen.getByRole("button", { name: "Rack" }));
+    fireEvent.click(screen.getByLabelText("Sơ đồ kho"));
+
+    expect(screen.getByLabelText("Số rack")).toHaveTextContent("0");
+  });
+
   it("gọi API reset riêng sau khi xác nhận reset sơ đồ", async () => {
     renderWithClient();
     await screen.findByText("Bản đồ kho 2D");
@@ -172,6 +197,7 @@ describe("WarehouseMapClient", () => {
     );
 
     await waitFor(() => expect(resetWarehouseLayout).toHaveBeenCalledTimes(1));
+    expect(resetWarehouseLayout).toHaveBeenCalledWith(3);
   });
 
   it("xóa phần tử bằng Delete và hỗ trợ phím tắt undo/redo", async () => {
@@ -226,10 +252,10 @@ describe("WarehouseMapClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Lưu thay đổi" }));
 
     expect(
-      await screen.findByText(/đã được cập nhật ở phiên khác/i),
+      await screen.findByText(/Draft đang dựa trên phiên bản 3/i),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Tải bản mới" }),
+      screen.getByRole("button", { name: "Tải bản mới và bỏ draft" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Lưu thay đổi" })).toBeEnabled();
   });

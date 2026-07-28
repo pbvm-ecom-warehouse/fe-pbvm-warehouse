@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   cloneWarehouseLayout,
+  findRackAccessPoint,
   getRackRect,
   snapToGrid,
   validateWarehouseLayoutClient,
@@ -14,7 +15,13 @@ const editorLayout: WarehouseLayout = {
   status: "PUBLISHED",
   updatedAt: "2026-07-27T00:00:00.000Z",
   canvas: { widthM: 40, heightM: 24, gridM: 0.5 },
-  rackTemplate: { widthM: 10, depthM: 1.5, levelCount: 3, bayCount: 3 },
+  rackTemplate: {
+    widthM: 10,
+    depthM: 1.5,
+    heightM: 3,
+    levelCount: 3,
+    bayCount: 3,
+  },
   zones: [
     {
       id: "zone-a",
@@ -56,7 +63,7 @@ const editorLayout: WarehouseLayout = {
       levelCount: 2,
       bayCount: 3,
       shelfCodes: ["A2-S01", "A2-S02"],
-      accessPoint: { xM: 8, yM: 10 },
+      accessPoint: { xM: 8, yM: 8 },
     },
   ],
   shelves: [],
@@ -146,5 +153,33 @@ describe("warehouse architectural layout", () => {
     expect(validateWarehouseLayoutClient(layout, { publishing: true })).toEqual(
       expect.arrayContaining([expect.stringMatching(/chồng lên/)]),
     );
+  });
+
+  it("chặn rack có điểm tiếp cận không nằm trong lối đi", () => {
+    const layout = cloneWarehouseLayout(editorLayout);
+    layout.racks[0].accessPoint = { xM: 8, yM: 5 };
+
+    expect(validateWarehouseLayoutClient(layout)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("A1 chưa nối với lối đi"),
+      ]),
+    );
+  });
+
+  it("chọn điểm tiếp cận gần rack nằm bên trong lối đi", () => {
+    expect(
+      findRackAccessPoint(
+        editorLayout.racks[0],
+        editorLayout.aisles,
+        editorLayout.canvas.gridM,
+      ),
+    ).toEqual({ xM: 8, yM: 6 });
+    expect(
+      findRackAccessPoint(
+        editorLayout.racks[0],
+        [],
+        editorLayout.canvas.gridM,
+      ),
+    ).toBeNull();
   });
 });

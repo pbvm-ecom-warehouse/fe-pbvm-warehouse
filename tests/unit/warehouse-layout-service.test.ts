@@ -47,7 +47,13 @@ const apiLayout = {
   ],
   aisles: [],
   gates: [],
-  rackTemplate: { widthM: 10, depthM: 1.5, levelCount: 3, bayCount: 3 },
+  rackTemplate: {
+    widthM: 10,
+    depthM: 1.5,
+    heightM: 3,
+    levelCount: 3,
+    bayCount: 3,
+  },
 };
 
 describe("fetchWarehouseLayout", () => {
@@ -138,9 +144,11 @@ describe("resetWarehouseLayout", () => {
   it("POST reset endpoint và trả layout canonical mới", async () => {
     vi.mocked(apiClient.post).mockResolvedValue({ data: apiLayout });
 
-    const result = await resetWarehouseLayout();
+    const result = await resetWarehouseLayout(7);
 
-    expect(apiClient.post).toHaveBeenCalledWith("/location/layout/reset");
+    expect(apiClient.post).toHaveBeenCalledWith("/location/layout/reset", {
+      expectedRevision: 7,
+    });
     expect(result.revision).toBe(7);
     expect(result.canvas).toEqual({ widthM: 40, heightM: 24, gridM: 0.5 });
   });

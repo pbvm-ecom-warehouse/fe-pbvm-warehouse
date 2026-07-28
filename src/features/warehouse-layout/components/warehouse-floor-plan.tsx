@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  useEffect,
+  useMemo,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -60,6 +62,40 @@ type DragState = {
 };
 
 type ViewBox = { x: number; y: number; width: number; height: number };
+
+export function calculateFitViewBox(
+  widthM: number,
+  heightM: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  paddingM = 1,
+): ViewBox {
+  const paddedWidth = widthM + paddingM * 2;
+  const paddedHeight = heightM + paddingM * 2;
+  const viewportAspect =
+    viewportWidth > 0 && viewportHeight > 0
+      ? viewportWidth / viewportHeight
+      : paddedWidth / paddedHeight;
+  const contentAspect = paddedWidth / paddedHeight;
+
+  if (viewportAspect > contentAspect) {
+    const fittedWidth = paddedHeight * viewportAspect;
+    return {
+      x: -(fittedWidth - widthM) / 2,
+      y: -paddingM,
+      width: fittedWidth,
+      height: paddedHeight,
+    };
+  }
+
+  const fittedHeight = paddedWidth / viewportAspect;
+  return {
+    x: -paddingM,
+    y: -(fittedHeight - heightM) / 2,
+    width: paddedWidth,
+    height: fittedHeight,
+  };
+}
 
 type PanState = {
   pointerId: number;
@@ -166,20 +202,50 @@ export function WarehouseFloorPlan({
   selection?: LayoutSelection;
   tool?: WarehouseEditorTool;
 }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const panRef = useRef<PanState | null>(null);
   const { widthM, heightM, gridM } = layout.canvas;
-  const defaultViewBox = {
-    x: -1.8,
-    y: -1.8,
-    width: widthM + 3.6,
-    height: heightM + 3.6,
-  };
-  const [viewBox, setViewBox] = useState<ViewBox>(defaultViewBox);
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+  const fitViewBox = useMemo(
+    () =>
+      calculateFitViewBox(
+        widthM,
+        heightM,
+        viewportSize.width,
+        viewportSize.height,
+        Math.max(1, gridM * 2),
+      ),
+    [gridM, heightM, viewportSize.height, viewportSize.width, widthM],
+  );
+  const [viewBox, setViewBox] = useState<ViewBox>(fitViewBox);
   const layoutDomId = layout.id;
   const patternId = `warehouse-grid-${layoutDomId}`;
   const hatchId = `warehouse-zone-hatch-${layoutDomId}`;
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      const nextViewportSize = {
+        width: entry.contentRect.width,
+        height: entry.contentRect.height,
+      };
+      setViewportSize(nextViewportSize);
+      setViewBox(
+        calculateFitViewBox(
+          widthM,
+          heightM,
+          nextViewportSize.width,
+          nextViewportSize.height,
+          Math.max(1, gridM * 2),
+        ),
+      );
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [gridM, heightM, widthM]);
 
   function getZoneGroupMembers(
     nextSelection: NonNullable<LayoutSelection>,
@@ -407,10 +473,10 @@ export function WarehouseFloorPlan({
 
   function zoom(factor: number, center?: { x: number; y: number }) {
     const nextWidth = Math.min(
-      widthM * 3,
+      fitViewBox.width,
       Math.max(widthM / 5, viewBox.width * factor),
     );
-    const nextHeight = nextWidth * (viewBox.height / viewBox.width);
+    const nextHeight = nextWidth * (fitViewBox.height / fitViewBox.width);
     const target = center ?? {
       x: viewBox.x + viewBox.width / 2,
       y: viewBox.y + viewBox.height / 2,
@@ -437,6 +503,7 @@ export function WarehouseFloorPlan({
         "relative overflow-hidden border border-slate-300 bg-[#f5f7f6] shadow-inner",
         className,
       )}
+      ref={containerRef}
     >
       <svg
         aria-label="Sơ đồ kho"
@@ -509,11 +576,15 @@ export function WarehouseFloorPlan({
           return (
             <g
               aria-label={`${zone.name}, ${rect.widthM} x ${rect.heightM} mét`}
-              className={
-                editable && tool === "select" ? "cursor-move" : undefined
-              }
+              className={cn(
+                "outline-none",
+                editable && tool === "select" ? "cursor-move" : null,
+              )}
               data-layout-element
               key={zone.id}
+              onFocus={() =>
+                tool === "select" && onSelect?.({ kind: "zone", id: zone.id })
+              }
               onPointerDown={(event) =>
                 startDrag(event, { kind: "zone", id: zone.id }, rect, "move")
               }
@@ -580,11 +651,16 @@ export function WarehouseFloorPlan({
           return (
             <g
               aria-label={`${isMain ? "Đường chính" : "Lối giữa kệ"} ${aisle.code}`}
-              className={
-                editable && tool === "select" ? "cursor-move" : undefined
-              }
+              className={cn(
+                "outline-none",
+                editable && tool === "select" ? "cursor-move" : null,
+              )}
               data-layout-element
               key={aisle.id}
+              onFocus={() =>
+                tool === "select" &&
+                onSelect?.({ kind: "aisle", id: aisle.id })
+              }
               onPointerDown={(event) =>
                 startDrag(event, { kind: "aisle", id: aisle.id }, rect, "move")
               }
@@ -657,9 +733,15 @@ export function WarehouseFloorPlan({
             <g
               aria-label={rack.name}
               aria-pressed={selected}
-              className={tool === "select" ? "cursor-pointer" : undefined}
+              className={cn(
+                "outline-none",
+                tool === "select" ? "cursor-pointer" : null,
+              )}
               data-layout-element
               key={rack.id}
+              onFocus={() =>
+                tool === "select" && onSelect?.({ kind: "rack", id: rack.id })
+              }
               onPointerDown={(event) =>
                 startDrag(event, { kind: "rack", id: rack.id }, rect, "move")
               }
@@ -732,11 +814,15 @@ export function WarehouseFloorPlan({
           return (
             <g
               aria-label={gate.label}
-              className={
-                editable && tool === "select" ? "cursor-move" : undefined
-              }
+              className={cn(
+                "outline-none",
+                editable && tool === "select" ? "cursor-move" : null,
+              )}
               data-layout-element
               key={gate.id}
+              onFocus={() =>
+                tool === "select" && onSelect?.({ kind: "gate", id: gate.id })
+              }
               onPointerDown={(event) =>
                 startDrag(
                   event,
@@ -832,7 +918,7 @@ export function WarehouseFloorPlan({
         <button
           aria-label="Vừa màn hình"
           className="grid size-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-950"
-          onClick={() => setViewBox(defaultViewBox)}
+          onClick={() => setViewBox(fitViewBox)}
           type="button"
         >
           <Maximize2 className="size-4" />

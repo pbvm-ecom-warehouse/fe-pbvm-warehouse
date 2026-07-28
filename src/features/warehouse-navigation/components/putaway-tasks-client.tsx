@@ -8,24 +8,18 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import {
+  ArrowLeft,
   Boxes,
   CalendarDays,
+  Eye,
   LoaderCircle,
-  PackageSearch,
   RefreshCw,
   Search,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -35,8 +29,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   PageHeader,
   PermissionNotice,
+  StatusBadge,
 } from "@/features/admin-shell/components/operations-ui";
 import {
   getGoodsReceiptNote,
@@ -45,7 +48,7 @@ import {
 import { useSessionUser } from "@/hooks/use-session-user";
 import { getApiErrorCode, getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
-import { cn } from "@/lib/utils";
+import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
 import { listPutawaySuggestionResult } from "../services/putaway-navigation.service";
 import {
   confirmPutawayLine,
@@ -69,6 +72,15 @@ function ErrorBanner({ error }: { error: unknown }) {
       {getApiErrorMessage(error) ?? "Không tải được dữ liệu cất hàng."}
     </div>
   );
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat("vi-VN").format(date);
 }
 
 export function PutawayTasksClient() {
@@ -113,14 +125,7 @@ export function PutawayTasksClient() {
           ),
       )
     : workItems;
-  const effectiveSelectedKey = visibleItems.some(
-    (item) => item.key === selectedKey,
-  )
-    ? selectedKey
-    : (visibleItems[0]?.key ?? "");
-  const selected = visibleItems.find(
-    (item) => item.key === effectiveSelectedKey,
-  );
+  const selected = workItems.find((item) => item.key === selectedKey);
   const receiptsLoading = receiptQueries.some((query) => query.isLoading);
   const firstReceiptError = receiptQueries.find((query) => query.error)?.error;
 
@@ -207,23 +212,30 @@ export function PutawayTasksClient() {
     );
   }
 
+  const viewingDetail = Boolean(selected);
+
   return (
     <div className="space-y-5">
       <PageHeader
-        eyebrow={
-          <Badge
-            className="border-blue-200 bg-blue-50 text-blue-700"
-            variant="outline"
-          >
-            Vận hành kho 2D
-          </Badge>
-        }
         title="Cất hàng"
         actions={
-          <Button variant="outline" onClick={() => void refresh()}>
-            <RefreshCw data-icon="inline-start" />
-            Làm mới
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {viewingDetail ? (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSelectedKey("");
+                }}
+              >
+                <ArrowLeft data-icon="inline-start" />
+                Quay lại danh sách
+              </Button>
+            ) : null}
+            <Button variant="outline" onClick={() => void refresh()}>
+              <RefreshCw data-icon="inline-start" />
+              Làm mới
+            </Button>
+          </div>
         }
       />
       {!canConfirm ? (
@@ -232,25 +244,114 @@ export function PutawayTasksClient() {
           nhận.
         </PermissionNotice>
       ) : null}
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]">
-        <Card className="overflow-hidden xl:sticky xl:top-4">
-          <CardHeader className="border-b bg-slate-950 text-white">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <PackageSearch className="size-4 text-amber-400" />
-              Danh sách mặt hàng
-            </CardTitle>
-            <CardDescription className="text-slate-300">
-              Chọn một dòng để xem vị trí, đường đi và sức chứa.
-            </CardDescription>
+      {tasksQuery.error || firstReceiptError ? (
+        <ErrorBanner error={tasksQuery.error ?? firstReceiptError} />
+      ) : null}
+
+      {viewingDetail && selected ? (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="border-b bg-muted/20">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1.5">
+                  <CardTitle className="text-base">
+                    {selected.itemName}
+                  </CardTitle>
+                  <div className="font-mono text-sm text-muted-foreground">
+                    {selected.sku}
+                  </div>
+                </div>
+                <StatusBadge tone={statusTone(status)}>
+                  {status === "PENDING" ? "Đang cất" : statusLabel(status)}
+                </StatusBadge>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-3 pt-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-lg border bg-muted/20 p-3">
+                <div className="text-xs text-muted-foreground">Phiếu nhập</div>
+                <div className="mt-1 font-mono text-sm font-medium">
+                  {selected.grnNumber}
+                </div>
+              </div>
+              <div className="rounded-lg border bg-muted/20 p-3">
+                <div className="text-xs text-muted-foreground">Số lô</div>
+                <div className="mt-1 font-mono text-sm font-medium">
+                  {selected.lotNumber ?? "—"}
+                </div>
+              </div>
+              <div className="rounded-lg border bg-muted/20 p-3">
+                <div className="text-xs text-muted-foreground">
+                  Kích thước thùng
+                </div>
+                <div className="mt-1 text-sm font-medium">
+                  {selected.packageSpec
+                    ? `${selected.packageSpec.depthCm} × ${selected.packageSpec.widthCm} × ${selected.packageSpec.heightCm} cm`
+                    : "Chưa khai báo"}
+                </div>
+              </div>
+              <div className="rounded-lg border bg-muted/20 p-3">
+                <div className="text-xs text-muted-foreground">
+                  Ngày sản xuất
+                </div>
+                <div className="mt-1 flex items-center gap-1.5 text-sm font-medium">
+                  <CalendarDays className="size-3.5 text-primary" />
+                  {selected.manufacturedDate ?? "—"}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {status === "PENDING" && canConfirm ? (
+            <WarehouseOperationWorkspace
+              key={selected.key}
+              operation="PUTAWAY"
+              sku={selected.sku}
+              remainingPackageCount={selected.remainingQty}
+              packageSpec={selected.packageSpec}
+              suggestions={suggestionQuery.data?.suggestions ?? []}
+              suggestionsLoading={suggestionQuery.isLoading}
+              suggestionsError={suggestionQuery.error}
+              pending={confirmMutation.isPending}
+              onConfirm={async (input) => {
+                await confirmMutation.mutateAsync(input);
+              }}
+            />
+          ) : (
+            <Card>
+              <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                {status === "COMPLETED"
+                  ? "Dòng hàng này đã được cất hoàn tất."
+                  : "Chế độ theo dõi không cho phép quét xác nhận."}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      ) : (
+        <Card>
+          <CardHeader className="border-b bg-muted/20">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1.5">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Boxes className="size-4 text-primary" />
+                  Danh sách mặt hàng
+                </CardTitle>
+                <div className="text-sm text-muted-foreground">
+                  Chọn một dòng để mở bản đồ cất hàng trong cùng tab.
+                </div>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {visibleItems.length} mặt hàng
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-3 pt-4">
-            <div className="grid gap-2 sm:grid-cols-[1fr_140px] xl:grid-cols-1">
+          <CardContent className="space-y-4 pt-4">
+            <div className="grid gap-2 md:grid-cols-[minmax(0,320px)_180px]">
               <label className="relative">
                 <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
                 <Input
                   aria-label="Tìm mặt hàng cất"
                   className="pl-9"
-                  placeholder="SKU, tên, lô, phiếu nhập"
+                  placeholder="Tìm SKU, lô, phiếu nhập..."
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                 />
@@ -271,132 +372,82 @@ export function PutawayTasksClient() {
                 </SelectContent>
               </Select>
             </div>
-            {tasksQuery.error || firstReceiptError ? (
-              <ErrorBanner error={tasksQuery.error ?? firstReceiptError} />
-            ) : null}
+
             {tasksQuery.isLoading || receiptsLoading ? (
-              <div className="py-8 text-center text-sm text-muted-foreground">
-                <LoaderCircle className="mr-2 inline size-4 animate-spin" />
+              <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-muted-foreground">
+                <LoaderCircle className="size-4 animate-spin" />
                 Đang ghép lệnh với phiếu nhập...
               </div>
-            ) : visibleItems.length === 0 ? (
-              <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-                <Boxes className="mx-auto mb-2 size-6" />
-                Không có mặt hàng phù hợp.
-              </div>
             ) : (
-              <div className="max-h-[62vh] space-y-2 overflow-y-auto pr-1">
-                {visibleItems.map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    className={cn(
-                      "w-full rounded-xl border p-3 text-left transition hover:border-blue-400 hover:bg-blue-50",
-                      item.key === effectiveSelectedKey
-                        ? "border-blue-600 bg-blue-50 ring-2 ring-blue-100"
-                        : "bg-white",
-                    )}
-                    onClick={() => setSelectedKey(item.key)}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="font-mono text-sm font-bold text-slate-950">
+              <Table scrollable>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>SKU</TableHead>
+                    <TableHead>Mặt hàng</TableHead>
+                    <TableHead>Số lô</TableHead>
+                    <TableHead>Số phiếu nhập</TableHead>
+                    <TableHead>Trạng thái</TableHead>
+                    <TableHead>SL còn lại</TableHead>
+                    <TableHead>Ngày sản xuất</TableHead>
+                    <TableHead className="w-40 text-right">Thao tác</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleItems.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        className="h-24 text-center text-muted-foreground"
+                        colSpan={8}
+                      >
+                        Không có mặt hàng phù hợp.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    visibleItems.map((item) => (
+                      <TableRow key={item.key}>
+                        <TableCell className="font-mono font-medium">
                           {item.sku}
-                        </div>
-                        <div className="mt-0.5 truncate text-sm font-medium">
+                        </TableCell>
+                        <TableCell className="font-medium">
                           {item.itemName}
-                        </div>
-                      </div>
-                      <Badge variant="secondary">
-                        {item.remainingQty} thùng
-                      </Badge>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      <span>{item.grnNumber}</span>
-                      {item.lotNumber ? <span>Lô {item.lotNumber}</span> : null}
-                      {item.itemType ? <span>Loại {item.itemType}</span> : null}
-                    </div>
-                  </button>
-                ))}
-              </div>
+                        </TableCell>
+                        <TableCell className="font-mono">
+                          {item.lotNumber ?? "—"}
+                        </TableCell>
+                        <TableCell className="font-mono">
+                          {item.grnNumber}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge tone={statusTone(status)}>
+                            {status === "PENDING"
+                              ? "Đang cất"
+                              : statusLabel(status)}
+                          </StatusBadge>
+                        </TableCell>
+                        <TableCell>{item.remainingQty} thùng</TableCell>
+                        <TableCell>{formatDate(item.manufacturedDate)}</TableCell>
+                        <TableCell>
+                          <div className="flex justify-end">
+                            <Button
+                              size="sm"
+                              type="button"
+                              variant="outline"
+                              onClick={() => setSelectedKey(item.key)}
+                            >
+                              <Eye data-icon="inline-start" />
+                              Mở bản đồ
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             )}
           </CardContent>
         </Card>
-
-        <div className="min-w-0 space-y-4">
-          {selected ? (
-            <>
-              <Card>
-                <CardContent className="grid gap-3 pt-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Phiếu nhập
-                    </div>
-                    <div className="mt-1 font-mono text-sm font-semibold">
-                      {selected.grnNumber}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground">Số lô</div>
-                    <div className="mt-1 font-mono text-sm font-semibold">
-                      {selected.lotNumber ?? "—"}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Kích thước thùng
-                    </div>
-                    <div className="mt-1 text-sm font-semibold">
-                      {selected.packageSpec
-                        ? `${selected.packageSpec.depthCm} × ${selected.packageSpec.widthCm} × ${selected.packageSpec.heightCm} cm`
-                        : "Chưa khai báo"}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Ngày sản xuất
-                    </div>
-                    <div className="mt-1 flex items-center gap-1.5 text-sm font-semibold">
-                      <CalendarDays className="size-3.5 text-blue-700" />
-                      {selected.manufacturedDate ?? "—"}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              {status === "PENDING" && canConfirm ? (
-                <WarehouseOperationWorkspace
-                  key={selected.key}
-                  operation="PUTAWAY"
-                  sku={selected.sku}
-                  remainingPackageCount={selected.remainingQty}
-                  packageSpec={selected.packageSpec}
-                  suggestions={suggestionQuery.data?.suggestions ?? []}
-                  suggestionsLoading={suggestionQuery.isLoading}
-                  suggestionsError={suggestionQuery.error}
-                  pending={confirmMutation.isPending}
-                  onConfirm={async (input) => {
-                    await confirmMutation.mutateAsync(input);
-                  }}
-                />
-              ) : (
-                <Card>
-                  <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                    {status === "COMPLETED"
-                      ? "Dòng hàng này đã được cất hoàn tất."
-                      : "Chế độ theo dõi không cho phép quét xác nhận."}
-                  </CardContent>
-                </Card>
-              )}
-            </>
-          ) : (
-            <Card>
-              <CardContent className="py-16 text-center text-sm text-muted-foreground">
-                Chọn một mặt hàng để mở bản đồ kho.
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 }

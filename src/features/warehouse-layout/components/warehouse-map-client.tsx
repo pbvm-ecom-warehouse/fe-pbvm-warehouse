@@ -48,6 +48,8 @@ import {
   setStagingRack,
 } from "../utils/warehouse-layout-operations";
 import {
+  findRackAccessPoint,
+  getAisleRect,
   getZoneRect,
   isRectInside,
   snapToGrid,
@@ -128,6 +130,8 @@ function formatLayoutError(error: unknown, fallback: string) {
     ZONE_HAS_RACKS:
       "Không thể xoá khu vực vì khu vực vẫn còn rack. Hãy xoá hoặc chuyển rack trước.",
     SHELF_HAS_STOCK: "Không thể xoá tầng kệ vì tầng này vẫn còn hàng tồn.",
+    RACK_TEMPLATE_STOCK_CONFLICT:
+      "Không thể thu nhỏ kệ vì một hoặc nhiều khoang vẫn đang có hàng tồn.",
   };
 
   return (code && messages[code]) || getApiErrorMessage(error) || fallback;
@@ -175,16 +179,33 @@ function WarehouseEditor({
   const [issues, setIssues] = useState<LayoutValidationIssue[]>([]);
   const [clientErrors, setClientErrors] = useState<string[]>([]);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [viewportResetKey, setViewportResetKey] = useState(0);
 
   const invalidSelectionKeys = useMemo(
-    () =>
-      new Set(
+    () => {
+      const keys = new Set(
         issues.flatMap((issue) => {
           const id = issue.id ?? issue.clientId;
           return id ? [`${issue.entity.toLowerCase()}:${id}`] : [];
         }),
-      ),
-    [issues],
+      );
+      editor.draftLayout.racks.forEach((rack) => {
+        const connected = editor.draftLayout.aisles.some((aisle) =>
+          isRectInside(
+            {
+              xM: rack.accessPoint.xM,
+              yM: rack.accessPoint.yM,
+              widthM: 0,
+              heightM: 0,
+            },
+            getAisleRect(aisle),
+          ),
+        );
+        if (!connected) keys.add(`rack:${rack.id}`);
+      });
+      return keys;
+    },
+    [editor.draftLayout, issues],
   );
 
   const activeSelection =
@@ -225,13 +246,17 @@ function WarehouseEditor({
   });
 
   const resetMutation = useMutation({
-    mutationFn: resetWarehouseLayout,
+    mutationFn: async () => {
+      const latestLayout = await onReload();
+      return resetWarehouseLayout(latestLayout.revision);
+    },
     onSuccess: (layout) => {
       editor.reset(layout);
       setSelection(null);
       setIssues([]);
       setClientErrors([]);
       setConflictRevision(null);
+      setViewportResetKey((value) => value + 1);
       queryClient.setQueryData(layoutKey, layout);
       toast.success(
         "Đã reset sơ đồ kho. Hãy tạo lại khu vực, rack và chọn một tầng kệ làm vị trí nhận hàng tạm.",
@@ -408,7 +433,7 @@ function WarehouseEditor({
         zoneRect.yM,
         zoneRect.yM + zoneRect.heightM - template.depthM,
       );
-      const rack: WarehouseLayoutRack = {
+      const rackDraft: WarehouseLayoutRack = {
         id,
         zoneId: zone.id,
         code,
@@ -424,11 +449,22 @@ function WarehouseEditor({
           { length: template.levelCount },
           (_, index) => `${code}-T${index + 1}`,
         ),
-        accessPoint: {
-          xM: rackX + template.widthM / 2,
-          yM: rackY + template.depthM + grid,
-        },
+        accessPoint: { xM: rackX, yM: rackY },
       };
+      const accessPoint = findRackAccessPoint(
+        rackDraft,
+        layout.aisles,
+        grid,
+      );
+      if (!accessPoint) {
+        toast.error(
+          "Hãy tạo lối đi trước, sau đó đặt rack sát lối đi (khoảng cách tối đa 2 m).",
+        );
+        return;
+      }
+      const rack = { ...rackDraft, accessPoint };
+      const innerHeight =
+        (template.heightM * 100) / template.levelCount;
       const shelves = rack.shelfCodes.map((shelfCode, index) => ({
         id: temporaryId(),
         rackId: id,
@@ -436,7 +472,7 @@ function WarehouseEditor({
         code: shelfCode,
         innerDepth: template.depthM * 100,
         innerWidth: template.widthM * 100,
-        innerHeight: 100,
+        innerHeight,
         isStaging: false,
       }));
       editor.commit((next) => ({
@@ -729,8 +765,11 @@ function WarehouseEditor({
             <h1 className="truncate text-lg font-semibold text-slate-950">
               Bản đồ kho 2D
             </h1>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-600">
-              rev {editor.baseLayout.revision}
+            <span
+              className="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-600"
+              title="Mỗi lần lưu hoặc reset sơ đồ sẽ tăng một phiên bản"
+            >
+              Phiên bản {editor.baseLayout.revision}
             </span>
             <span
               className={
@@ -795,18 +834,17 @@ function WarehouseEditor({
       {conflictRevision !== null ? (
         <div className="flex items-center justify-between gap-4 border-b border-amber-200 bg-amber-50 px-5 py-2.5 text-sm text-amber-950">
           <span>
-            Bản đồ đã được cập nhật ở phiên khác
-            {conflictRevision ? ` (revision ${conflictRevision})` : ""}. Draft
-            của bạn vẫn được giữ.
+            Draft đang dựa trên phiên bản {editor.baseLayout.revision}; máy chủ
+            hiện ở phiên bản {conflictRevision}. Draft của bạn vẫn được giữ.
           </span>
           <Button
-            aria-label="Tải bản mới"
+            aria-label="Tải bản mới và bỏ draft"
             onClick={() => void reloadCanonical()}
             size="sm"
             variant="outline"
           >
             <RefreshCw data-icon="inline-start" />
-            Tải bản mới
+            Tải bản mới và bỏ draft
           </Button>
         </div>
       ) : null}
@@ -858,6 +896,7 @@ function WarehouseEditor({
             className="h-full rounded-xl border-slate-300 bg-white shadow-sm"
             editable={canEdit}
             invalidSelectionKeys={invalidSelectionKeys}
+            key={`${viewportResetKey}:${editor.draftLayout.canvas.widthM}:${editor.draftLayout.canvas.heightM}:${editor.draftLayout.canvas.gridM}`}
             layout={editor.draftLayout}
             onCreate={createElement}
             onInteractionEnd={editor.endInteraction}
