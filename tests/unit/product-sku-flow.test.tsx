@@ -167,6 +167,10 @@ describe("product SKU creation", () => {
       await screen.findByRole("option", { name: "Nhóm nguyên liệu" }),
     );
 
+    fireEvent.click(
+      screen.getByRole("button", { name: "Tạo giá trị thuộc tính" }),
+    );
+
     fireEvent.change(screen.getByLabelText("Tên giá trị"), {
       target: { value: "Bột" },
     });

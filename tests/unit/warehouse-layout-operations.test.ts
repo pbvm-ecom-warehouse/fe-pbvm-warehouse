@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildWarehouseLayoutOperations } from "@/features/warehouse-layout/utils/warehouse-layout-operations";
+import {
+  buildWarehouseLayoutOperations,
+  reconcileRackShelves,
+  setStagingRack,
+} from "@/features/warehouse-layout/utils/warehouse-layout-operations";
 import type { WarehouseLayout } from "@/types/api";
 
 const base: WarehouseLayout = {
@@ -171,5 +175,155 @@ describe("buildWarehouseLayoutOperations", () => {
         },
       },
     ]);
+  });
+  it("chọn nhận tạm theo cả rack và giữ mọi rack khác là vị trí lưu trữ", () => {
+    const layout = structuredClone(base);
+    layout.racks = [
+      {
+        id: "rack-temp",
+        zoneId: "z1",
+        code: "RACK-00",
+        name: "Kệ tạm",
+        xM: 0,
+        yM: 0,
+        widthM: 6,
+        depthM: 1.5,
+        rotation: 0,
+        levelCount: 3,
+        bayCount: 3,
+        shelfCodes: ["RACK-00-T1", "RACK-00-T2", "RACK-00-T3"],
+        accessPoint: { xM: 1, yM: 1 },
+      },
+      {
+        id: "rack-storage",
+        zoneId: "z1",
+        code: "RACK-10",
+        name: "Kệ chính",
+        xM: 10,
+        yM: 0,
+        widthM: 6,
+        depthM: 1.5,
+        rotation: 0,
+        levelCount: 3,
+        bayCount: 3,
+        shelfCodes: ["RACK-10-T1", "RACK-10-T2", "RACK-10-T3"],
+        accessPoint: { xM: 11, yM: 1 },
+      },
+    ];
+    layout.shelves = [
+      {
+        id: "t1",
+        rackId: "rack-temp",
+        level: 1,
+        code: "RACK-00-T1",
+        isStaging: false,
+      },
+      {
+        id: "t2",
+        rackId: "rack-temp",
+        level: 2,
+        code: "RACK-00-T2",
+        isStaging: false,
+      },
+      {
+        id: "t3",
+        rackId: "rack-temp",
+        level: 3,
+        code: "RACK-00-T3",
+        isStaging: false,
+      },
+      {
+        id: "s1",
+        rackId: "rack-storage",
+        level: 1,
+        code: "RACK-10-T1",
+        isStaging: true,
+      },
+      {
+        id: "s2",
+        rackId: "rack-storage",
+        level: 2,
+        code: "RACK-10-T2",
+        isStaging: false,
+      },
+      {
+        id: "s3",
+        rackId: "rack-storage",
+        level: 3,
+        code: "RACK-10-T3",
+        isStaging: false,
+      },
+    ];
+
+    const next = setStagingRack(layout, "rack-temp");
+
+    expect(next.shelves.map((shelf) => [shelf.id, shelf.isStaging])).toEqual([
+      ["t1", true],
+      ["t2", true],
+      ["t3", true],
+      ["s1", false],
+      ["s2", false],
+      ["s3", false],
+    ]);
+  });
+  it("bổ sung tầng còn thiếu theo rack template và giữ rack nhận tạm theo cả 3 tầng", () => {
+    const layout = structuredClone(base);
+    layout.rackTemplate = {
+      widthM: 10,
+      depthM: 1.5,
+      levelCount: 3,
+      bayCount: 4,
+    };
+    layout.racks = [
+      {
+        id: "rack-temp",
+        zoneId: "z1",
+        code: "RACK-00",
+        name: "Kệ tạm",
+        xM: 0,
+        yM: 0,
+        widthM: 10,
+        depthM: 1.5,
+        rotation: 0,
+        levelCount: 2,
+        bayCount: 4,
+        shelfCodes: ["RACK-00-T1", "RACK-00-T2"],
+        accessPoint: { xM: 1, yM: 1 },
+      },
+    ];
+    layout.shelves = [
+      {
+        id: "t1",
+        rackId: "rack-temp",
+        level: 1,
+        code: "RACK-00-T1",
+        isStaging: true,
+      },
+      {
+        id: "t2",
+        rackId: "rack-temp",
+        level: 2,
+        code: "RACK-00-T2",
+        isStaging: true,
+      },
+    ];
+
+    const next = reconcileRackShelves(layout, () => "tmp:new-t3");
+
+    expect(next.racks[0]).toMatchObject({
+      levelCount: 3,
+      shelfCodes: ["RACK-00-T1", "RACK-00-T2", "RACK-00-T3"],
+    });
+    expect(next.shelves).toHaveLength(3);
+    expect(next.shelves[2]).toEqual({
+      id: "tmp:new-t3",
+      rackId: "rack-temp",
+      level: 3,
+      code: "RACK-00-T3",
+      innerDepth: 150,
+      innerWidth: 1000,
+      innerHeight: 100,
+      isStaging: true,
+    });
   });
 });

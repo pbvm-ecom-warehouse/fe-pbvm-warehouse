@@ -34,7 +34,7 @@ describe("warehouse navigation services", () => {
 
     const result = await listPutawaySuggestionResult({
       sku: "CUP-BLANK-500",
-      quantity: 80,
+      packageCount: 80,
     });
 
     expect(mockedGet).toHaveBeenCalledWith("/putaway/suggestions", {
@@ -61,7 +61,7 @@ describe("warehouse navigation services", () => {
     await expect(
       listPutawaySuggestionResult({
         sku: "SKU-001",
-        quantity: 999,
+        packageCount: 999,
       }),
     ).resolves.toMatchObject({
       suggestions: [],
@@ -75,7 +75,7 @@ describe("warehouse navigation services", () => {
     await expect(
       listPutawaySuggestionResult({
         sku: "CUP-BLANK-500",
-        quantity: 80,
+        packageCount: 80,
       }),
     ).rejects.toBeInstanceOf(MissingBackendEndpointError);
   });

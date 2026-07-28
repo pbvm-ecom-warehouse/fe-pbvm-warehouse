@@ -5,19 +5,42 @@ import {
   unwrapApiData,
 } from "@/lib/api-contract";
 
+export type NavigationPath = {
+  startGateCode: string;
+  targetRackId: string;
+  points: { xM: number; yM: number }[];
+  distanceM: number;
+};
+
 export type PutawaySuggestionInput = {
-  quantity: number;
+  packageCount: number;
   sku: string;
+  lotId?: string;
+  packageSpec?: {
+    depthCm: number;
+    widthCm: number;
+    heightCm: number;
+    volumeCm3: number;
+  };
 };
 
 export type PutawaySuggestionWarning =
   | "ITEM_NO_DIMENSIONS"
   | "NO_SHELF_FITS"
-  | "INSUFFICIENT_CAPACITY";
+  | "INSUFFICIENT_CAPACITY"
+  | "NO_NAVIGATION_PATH";
 
 export type PutawayShelfSuggestion = {
   shelfCode: string;
   capacity: number;
+  cellId: string;
+  cellCode: string;
+  rackId: string;
+  level: number;
+  bay: number;
+  fillPercent: number;
+  reason: "SAME_SKU_LOT_CELL" | "SAME_SKU_CELL" | "BEST_FIT_VOLUME";
+  path: NavigationPath;
 };
 
 export type PutawaySuggestionResponse = {
@@ -25,10 +48,8 @@ export type PutawaySuggestionResponse = {
   warning?: PutawaySuggestionWarning | null;
 };
 
-export type PutawaySuggestionResult = {
+export type PutawaySuggestionResult = PutawaySuggestionResponse & {
   source: "api";
-  suggestions: PutawayShelfSuggestion[];
-  warning?: PutawaySuggestionWarning | null;
 };
 
 export async function listPutawaySuggestionResult(
@@ -39,17 +60,17 @@ export async function listPutawaySuggestionResult(
       ApiEnvelope<PutawaySuggestionResponse> | PutawaySuggestionResponse
     >("/putaway/suggestions", {
       params: {
-        qty: input.quantity,
+        qty: input.packageCount,
         sku: input.sku,
+        lotId: input.lotId,
+        packageVolumeCm3: input.packageSpec?.volumeCm3,
+        packageDepthCm: input.packageSpec?.depthCm,
+        packageWidthCm: input.packageSpec?.widthCm,
+        packageHeightCm: input.packageSpec?.heightCm,
       },
     });
     const payload = unwrapApiData(response.data);
-
-    return {
-      source: "api",
-      suggestions: payload.suggestions,
-      warning: payload.warning,
-    };
+    return { source: "api", ...payload };
   } catch (error) {
     throwIfMissingBackendEndpoint(error, "GET /api/wms/putaway/suggestions");
     throw error;

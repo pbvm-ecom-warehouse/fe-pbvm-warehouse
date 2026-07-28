@@ -20,6 +20,7 @@ import {
   createGoodsReceiptNote,
   listGoodsReceiptNotes,
   normalizeGoodsReceiptNoteListResponse,
+  updateGoodsReceiptNoteItems,
 } from "@/features/purchases/services/goods-receipt-note.service";
 import {
   confirmPutawayLine,
@@ -442,6 +443,7 @@ describe("Swagger-backed WMS services", () => {
   it("calls goods receipt note endpoints from Swagger", async () => {
     mockedGet.mockResolvedValueOnce({ data: [grn] });
     mockedPost.mockResolvedValue({ data: grn });
+    mockedPatch.mockResolvedValue({ data: grn });
 
     await listGoodsReceiptNotes({
       limit: 20,
@@ -453,6 +455,7 @@ describe("Swagger-backed WMS services", () => {
       items: grn.items,
       purchaseOrderId: "po-1",
     });
+    await updateGoodsReceiptNoteItems("grn-1", grn.items);
     await confirmGoodsReceiptNote("grn-1");
     await approveGoodsReceiptNote("grn-1");
 
@@ -475,12 +478,29 @@ describe("Swagger-backed WMS services", () => {
           lotNumber: undefined,
           expiryDate: undefined,
           note: undefined,
+          packageCount: undefined,
         },
       ],
       purchaseOrderId: "po-1",
     });
+    expect(mockedPatch).toHaveBeenCalledWith(
+      "/goods-receipt-notes/grn-1/items",
+      {
+        items: [
+          {
+            actualQty: 10,
+            itemId: "item-1",
+            unit: "cái",
+            lotNumber: undefined,
+            expiryDate: undefined,
+            note: undefined,
+            packageCount: undefined,
+          },
+        ],
+      },
+    );
     expect(mockedPost).toHaveBeenCalledWith(
-      "/goods-receipt-notes/grn-1/confirm",
+      "/goods-receipt-notes/grn-1/submit",
     );
     expect(mockedPost).toHaveBeenCalledWith(
       "/goods-receipt-notes/grn-1/approve",
@@ -537,8 +557,8 @@ describe("Swagger-backed WMS services", () => {
     });
     await confirmGoodsIssueLine("gi-1", {
       itemBarcode: "CUP-BLANK-500",
-      quantity: 10,
-      shelfCode: "A1-S02",
+      cellBarcode: "A1-S02-B1",
+      packageCount: 10,
     });
 
     expect(mockedGet).toHaveBeenCalledWith("/goods-issues", {
@@ -553,8 +573,8 @@ describe("Swagger-backed WMS services", () => {
     );
     expect(mockedPost).toHaveBeenCalledWith("/goods-issues/gi-1/confirm-line", {
       itemBarcode: "CUP-BLANK-500",
-      quantity: 10,
-      shelfCode: "A1-S02",
+      cellBarcode: "A1-S02-B1",
+      packageCount: 10,
     });
   });
 

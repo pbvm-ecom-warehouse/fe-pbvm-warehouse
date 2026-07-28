@@ -961,17 +961,29 @@ test("manager opens the canonical warehouse map editor", async ({ page }) => {
   expect(legacyWarehouseCalled).toBe(false);
 });
 
-test("picker sees picking location and confirms goods issue line", async ({
+test("picker follows the suggested cell and confirms whole-package issue", async ({
   page,
 }) => {
   await seedWmsSession(page, ["PICKER"], "Picker User");
+  let confirmBody: Record<string, unknown> | undefined;
+  const path = {
+    startGateCode: "GATE-01",
+    targetRackId: "rack-1",
+    points: [
+      { xM: 0, yM: 2 },
+      { xM: 4, yM: 2 },
+      { xM: 8, yM: 5 },
+    ],
+    distanceM: 9,
+  };
   const goodsIssue = {
     id: "gi-1",
     items: [
       {
         itemId: "item-1",
-        quantity: 12,
-        remainingQty: 12,
+        quantity: 24,
+        remainingQty: 24,
+        packageCount: 2,
         sku: "CUP-500ML-RED",
         unit: "cái",
       },
@@ -979,74 +991,157 @@ test("picker sees picking location and confirms goods issue line", async ({
     orderId: "ORD-1",
     status: "PENDING",
   };
+  const cell = {
+    id: "cell-1",
+    rackId: "rack-1",
+    shelfId: "shelf-1",
+    level: 1,
+    bay: 1,
+    code: "R01-T1-B1",
+    barcode: "R01-T1-B1",
+    status: "ACTIVE",
+    innerDepth: 100,
+    innerWidth: 100,
+    innerHeight: 100,
+    usableVolumeCm3: 750000,
+    occupiedVolumeCm3: 60000,
+    fillPercent: 8,
+    contents: [
+      {
+        id: "inventory-1",
+        sku: "CUP-500ML-RED",
+        itemName: "Ly nhựa 500ml",
+        unit: "cái",
+        quantity: 24,
+        packageCount: 2,
+        packageFactor: 12,
+        lotNumber: "LOT-A",
+      },
+    ],
+  };
 
   await page.route("**/api/wms/goods-issues**", async (route) => {
     const url = route.request().url();
-    const method = route.request().method();
-
-    if (method === "POST") {
+    if (route.request().method() === "POST") {
+      confirmBody = route.request().postDataJSON();
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
+          meta: { requestId: "pick-e2e" },
           data: { ...goodsIssue, status: "CONFIRMED" },
-          meta: { requestId: "goods-issue-confirm" },
         }),
       });
       return;
     }
-
-    if (url.includes("/goods-issues/gi-1/items/item-1/suggestions")) {
+    if (url.includes("/items/item-1/suggestions")) {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
+          meta: { requestId: "pick-e2e" },
           data: [
             {
+              shelfId: "shelf-1",
+              shelfCode: "R01-T1",
+              cellId: "cell-1",
+              cellCode: "R01-T1-B1",
+              rackId: "rack-1",
+              level: 1,
+              bay: 1,
+              path,
               lotId: "lot-1",
               lotNumber: "LOT-A",
-              quantity: 12,
-              shelfCode: "A1-S02",
-              shelfId: "shelf-1",
+              quantity: 24,
+              packageCount: 2,
+              packageFactor: 12,
             },
           ],
-          meta: { requestId: "pick-suggestions" },
         }),
       });
       return;
     }
-
-    if (url.includes("/goods-issues/gi-1")) {
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({
-          data: goodsIssue,
-          meta: { requestId: "goods-issue-detail" },
-        }),
-      });
-      return;
-    }
-
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
-        data: [goodsIssue],
-        meta: { requestId: "goods-issue-list" },
+        meta: { requestId: "pick-e2e" },
+        data: url.includes("/goods-issues/gi-1") ? goodsIssue : [goodsIssue],
       }),
+    });
+  });
+  await page.route("**/api/wms/location/layout", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        meta: { requestId: "pick-e2e" },
+        data: {
+          id: "layout-1",
+          revision: 1,
+          canvas: { widthM: 20, heightM: 12, gridM: 1 },
+          rackTemplate: { widthM: 4, depthM: 1, levelCount: 3, bayCount: 4 },
+          zones: [],
+          racks: [
+            {
+              id: "rack-1",
+              code: "R01",
+              name: "Kệ R01",
+              xM: 7,
+              yM: 4,
+              widthM: 4,
+              depthM: 1,
+              rotation: 0,
+              accessPointXM: 8,
+              accessPointYM: 5,
+            },
+          ],
+          shelves: [],
+          aisles: [
+            {
+              id: "aisle-1",
+              code: "A01",
+              xM: 0,
+              yM: 2,
+              widthM: 12,
+              heightM: 2,
+            },
+          ],
+          gates: [{ id: "gate-1", code: "GATE-01", xM: 0, yM: 2 }],
+        },
+      }),
+    });
+  });
+  await page.route("**/api/wms/location/racks/rack-1/cells", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ data: [cell], meta: { requestId: "pick-cell" } }),
+    });
+  });
+  await page.route("**/api/wms/location/navigation**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ data: path, meta: { requestId: "pick-path" } }),
     });
   });
 
   await page.goto("/goods-issues");
-  await expect(page.getByRole("heading", { name: "Xuất kho" })).toBeVisible();
+  await page.getByRole("button", { name: "Xem chi tiết" }).click();
   await page.getByRole("row", { name: /CUP-500ML-RED/i }).click();
-  await expect(page.getByText("A1-S02").first()).toBeVisible();
-  await page.getByRole("button", { name: /A1-S02/i }).click();
-  await expect(page.getByLabel("Mã vị trí")).toHaveValue("A1-S02");
-  await expect(page.getByLabel("Mã vạch mặt hàng")).toHaveValue("");
-  await page.getByLabel("Mã vạch mặt hàng").fill("2000000000015");
-  await expect(page.getByLabel("Mã lô")).toHaveValue("lot-1");
-  await page.getByRole("button", { name: /^Xác nhận$/i }).click();
-  await expect(page.getByText(/Đã xác nhận dòng xuất kho/i)).toBeVisible();
+  await expect(page.getByText("R01-T1-B1").first()).toBeVisible();
+  await page.getByRole("button", { name: "Chọn khoang và quét mã" }).click();
+  const scanner = page.getByRole("dialog", { name: "Quét xác nhận vị trí" });
+  await scanner.getByLabel("Mã vạch mặt hàng").fill("2000000000015");
+  await expect(scanner.getByLabel("Mã khoang")).toHaveValue("R01-T1-B1");
+  await scanner.getByLabel("Số thùng nguyên").fill("2");
+  await scanner.getByRole("button", { name: "Xác nhận lấy hàng" }).click();
+  await expect(
+    page.getByText(/Đã xác nhận lấy hàng đúng khoang/i),
+  ).toBeVisible();
+  expect(confirmBody).toMatchObject({
+    itemBarcode: "2000000000015",
+    cellBarcode: "R01-T1-B1",
+    packageCount: 2,
+    suggestedCellId: "cell-1",
+    lotId: "lot-1",
+  });
 });
-
 test("shipper assigns a carrier and advances a shipment", async ({ page }) => {
   await seedWmsSession(page, ["SHIPPER"], "Shipper User");
   let shipmentStatus = "PENDING";

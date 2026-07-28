@@ -5,6 +5,7 @@ const statusLabels: Record<string, string> = {
   CANCELLED: "Đã hủy",
   COMPLETED: "Hoàn tất",
   CONFIRMED: "Đã xác nhận",
+  PENDING_APPROVAL: "Chờ duyệt",
   CONSUMED: "Đã lấy ly",
   DRAFT: "Nháp",
   DAMAGED: "Hàng lỗi",

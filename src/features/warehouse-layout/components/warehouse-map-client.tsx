@@ -44,6 +44,10 @@ import {
 } from "../services/warehouse-layout.service";
 import { useWarehouseEditor } from "../hooks/use-warehouse-editor";
 import {
+  reconcileRackShelves,
+  setStagingRack,
+} from "../utils/warehouse-layout-operations";
+import {
   getZoneRect,
   isRectInside,
   snapToGrid,
@@ -430,6 +434,9 @@ function WarehouseEditor({
         rackId: id,
         level: index + 1,
         code: shelfCode,
+        innerDepth: template.depthM * 100,
+        innerWidth: template.widthM * 100,
+        innerHeight: 100,
         isStaging: false,
       }));
       editor.commit((next) => ({
@@ -553,33 +560,23 @@ function WarehouseEditor({
   }
 
   function patchRackTemplate(patch: Record<string, number>) {
-    editor.commit((layout) => {
-      const template = { ...layout.rackTemplate, ...patch };
-      return {
+    editor.commit((layout) =>
+      reconcileRackShelves({
         ...layout,
-        rackTemplate: template,
-        racks: layout.racks.map((rack) => ({
-          ...rack,
-          widthM: template.widthM,
-          depthM: template.depthM,
-          levelCount: template.levelCount,
-          bayCount: template.bayCount,
-        })),
-      };
-    });
+        rackTemplate: { ...layout.rackTemplate, ...patch },
+      }),
+    );
     setIssues([]);
   }
 
-  function patchShelf(shelfId: string, patch: Record<string, unknown>) {
+  function patchStagingRack(rackId: string) {
     editor.commit((layout) => {
-      layout.shelves = layout.shelves.map((item) => {
-        if (patch.isStaging === true) {
-          return { ...item, isStaging: item.id === shelfId };
-        }
-        if (item.id !== shelfId) return item;
-        return { ...item, ...patch };
-      });
-      return layout;
+      const rackShelves = layout.shelves.filter(
+        (shelf) => shelf.rackId === rackId,
+      );
+      const isCurrentStagingRack =
+        rackShelves.length > 0 && rackShelves.every((shelf) => shelf.isStaging);
+      return setStagingRack(layout, isCurrentStagingRack ? null : rackId);
     });
     setIssues([]);
     setClientErrors([]);
@@ -888,7 +885,7 @@ function WarehouseEditor({
           }
           onPatchCanvas={patchCanvas}
           onPatchRackTemplate={patchRackTemplate}
-          onPatchShelf={patchShelf}
+          onSetStagingRack={patchStagingRack}
           onRotate={rotateSelection}
           selection={activeSelection}
         />
