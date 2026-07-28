@@ -4,6 +4,8 @@ import {
   cloneWarehouseLayout,
   findRackAccessPoint,
   getRackRect,
+  isRackHeightWhitelistIssue,
+  reconnectRackAccessPoints,
   snapToGrid,
   validateWarehouseLayoutClient,
 } from "@/features/warehouse-layout/utils/warehouse-layout";
@@ -175,11 +177,100 @@ describe("warehouse architectural layout", () => {
       ),
     ).toEqual({ xM: 8, yM: 6 });
     expect(
-      findRackAccessPoint(
-        editorLayout.racks[0],
-        [],
-        editorLayout.canvas.gridM,
-      ),
+      findRackAccessPoint(editorLayout.racks[0], [], editorLayout.canvas.gridM),
     ).toBeNull();
+  });
+
+  it("tự nối rack với lối đi gần nhất dù xa hơn 2 m", () => {
+    const rack = {
+      ...editorLayout.racks[0],
+      xM: 28,
+      yM: 15,
+    };
+
+    expect(findRackAccessPoint(rack, [editorLayout.aisles[1]], 0.5)).toEqual({
+      xM: 17,
+      yM: 8,
+    });
+  });
+
+  it("ưu tiên lối đi giữa rack khi khoảng cách bằng đường chính", () => {
+    const rack = {
+      ...editorLayout.racks[0],
+      xM: 8,
+      yM: 8,
+      widthM: 2,
+      depthM: 2,
+    };
+
+    expect(
+      findRackAccessPoint(
+        rack,
+        [
+          {
+            id: "main",
+            code: "MAIN",
+            type: "MAIN",
+            xM: 4,
+            yM: 8,
+            widthM: 2,
+            heightM: 2,
+          },
+          {
+            id: "rack-aisle",
+            code: "RACK-AISLE",
+            type: "RACK",
+            xM: 12,
+            yM: 8,
+            widthM: 2,
+            heightM: 2,
+          },
+        ],
+        0.5,
+      ),
+    ).toEqual({ xM: 12, yM: 9 });
+  });
+
+  it("tính lại access point của mọi rack sau khi aisle thay đổi", () => {
+    const layout = cloneWarehouseLayout(editorLayout);
+    layout.aisles = [
+      {
+        id: "new-rack-aisle",
+        code: "AISLE-NEW",
+        type: "RACK",
+        xM: 14,
+        yM: 0,
+        widthM: 2,
+        heightM: 24,
+      },
+    ];
+
+    const reconnected = reconnectRackAccessPoints(layout);
+
+    expect(reconnected.racks.map((rack) => rack.accessPoint)).toEqual([
+      { xM: 14, yM: 3.75 },
+      { xM: 14, yM: 11.75 },
+    ]);
+  });
+
+  it("nhận diện backend cũ từ lỗi whitelist heightM", () => {
+    expect(
+      isRackHeightWhitelistIssue([
+        {
+          entity: "RACK_TEMPLATE",
+          field: "heightM",
+          code: "whitelistValidation",
+        },
+      ]),
+    ).toBe(true);
+    expect(
+      isRackHeightWhitelistIssue([
+        {
+          entity: "RACK_TEMPLATE",
+          field: "widthM",
+          code: "VALUE_MUST_BE_POSITIVE",
+        },
+      ]),
+    ).toBe(false);
   });
 });
