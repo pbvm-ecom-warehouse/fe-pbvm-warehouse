@@ -164,7 +164,13 @@ test("receiver follows the 2D route and can put away into a compatible empty ove
           id: "layout-1",
           revision: 1,
           canvas: { widthM: 20, heightM: 12, gridM: 1 },
-          rackTemplate: { widthM: 4, depthM: 1, levelCount: 3, bayCount: 4 },
+          rackTemplate: {
+            widthM: 4,
+            depthM: 1,
+            heightM: 3,
+            levelCount: 3,
+            bayCount: 4,
+          },
           zones: [],
           racks: [
             {
@@ -216,6 +222,7 @@ test("receiver follows the 2D route and can put away into a compatible empty ove
   await page.goto("/putaway-tasks");
   await expect(page.getByRole("heading", { name: "Cất hàng" })).toBeVisible();
   await expect(page.getByText("SKU-CAFE").first()).toBeVisible();
+  await page.getByRole("button", { name: "Mở bản đồ" }).click();
   await expect(page.getByRole("button", { name: "2D" })).toBeVisible();
   await expect(page.getByText("R01-T1-B1").first()).toBeVisible();
 

@@ -1,7 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-import { WarehouseFloorPlan } from "@/features/warehouse-layout/components/warehouse-floor-plan";
+import {
+  calculateFitViewBox,
+  WarehouseFloorPlan,
+} from "@/features/warehouse-layout/components/warehouse-floor-plan";
 import type { WarehouseLayout } from "@/types/api";
 
 const layout: WarehouseLayout = {
@@ -10,7 +13,13 @@ const layout: WarehouseLayout = {
   status: "PUBLISHED",
   updatedAt: "2026-07-27T00:00:00.000Z",
   canvas: { widthM: 20, heightM: 12, gridM: 0.5 },
-  rackTemplate: { widthM: 5, depthM: 1.5, levelCount: 2, bayCount: 2 },
+  rackTemplate: {
+    widthM: 5,
+    depthM: 1.5,
+    heightM: 2,
+    levelCount: 2,
+    bayCount: 2,
+  },
   zones: [],
   racks: [],
   shelves: [],
@@ -183,5 +192,46 @@ describe("WarehouseFloorPlan editor tools", () => {
 
     const gate = screen.getByLabelText("Cổng nhận");
     expect(gate.querySelector("circle")).toHaveAttribute("fill", "#dc2626");
+  });
+
+  it("fit viewBox theo đúng tỷ lệ khung và vẫn chứa toàn bộ boundary", () => {
+    const viewBox = calculateFitViewBox(40, 24, 1000, 600, 1);
+
+    expect(viewBox.width / viewBox.height).toBeCloseTo(1000 / 600);
+    expect(viewBox.x).toBeLessThanOrEqual(0);
+    expect(viewBox.y).toBeLessThanOrEqual(0);
+    expect(viewBox.x + viewBox.width).toBeGreaterThanOrEqual(40);
+    expect(viewBox.y + viewBox.height).toBeGreaterThanOrEqual(24);
+  });
+
+  it("focus lối đi không dùng outline mặc định và chọn bằng bàn phím", () => {
+    const onSelect = vi.fn();
+    const layoutWithAisle: WarehouseLayout = {
+      ...layout,
+      aisles: [
+        {
+          id: "aisle-1",
+          code: "AISLE-01",
+          type: "MAIN",
+          xM: 8,
+          yM: 0,
+          widthM: 2,
+          heightM: 12,
+        },
+      ],
+    };
+    render(
+      <WarehouseFloorPlan
+        editable
+        layout={layoutWithAisle}
+        onSelect={onSelect}
+        tool="select"
+      />,
+    );
+
+    const aisle = screen.getByRole("button", { name: "Đường chính AISLE-01" });
+    expect(aisle).toHaveClass("outline-none");
+    fireEvent.focus(aisle);
+    expect(onSelect).toHaveBeenCalledWith({ kind: "aisle", id: "aisle-1" });
   });
 });

@@ -142,7 +142,15 @@ function assertWarehouseLayoutApiResponse(
   }
   if (typeof value.revision !== "number") missingFields.push("revision");
   if (!Array.isArray(value.shelves)) missingFields.push("shelves");
-  if (!isRecord(value.rackTemplate)) missingFields.push("rackTemplate");
+  if (!isRecord(value.rackTemplate)) {
+    missingFields.push("rackTemplate");
+  } else if (
+    typeof value.rackTemplate.heightM !== "number" ||
+    !Number.isFinite(value.rackTemplate.heightM) ||
+    value.rackTemplate.heightM <= 0
+  ) {
+    missingFields.push("rackTemplate.heightM");
+  }
   if (!Array.isArray(value.zones)) missingFields.push("zones");
   if (!Array.isArray(value.racks)) missingFields.push("racks");
   if (!Array.isArray(value.aisles)) missingFields.push("aisles");
@@ -229,10 +237,12 @@ export async function saveWarehouseLayout(
   };
 }
 
-export async function resetWarehouseLayout(): Promise<WarehouseLayout> {
+export async function resetWarehouseLayout(
+  expectedRevision: number,
+): Promise<WarehouseLayout> {
   const response = await apiClient.post<
     ApiEnvelope<WarehouseLayoutApiResponse> | WarehouseLayoutApiResponse
-  >("/location/layout/reset");
+  >("/location/layout/reset", { expectedRevision });
 
   return mapWarehouseLayoutResponse(unwrapApiData(response.data));
 }

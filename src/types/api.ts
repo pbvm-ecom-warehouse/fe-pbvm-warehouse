@@ -158,6 +158,7 @@ export type WarehouseLayoutGate = {
 export type WarehouseRackTemplate = {
   widthM: number;
   depthM: number;
+  heightM: number;
   levelCount: number;
   bayCount: number;
 };

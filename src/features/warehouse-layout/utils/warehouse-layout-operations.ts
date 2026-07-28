@@ -20,6 +20,11 @@ export function reconcileRackShelves(
   createId: () => string = () => `tmp:${crypto.randomUUID()}`,
 ): WarehouseLayout {
   const template = layout.rackTemplate;
+  const totalHeightM =
+    Number.isFinite(template.heightM) && template.heightM > 0
+      ? template.heightM
+      : template.levelCount;
+  const innerHeight = (totalHeightM * 100) / template.levelCount;
   const shelves: WarehouseLayoutShelf[] = [];
   const racks = layout.racks.map((rack) => {
     const current = layout.shelves
@@ -36,9 +41,9 @@ export function reconcileRackShelves(
         if (existing) {
           return {
             ...existing,
-            innerDepth: existing.innerDepth ?? template.depthM * 100,
-            innerWidth: existing.innerWidth ?? template.widthM * 100,
-            innerHeight: existing.innerHeight ?? 100,
+            innerDepth: template.depthM * 100,
+            innerWidth: template.widthM * 100,
+            innerHeight,
           };
         }
         return {
@@ -48,7 +53,7 @@ export function reconcileRackShelves(
           code: `${rack.code}-T${level}`,
           innerDepth: template.depthM * 100,
           innerWidth: template.widthM * 100,
-          innerHeight: 100,
+          innerHeight,
           isStaging: isStagingRack,
         };
       },

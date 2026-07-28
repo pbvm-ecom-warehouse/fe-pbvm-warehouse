@@ -111,6 +111,10 @@ function TextField({
   );
 }
 
+function formatCentimeters(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 const issueLabels: Record<string, string> = {
   CANVAS_DIMENSIONS_INVALID: "Kích thước canvas phải lớn hơn 0",
   RACK_TEMPLATE_DIMENSIONS_INVALID: "Kích thước rack phải lớn hơn 0",
@@ -120,6 +124,8 @@ const issueLabels: Record<string, string> = {
   RACK_OUTSIDE_ZONE: "Rack phải nằm hoàn toàn trong khu vực",
   RACK_OVERLAP: "Rack đang chồng lên rack khác",
   RACK_OVERLAPS_AISLE: "Rack đang chồng lên lối đi",
+  RACK_ACCESS_POINT_NOT_CONNECTED:
+    "Điểm tiếp cận của rack chưa nằm trong lối đi",
 };
 
 export function WarehouseLayoutInspector({
@@ -448,6 +454,14 @@ export function WarehouseLayoutInspector({
               value={template.depthM}
             />
           </div>
+          <NumberField
+            disabled={!canEdit}
+            label="Cao toàn kệ (m)"
+            min={0.1}
+            onChange={(heightM) => onPatchRackTemplate({ heightM })}
+            step={0.1}
+            value={template.heightM}
+          />
           <div className="grid grid-cols-2 gap-3">
             <NumberField
               disabled={!canEdit}
@@ -467,8 +481,22 @@ export function WarehouseLayoutInspector({
             />
           </div>
           <p className="text-[11px] leading-4 text-slate-500">
-            Chiều dài, chiều sâu và số khoang áp dụng cho mọi rack trên bản đồ.
+            Chiều dài, chiều sâu, chiều cao và số khoang áp dụng cho mọi rack
+            trên bản đồ.
           </p>
+          <div
+            aria-label="Kích thước mỗi khoang"
+            className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] leading-5 text-blue-900"
+          >
+            <span className="font-semibold">Mỗi khoang:</span>{" "}
+            {formatCentimeters((template.widthM * 100) / template.bayCount)} ×{" "}
+            {formatCentimeters(template.depthM * 100)} ×{" "}
+            {formatCentimeters(
+              (template.heightM * 100) / template.levelCount,
+            )}{" "}
+            cm. Sức chứa còn lại được tính từ thể tích hữu dụng trừ thể tích
+            hàng đang có.
+          </div>
         </div>
       </details>
     </aside>

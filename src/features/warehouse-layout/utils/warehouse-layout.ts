@@ -65,6 +65,47 @@ export function doRectsOverlap(left: LayoutRect, right: LayoutRect) {
   );
 }
 
+export function findRackAccessPoint(
+  rack: WarehouseLayoutRack,
+  aisles: WarehouseLayoutAisle[],
+  gridM: number,
+): { xM: number; yM: number } | null {
+  const rackRect = getRackRect(rack);
+  const rackCenter = {
+    xM: rackRect.xM + rackRect.widthM / 2,
+    yM: rackRect.yM + rackRect.heightM / 2,
+  };
+  const maximumGapM = Math.max(2, gridM * 4);
+
+  const candidates = aisles
+    .map((aisle) => {
+      const rect = getAisleRect(aisle);
+      const xM = Math.min(
+        Math.max(rackCenter.xM, rect.xM),
+        rect.xM + rect.widthM,
+      );
+      const yM = Math.min(
+        Math.max(rackCenter.yM, rect.yM),
+        rect.yM + rect.heightM,
+      );
+      const deltaX = Math.max(
+        rect.xM - (rackRect.xM + rackRect.widthM),
+        rackRect.xM - (rect.xM + rect.widthM),
+        0,
+      );
+      const deltaY = Math.max(
+        rect.yM - (rackRect.yM + rackRect.heightM),
+        rackRect.yM - (rect.yM + rect.heightM),
+        0,
+      );
+      return { point: { xM, yM }, distance: Math.hypot(deltaX, deltaY) };
+    })
+    .filter((candidate) => candidate.distance <= maximumGapM)
+    .sort((left, right) => left.distance - right.distance);
+
+  return candidates[0]?.point ?? null;
+}
+
 export function validateWarehouseLayoutClient(
   layout: WarehouseLayout,
   options: { publishing?: boolean } = {},
@@ -118,6 +159,20 @@ export function validateWarehouseLayoutClient(
     const zone = layout.zones.find((item) => item.id === rack.zoneId);
     if (!zone || !isRectInside(getRackRect(rack), getZoneRect(zone))) {
       errors.push(`${rack.code} phải nằm hoàn toàn trong zone.`);
+    }
+    const accessPointConnected = layout.aisles.some((aisle) =>
+      isRectInside(
+        {
+          xM: rack.accessPoint.xM,
+          yM: rack.accessPoint.yM,
+          widthM: 0,
+          heightM: 0,
+        },
+        getAisleRect(aisle),
+      ),
+    );
+    if (!accessPointConnected) {
+      errors.push(`${rack.code} chưa nối với lối đi.`);
     }
   });
 

@@ -905,6 +905,7 @@ test("manager opens the canonical warehouse map editor", async ({ page }) => {
           rackTemplate: {
             widthM: 10,
             depthM: 1.5,
+            heightM: 3,
             levelCount: 3,
             bayCount: 3,
           },
@@ -1076,7 +1077,13 @@ test("picker follows the suggested cell and confirms whole-package issue", async
           id: "layout-1",
           revision: 1,
           canvas: { widthM: 20, heightM: 12, gridM: 1 },
-          rackTemplate: { widthM: 4, depthM: 1, levelCount: 3, bayCount: 4 },
+          rackTemplate: {
+            widthM: 4,
+            depthM: 1,
+            heightM: 3,
+            levelCount: 3,
+            bayCount: 4,
+          },
           zones: [],
           racks: [
             {

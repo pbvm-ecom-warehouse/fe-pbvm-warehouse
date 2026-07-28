@@ -13,7 +13,13 @@ const base: WarehouseLayout = {
   status: "PUBLISHED",
   updatedAt: "2026-07-27T00:00:00.000Z",
   canvas: { widthM: 40, heightM: 24, gridM: 0.5 },
-  rackTemplate: { widthM: 6, depthM: 1.5, levelCount: 2, bayCount: 3 },
+  rackTemplate: {
+    widthM: 6,
+    depthM: 1.5,
+    heightM: 2,
+    levelCount: 2,
+    bayCount: 3,
+  },
   zones: [],
   racks: [],
   shelves: [],
@@ -90,6 +96,66 @@ describe("buildWarehouseLayoutOperations", () => {
       { op: "UPDATE", entity: "CANVAS", patch: { widthM: 48 } },
       { op: "UPDATE", entity: "RACK_TEMPLATE", patch: { depthM: 2 } },
     ]);
+  });
+
+  it("chia đều tổng chiều cao và đồng bộ lại kích thước mọi tầng", () => {
+    const layout = structuredClone(base);
+    layout.rackTemplate = {
+      widthM: 8,
+      depthM: 2,
+      heightM: 3,
+      levelCount: 3,
+      bayCount: 4,
+    };
+    layout.racks = [
+      {
+        id: "r1",
+        zoneId: "z1",
+        code: "RACK-01",
+        name: "Kệ 1",
+        xM: 1,
+        yM: 1,
+        widthM: 6,
+        depthM: 1.5,
+        rotation: 0,
+        levelCount: 2,
+        bayCount: 3,
+        shelfCodes: ["RACK-01-T1", "RACK-01-T2"],
+        accessPoint: { xM: 4, yM: 3 },
+      },
+    ];
+    layout.shelves = [
+      {
+        id: "s1",
+        rackId: "r1",
+        level: 1,
+        code: "RACK-01-T1",
+        innerWidth: 600,
+        innerDepth: 150,
+        innerHeight: 75,
+        isStaging: false,
+      },
+    ];
+
+    const next = reconcileRackShelves(layout, () => "tmp:new");
+
+    expect(next.shelves).toHaveLength(3);
+    expect(next.shelves).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: 1,
+          innerWidth: 800,
+          innerDepth: 200,
+          innerHeight: 100,
+        }),
+        expect.objectContaining({
+          level: 3,
+          innerWidth: 800,
+          innerDepth: 200,
+          innerHeight: 100,
+        }),
+      ]),
+    );
   });
 
   it("xóa Shelf trước Rack trước Zone để vượt delete guards", () => {
@@ -271,6 +337,7 @@ describe("buildWarehouseLayoutOperations", () => {
     layout.rackTemplate = {
       widthM: 10,
       depthM: 1.5,
+      heightM: 3,
       levelCount: 3,
       bayCount: 4,
     };
