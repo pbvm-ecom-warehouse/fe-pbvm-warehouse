@@ -11,7 +11,6 @@ export type UnassignedInventoryRow = {
   lotId?: string | null;
   lotNumber?: string | null;
   quantity: number;
-  packageCount: number;
   packageFactor?: number | null;
   packageVolumeCm3Snapshot?: number | null;
 };
@@ -27,8 +26,7 @@ export type InventoryCellProgress = {
 export type AssignInventoryCellInput = {
   inventoryId: string;
   cellBarcode: string;
-  packageCount: number;
-  packageFactor: number;
+  quantity: number;
   packageDepthCm: number;
   packageWidthCm: number;
   packageHeightCm: number;

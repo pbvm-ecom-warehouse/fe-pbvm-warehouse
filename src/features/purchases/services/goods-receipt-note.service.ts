@@ -27,21 +27,16 @@ export type GoodsReceiptNoteItem = {
   unitPrice?: number;
   receivedQty?: number;
   remainingQty?: number;
+  /** Số thùng thực nhận — luôn là số nguyên, luôn theo đơn vị cơ sở (thùng). */
   actualQty: number;
-  unit: string;
   lotNumber?: string | null;
   expiryDate?: string | null;
   note?: string | null;
-  packageCount?: number;
   wholePackageOnly?: boolean;
-  packageSpec?: {
-    unit: string;
-    factor: number;
-    depthCm: number;
-    widthCm: number;
-    heightCm: number;
-    volumeCm3: number;
-  };
+  /** Kích thước 1 thùng — đọc live từ WarehouseItem. */
+  itemDepth?: number;
+  itemWidth?: number;
+  itemHeight?: number;
 };
 
 export type GoodsReceiptNote = {
@@ -73,11 +68,9 @@ export type QueryGoodsReceiptNotesInput = {
 export type CreateGoodsReceiptNoteItemInput = {
   itemId: string;
   actualQty: number;
-  unit?: string;
   lotNumber?: string;
   expiryDate?: string;
   note?: string;
-  packageCount?: number;
 };
 
 export type CreateGoodsReceiptNoteInput = {
@@ -137,11 +130,9 @@ export async function createGoodsReceiptNote(
     items: input.items?.map((item) => ({
       itemId: item.itemId,
       actualQty: item.actualQty,
-      unit: item.unit,
       lotNumber: item.lotNumber,
       expiryDate: item.expiryDate,
       note: item.note,
-      packageCount: item.packageCount,
     })),
   };
   const response = await apiClient.post<
@@ -161,11 +152,9 @@ export async function updateGoodsReceiptNoteItems(
     items: items.map((item) => ({
       itemId: item.itemId,
       actualQty: item.actualQty,
-      unit: item.unit,
       lotNumber: item.lotNumber,
       expiryDate: item.expiryDate,
       note: item.note,
-      packageCount: item.packageCount,
     })),
   });
 

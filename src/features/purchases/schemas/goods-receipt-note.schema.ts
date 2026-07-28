@@ -2,7 +2,10 @@ import { z } from "zod";
 
 const goodsReceiptItemFormSchema = z
   .object({
-    actualQty: z.coerce.number().positive("Số lượng thực nhập phải lớn hơn 0"),
+    actualQty: z.coerce
+      .number()
+      .int("Số thùng thực nhận phải là số nguyên")
+      .positive("Số thùng thực nhận phải lớn hơn 0"),
     expiryDate: z.string().trim().optional().default(""),
     isPerishable: z.boolean(),
     itemId: z.string().trim().min(1, "Thiếu mặt hàng"),
@@ -10,7 +13,6 @@ const goodsReceiptItemFormSchema = z
     lotNumber: z.string().trim().optional().default(""),
     note: z.string().trim().max(240, "Ghi chú quá dài").optional().default(""),
     sku: z.string().trim().min(1, "Thiếu SKU"),
-    unit: z.string().trim().min(1, "Thiếu đơn vị"),
   })
   .superRefine((value, context) => {
     if (value.isPerishable && !value.lotNumber) {

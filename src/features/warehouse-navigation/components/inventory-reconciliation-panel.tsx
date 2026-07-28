@@ -36,8 +36,7 @@ export function InventoryReconciliationPanel() {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<UnassignedInventoryRow>();
   const [cellBarcode, setCellBarcode] = useState("");
-  const [packageCount, setPackageCount] = useState("1");
-  const [factor, setFactor] = useState("1");
+  const [quantity, setQuantity] = useState("1");
   const [depth, setDepth] = useState("");
   const [width, setWidth] = useState("");
   const [height, setHeight] = useState("");
@@ -56,8 +55,7 @@ export function InventoryReconciliationPanel() {
       return assignInventoryCell({
         inventoryId: selected.id,
         cellBarcode: cellBarcode.trim(),
-        packageCount: Number(packageCount),
-        packageFactor: Number(factor),
+        quantity: Number(quantity),
         packageDepthCm: Number(depth),
         packageWidthCm: Number(width),
         packageHeightCm: Number(height),
@@ -81,8 +79,7 @@ export function InventoryReconciliationPanel() {
   const progress = progressQuery.data;
   function choose(row: UnassignedInventoryRow) {
     setSelected(row);
-    setFactor(String(row.packageFactor ?? 1));
-    setPackageCount(String(row.packageCount > 0 ? row.packageCount : 1));
+    setQuantity(String(row.quantity > 0 ? row.quantity : 1));
     const volume = row.packageVolumeCm3Snapshot;
     if (volume) {
       setDepth(String(volume));
@@ -98,10 +95,10 @@ export function InventoryReconciliationPanel() {
   const valid =
     selected &&
     cellBarcode.trim() &&
-    Number(packageCount) > 0 &&
-    Number(factor) > 0 &&
+    Number.isInteger(Number(quantity)) &&
+    Number(quantity) > 0 &&
     volume > 0 &&
-    Number(packageCount) * Number(factor) <= selected.quantity;
+    Number(quantity) <= selected.quantity;
   return (
     <div className="space-y-4">
       <Card>
@@ -231,25 +228,15 @@ export function InventoryReconciliationPanel() {
                 placeholder="Quét tem khoang"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Số thùng</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={packageCount}
-                  onChange={(event) => setPackageCount(event.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Số đơn vị/thùng</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={factor}
-                  onChange={(event) => setFactor(event.target.value)}
-                />
-              </div>
+            <div className="space-y-2">
+              <Label>Số thùng</Label>
+              <Input
+                type="number"
+                min="1"
+                step="1"
+                value={quantity}
+                onChange={(event) => setQuantity(event.target.value)}
+              />
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div className="space-y-2">

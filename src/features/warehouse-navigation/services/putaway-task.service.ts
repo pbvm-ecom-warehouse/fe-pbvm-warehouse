@@ -11,8 +11,6 @@ export type PutawayTaskItem = {
   sku: string;
   quantity: number;
   remainingQty?: number;
-  packageCount?: number;
-  remainingPackageCount?: number;
   unit?: string;
   lotId?: string | null;
   lotNumber?: string | null;
@@ -48,7 +46,6 @@ export type ConfirmPutawayLineInput = {
   shelfCode?: string;
   cellBarcode?: string;
   quantity?: number;
-  packageCount?: number;
   suggestedCellId?: string;
   lotId?: string;
 };

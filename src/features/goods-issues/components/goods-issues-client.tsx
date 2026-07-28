@@ -122,19 +122,14 @@ export function GoodsIssuesClient() {
       }),
   });
   const suggestions = suggestionsQuery.data ?? [];
-  const factor =
-    suggestions[0]?.packageFactor ??
-    (suggestions[0]?.packageCount
-      ? suggestions[0].quantity / suggestions[0].packageCount
-      : 1);
   const remainingPackageCount = selectedItem
-    ? Math.max(1, Math.floor(selectedItem.remainingQty / Math.max(1, factor)))
+    ? Math.max(1, Math.floor(selectedItem.remainingQty))
     : 1;
   const confirmMutation = useMutation({
     mutationFn: async (input: {
       itemBarcode: string;
       cellBarcode: string;
-      packageCount: number;
+      quantity: number;
       suggestedCellId?: string;
     }) => {
       const source =
@@ -348,7 +343,7 @@ export function GoodsIssuesClient() {
                       <TableCell>
                         <Badge variant="outline">{item.remainingQty}</Badge>
                       </TableCell>
-                      <TableCell>{item.unit ?? "đơn vị"}</TableCell>
+                      <TableCell>thùng</TableCell>
                     </TableRow>
                   ))
                 )}
@@ -365,7 +360,7 @@ export function GoodsIssuesClient() {
           remainingPackageCount={remainingPackageCount}
           suggestions={suggestions.map((item) => ({
             ...item,
-            capacity: item.packageCount,
+            capacity: item.quantity,
           }))}
           suggestionsLoading={suggestionsQuery.isLoading}
           suggestionsError={suggestionsQuery.error}
@@ -374,7 +369,7 @@ export function GoodsIssuesClient() {
             await confirmMutation.mutateAsync({
               itemBarcode: value.itemBarcode,
               cellBarcode: value.cellBarcode,
-              packageCount: value.packageCount,
+              quantity: value.quantity,
               suggestedCellId: value.suggestedCellId,
             });
           }}

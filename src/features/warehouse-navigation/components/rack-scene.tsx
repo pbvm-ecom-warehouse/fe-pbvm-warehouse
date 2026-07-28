@@ -85,7 +85,7 @@ function RackModel({
                 <span className="block">
                   {cell.fillPercent}% ·{" "}
                   {cell.contents.reduce(
-                    (sum, item) => sum + item.packageCount,
+                    (sum, item) => sum + item.quantity,
                     0,
                   )}{" "}
                   thùng

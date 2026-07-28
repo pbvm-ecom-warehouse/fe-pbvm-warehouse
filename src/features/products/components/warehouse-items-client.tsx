@@ -57,7 +57,7 @@ import {
   TablePanel,
   TableSkeleton,
 } from "@/features/admin-shell/components/operations-ui";
-import { getApiErrorMessage } from "@/lib/api-contract";
+import { getApiErrorCode, getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { useSessionUser } from "@/hooks/use-session-user";
 
@@ -102,7 +102,16 @@ const productKeys = {
 };
 
 function formatError(error: unknown) {
-  return getApiErrorMessage(error) ?? "Không kết nối được WMS.";
+  const code = getApiErrorCode(error);
+  const messages: Partial<Record<string, string>> = {
+    STOCK_ITEM_DIMENSIONS_LOCKED:
+      "Kích thước đã bị khoá vì mặt hàng đã có đơn đặt hàng — không thể sửa.",
+  };
+  return (
+    (code && messages[code]) ||
+    getApiErrorMessage(error) ||
+    "Không kết nối được WMS."
+  );
 }
 
 function optionalNumber(value: string) {
@@ -144,22 +153,21 @@ function altUnitToForm(unit: WarehouseItemAltUnit): AltUnitForm | null {
 }
 
 function normalizeAltUnits(units: WarehouseItemAltUnit[] | undefined) {
-  return (units ?? []).map(altUnitToForm).filter(Boolean) as AltUnitForm[];
+  const first = (units ?? [])[0];
+  const row = first ? altUnitToForm(first) : null;
+  return row ? [row] : [{ factor: "", unit: "cái" }];
 }
 
 function altUnitsToPayload(units: AltUnitForm[]): WarehouseItemAltUnit[] {
-  const payload: WarehouseItemAltUnit[] = [];
+  const row = units[0];
+  const factor = row ? optionalPositiveNumber(row.factor) : undefined;
+  const unitName = row?.unit.trim();
+  return factor && unitName ? [{ factor, unit: unitName }] : [];
+}
 
-  units.forEach((unit) => {
-    const factor = optionalPositiveNumber(unit.factor);
-    const unitName = unit.unit.trim();
-
-    if (factor && unitName) {
-      payload.push({ factor, unit: unitName });
-    }
-  });
-
-  return payload;
+function isAltUnitValid(row: AltUnitForm | undefined) {
+  if (!row) return false;
+  return Boolean(optionalPositiveNumber(row.factor)) && Boolean(row.unit.trim());
 }
 
 function itemToForm(item: WarehouseItem): ItemForm {
@@ -183,7 +191,7 @@ function formToUpdatePayload(form: ItemForm): UpdateWarehouseItemInput {
     isPerishable: form.isPerishable,
     name: form.name.trim(),
     nearExpiryDays: optionalNumber(form.nearExpiryDays),
-    unit: form.unit.trim(),
+    unit: "thùng",
     width: optionalNumber(form.width),
   };
 }
@@ -743,6 +751,8 @@ function ItemFormFields({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   submitLabel: string;
 }) {
+  const canSubmit = canManage && !busy && isAltUnitValid(form.altUnits[0]);
+
   return (
     <form className="space-y-4" onSubmit={onSubmit}>
       <div className="grid gap-3 md:grid-cols-2">
@@ -752,11 +762,14 @@ function ItemFormFields({
           value={form.name}
           onChange={(name) => onChange({ ...form, name })}
         />
-        <UnitSelectField
-          label="Đơn vị"
-          value={form.unit}
-          onChange={(unit) => onChange({ ...form, unit })}
-        />
+        <div className="space-y-2">
+          <Label>Đơn vị cơ sở</Label>
+          <Input
+            className="bg-muted/50 text-muted-foreground"
+            readOnly
+            value="thùng"
+          />
+        </div>
         <AltUnitsField
           value={form.altUnits}
           onChange={(altUnits) => onChange({ ...form, altUnits })}
@@ -766,7 +779,7 @@ function ItemFormFields({
       <div className="grid gap-3 md:grid-cols-4">
         <TextField
           id="item-depth"
-          label="Sâu"
+          label="Sâu (1 thùng)"
           required={false}
           type="number"
           value={form.depth}
@@ -774,7 +787,7 @@ function ItemFormFields({
         />
         <TextField
           id="item-width"
-          label="Rộng"
+          label="Rộng (1 thùng)"
           required={false}
           type="number"
           value={form.width}
@@ -782,7 +795,7 @@ function ItemFormFields({
         />
         <TextField
           id="item-height"
-          label="Cao"
+          label="Cao (1 thùng)"
           required={false}
           type="number"
           value={form.height}
@@ -814,7 +827,7 @@ function ItemFormFields({
         </Label>
       </div>
 
-      <Button disabled={!canManage || busy} type="submit">
+      <Button disabled={!canSubmit} type="submit">
         {busy ? (
           <LoaderCircle className="animate-spin" data-icon="inline-start" />
         ) : (
@@ -875,7 +888,7 @@ function UnitSelectField({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {WAREHOUSE_UNITS.map((unit) => (
+          {WAREHOUSE_UNITS.filter((unit) => unit !== "thùng").map((unit) => (
             <SelectItem key={unit} value={unit}>
               {unit}
             </SelectItem>
@@ -893,64 +906,30 @@ function AltUnitsField({
   onChange: (value: AltUnitForm[]) => void;
   value: AltUnitForm[];
 }) {
-  function updateRow(index: number, next: AltUnitForm) {
-    onChange(value.map((row, rowIndex) => (rowIndex === index ? next : row)));
+  const row = value[0] ?? { factor: "", unit: "cái" };
+
+  function updateRow(next: Partial<AltUnitForm>) {
+    onChange([{ ...row, ...next }]);
   }
 
   return (
     <div className="space-y-2 md:col-span-2">
-      <div className="flex items-center justify-between gap-3">
-        <Label>Đơn vị phụ</Label>
-        <Button
-          size="sm"
-          type="button"
-          variant="outline"
-          onClick={() => onChange([...value, { factor: "", unit: "thùng" }])}
-        >
-          <Plus data-icon="inline-start" />
-          Thêm đơn vị
-        </Button>
+      <Label>Đơn vị phụ (chỉ tham khảo hiển thị, không dùng để tính số lượng)</Label>
+      <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-2 md:grid-cols-[1fr_140px]">
+        <UnitSelectField
+          label="Đơn vị"
+          value={row.unit}
+          onChange={(unit) => updateRow({ unit })}
+        />
+        <TextField
+          id="item-alt-unit-factor"
+          label="Hệ số"
+          required={false}
+          type="number"
+          value={row.factor}
+          onChange={(factor) => updateRow({ factor })}
+        />
       </div>
-      {value.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
-          Chưa có đơn vị phụ.
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {value.map((row, index) => (
-            <div
-              className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-2 md:grid-cols-[1fr_140px_auto]"
-              key={index}
-            >
-              <UnitSelectField
-                label="Đơn vị"
-                value={row.unit}
-                onChange={(unit) => updateRow(index, { ...row, unit })}
-              />
-              <TextField
-                id={`item-alt-unit-factor-${index}`}
-                label="Hệ số"
-                required={false}
-                type="number"
-                value={row.factor}
-                onChange={(factor) => updateRow(index, { ...row, factor })}
-              />
-              <Button
-                className="self-end"
-                size="icon-sm"
-                type="button"
-                variant="destructive"
-                onClick={() =>
-                  onChange(value.filter((_, rowIndex) => rowIndex !== index))
-                }
-              >
-                <Trash2 />
-                <span className="sr-only">Xóa đơn vị phụ</span>
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

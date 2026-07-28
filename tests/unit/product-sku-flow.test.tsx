@@ -453,8 +453,6 @@ describe("product SKU creation", () => {
       screen.getByRole("combobox", { name: "Đơn vị cơ sở" }),
     ).toHaveTextContent("thùng");
 
-    fireEvent.click(screen.getByRole("button", { name: "Thêm đơn vị" }));
-
     const alternateUnitSelect = screen.getByRole("combobox", {
       name: "Đơn vị",
     });

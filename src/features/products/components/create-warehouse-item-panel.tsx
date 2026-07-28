@@ -10,10 +10,8 @@ import {
   ImagePlus,
   LoaderCircle,
   PackagePlus,
-  Plus,
   Printer,
   RotateCcw,
-  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -113,7 +111,7 @@ type CreateForm = {
 
 function initialForm(): CreateForm {
   return {
-    altUnits: [],
+    altUnits: [{ factor: "", unit: "cái" }],
     categoryOptionId: "",
     depth: "",
     height: "",
@@ -134,10 +132,19 @@ function optionalNumber(value: string) {
 }
 
 function toAltUnits(rows: AltUnitForm[]): WarehouseItemAltUnit[] | undefined {
-  const units = rows
-    .map((row) => ({ factor: Number(row.factor), unit: row.unit.trim() }))
-    .filter((row) => row.unit && Number.isFinite(row.factor) && row.factor > 0);
-  return units.length ? units : undefined;
+  const row = rows[0];
+  if (!row) return undefined;
+  const factor = Number(row.factor);
+  const unit = row.unit.trim();
+  return unit && Number.isInteger(factor) && factor >= 1
+    ? [{ factor, unit }]
+    : undefined;
+}
+
+function isAltUnitValid(row: AltUnitForm | undefined) {
+  if (!row) return false;
+  const factor = Number(row.factor);
+  return Boolean(row.unit.trim()) && Number.isInteger(factor) && factor >= 1;
 }
 
 function formatError(error: unknown) {
@@ -340,6 +347,7 @@ export function CreateWarehouseItemPanel({
     form.unit.length > 0 &&
     selectionComplete &&
     currentPreviewReady &&
+    isAltUnitValid(form.altUnits[0]) &&
     !createMutation.isPending;
 
   function reset(nextType: CreatableWarehouseItemType = "CUP_BLANK") {
@@ -547,19 +555,19 @@ export function CreateWarehouseItemPanel({
             />
             <NumericField
               id="create-depth"
-              label="Chiều sâu"
+              label="Chiều sâu (1 thùng)"
               value={form.depth}
               onChange={(value) => updateNumeric(setForm, "depth", value)}
             />
             <NumericField
               id="create-width"
-              label="Chiều rộng"
+              label="Chiều rộng (1 thùng)"
               value={form.width}
               onChange={(value) => updateNumeric(setForm, "width", value)}
             />
             <NumericField
               id="create-height"
-              label="Chiều cao"
+              label="Chiều cao (1 thùng)"
               value={form.height}
               onChange={(value) => updateNumeric(setForm, "height", value)}
             />
@@ -965,64 +973,34 @@ function AltUnitsEditor({
   onChange: (value: AltUnitForm[]) => void;
   value: AltUnitForm[];
 }) {
+  const row = value[0] ?? { factor: "", unit: "cái" };
+
+  function updateRow(patch: Partial<AltUnitForm>) {
+    onChange([{ ...row, ...patch }]);
+  }
+
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-3">
-        <Label>Đơn vị phụ</Label>
-        <Button
-          size="sm"
-          type="button"
-          variant="outline"
-          onClick={() => onChange([...value, { factor: "", unit: "cái" }])}
+      <Label>Đơn vị phụ (chỉ tham khảo hiển thị, không dùng để tính số lượng)</Label>
+      <div className="grid gap-2 md:grid-cols-[1fr_160px]">
+        <SelectField
+          label="Đơn vị"
+          value={row.unit}
+          onChange={(unit) => updateRow({ unit })}
         >
-          <Plus data-icon="inline-start" /> Thêm đơn vị
-        </Button>
+          {WAREHOUSE_UNITS.filter((unit) => unit !== "thùng").map((unit) => (
+            <SelectItem key={unit} value={unit}>
+              {unit}
+            </SelectItem>
+          ))}
+        </SelectField>
+        <NumericField
+          id="create-alt-factor"
+          label={`Số ${row.unit} trong 1 thùng`}
+          value={row.factor}
+          onChange={(factor) => updateRow({ factor })}
+        />
       </div>
-      {value.map((row, index) => (
-        <div className="grid gap-2 md:grid-cols-[1fr_160px_auto]" key={index}>
-          <SelectField
-            label="Đơn vị"
-            value={row.unit}
-            onChange={(unit) =>
-              onChange(
-                value.map((item, itemIndex) =>
-                  itemIndex === index ? { ...item, unit } : item,
-                ),
-              )
-            }
-          >
-            {WAREHOUSE_UNITS.map((unit) => (
-              <SelectItem key={unit} value={unit}>
-                {unit}
-              </SelectItem>
-            ))}
-          </SelectField>
-          <NumericField
-            id={`create-alt-factor-${index}`}
-            label={`Số ${row.unit} trong 1 thùng`}
-            value={row.factor}
-            onChange={(factor) =>
-              onChange(
-                value.map((item, itemIndex) =>
-                  itemIndex === index ? { ...item, factor } : item,
-                ),
-              )
-            }
-          />
-          <Button
-            aria-label="Xóa đơn vị phụ"
-            className="self-end"
-            size="icon-sm"
-            type="button"
-            variant="destructive"
-            onClick={() =>
-              onChange(value.filter((_, itemIndex) => itemIndex !== index))
-            }
-          >
-            <Trash2 />
-          </Button>
-        </div>
-      ))}
     </div>
   );
 }

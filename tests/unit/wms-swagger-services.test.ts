@@ -474,11 +474,9 @@ describe("Swagger-backed WMS services", () => {
         {
           actualQty: 10,
           itemId: "item-1",
-          unit: "cái",
           lotNumber: undefined,
           expiryDate: undefined,
           note: undefined,
-          packageCount: undefined,
         },
       ],
       purchaseOrderId: "po-1",
@@ -490,11 +488,9 @@ describe("Swagger-backed WMS services", () => {
           {
             actualQty: 10,
             itemId: "item-1",
-            unit: "cái",
             lotNumber: undefined,
             expiryDate: undefined,
             note: undefined,
-            packageCount: undefined,
           },
         ],
       },
@@ -558,7 +554,7 @@ describe("Swagger-backed WMS services", () => {
     await confirmGoodsIssueLine("gi-1", {
       itemBarcode: "CUP-BLANK-500",
       cellBarcode: "A1-S02-B1",
-      packageCount: 10,
+      quantity: 10,
     });
 
     expect(mockedGet).toHaveBeenCalledWith("/goods-issues", {
@@ -574,7 +570,7 @@ describe("Swagger-backed WMS services", () => {
     expect(mockedPost).toHaveBeenCalledWith("/goods-issues/gi-1/confirm-line", {
       itemBarcode: "CUP-BLANK-500",
       cellBarcode: "A1-S02-B1",
-      packageCount: 10,
+      quantity: 10,
     });
   });
 

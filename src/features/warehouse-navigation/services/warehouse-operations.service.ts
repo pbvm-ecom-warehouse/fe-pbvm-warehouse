@@ -8,7 +8,6 @@ export type StorageCellContent = {
   itemName: string;
   unit: string;
   quantity: number;
-  packageCount: number;
   packageFactor?: number | null;
   packageVolumeCm3Snapshot?: number | null;
   lotNumber?: string | null;

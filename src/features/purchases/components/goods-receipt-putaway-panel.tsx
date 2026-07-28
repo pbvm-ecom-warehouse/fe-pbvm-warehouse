@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSessionUser } from "@/hooks/use-session-user";
-import { getApiErrorMessage } from "@/lib/api-contract";
+import { getApiErrorCode, getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import type { GoodsReceiptNote } from "../services/goods-receipt-note.service";
 import { listPutawaySuggestionResult } from "@/features/warehouse-navigation/services/putaway-navigation.service";
@@ -52,17 +52,13 @@ export function GoodsReceiptPutawayPanel({ grn }: { grn: GoodsReceiptNote }) {
     () =>
       (tasksQuery.data?.data ?? []).flatMap((task) =>
         task.items
-          .filter(
-            (line) =>
-              (line.remainingPackageCount ?? line.packageCount ?? 0) > 0,
-          )
+          .filter((line) => (line.remainingQty ?? line.quantity ?? 0) > 0)
           .map((line) => {
             const grnItem = grn.items.find(
               (item) => item.itemId === line.itemId,
             );
             const sku = grnItem?.sku ?? line.sku ?? "Chưa có SKU";
-            const remaining =
-              line.remainingPackageCount ?? line.packageCount ?? 0;
+            const remaining = line.remainingQty ?? line.quantity ?? 0;
             return {
               taskId: task.id,
               line,
@@ -79,7 +75,7 @@ export function GoodsReceiptPutawayPanel({ grn }: { grn: GoodsReceiptNote }) {
       selectedKey,
   );
   const remainingPackageCount =
-    selected?.line.remainingPackageCount ?? selected?.line.packageCount ?? 0;
+    selected?.line.remainingQty ?? selected?.line.quantity ?? 0;
   const suggestionQuery = useQuery({
     enabled: Boolean(selected),
     queryFn: () =>
@@ -87,7 +83,14 @@ export function GoodsReceiptPutawayPanel({ grn }: { grn: GoodsReceiptNote }) {
         sku: selected!.sku,
         packageCount: remainingPackageCount || 1,
         lotId: selected!.line.lotId ?? undefined,
-        packageSpec: selected!.line.packageSpec,
+        packageSpec: selected!.line.packageSpec
+          ? {
+              depthCm: selected!.line.packageSpec.depthCm,
+              widthCm: selected!.line.packageSpec.widthCm,
+              heightCm: selected!.line.packageSpec.heightCm,
+              volumeCm3: selected!.line.packageSpec.volumeCm3,
+            }
+          : undefined,
       }),
     queryKey: [
       "putaway-suggestions",
@@ -101,7 +104,7 @@ export function GoodsReceiptPutawayPanel({ grn }: { grn: GoodsReceiptNote }) {
     mutationFn: async (input: {
       itemBarcode: string;
       cellBarcode: string;
-      packageCount: number;
+      quantity: number;
       suggestedCellId?: string;
     }) => {
       if (!selected) throw new Error("Chọn dòng cần cất hàng.");
@@ -110,11 +113,18 @@ export function GoodsReceiptPutawayPanel({ grn }: { grn: GoodsReceiptNote }) {
         ...(selected.line.lotId ? { lotId: selected.line.lotId } : {}),
       });
     },
-    onError: (error) =>
+    onError: (error) => {
+      const code = getApiErrorCode(error);
+      const messages: Partial<Record<string, string>> = {
+        GRN_PACKAGE_SPEC_REQUIRED:
+          "Mặt hàng chưa khai đủ kích thước thùng — không thể xếp kệ.",
+      };
       toast.error(
-        getApiErrorMessage(error) ??
+        (code && messages[code]) ||
+          getApiErrorMessage(error) ||
           (error instanceof Error ? error.message : "Không thể lưu cất hàng."),
-      ),
+      );
+    },
     onSuccess: async () => {
       toast.success("Đã lưu đúng khoang cất hàng.");
       await Promise.all([
@@ -204,7 +214,7 @@ export function GoodsReceiptPutawayPanel({ grn }: { grn: GoodsReceiptNote }) {
               await confirmMutation.mutateAsync({
                 itemBarcode: value.itemBarcode,
                 cellBarcode: value.cellBarcode,
-                packageCount: value.packageCount,
+                quantity: value.quantity,
                 suggestedCellId: value.suggestedCellId,
               });
             }}

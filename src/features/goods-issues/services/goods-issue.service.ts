@@ -11,8 +11,7 @@ export type GoodsIssueItem = {
   sku: string;
   quantity: number;
   remainingQty: number;
-  packageCount?: number;
-  unit?: string;
+  packageFactor?: number;
 };
 
 export type GoodsIssue = {
@@ -43,15 +42,13 @@ export type PickSuggestion = {
   lotNumber?: string | null;
   expiryDate?: string | null;
   quantity: number;
-  packageCount: number;
   packageFactor?: number;
 };
 
 export type ConfirmGoodsIssueLineInput = {
   itemBarcode: string;
   cellBarcode: string;
-  packageCount: number;
-  packageFactor?: number;
+  quantity: number;
   suggestedCellId?: string;
   lotId?: string;
 };

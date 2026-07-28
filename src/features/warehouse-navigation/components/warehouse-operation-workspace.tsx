@@ -35,7 +35,7 @@ export type WarehouseOperationSuggestion = {
   bay: number;
   path: NavigationPath;
   capacity?: number;
-  packageCount?: number;
+  quantity?: number;
   fillPercent?: number;
   reason?: string;
   lotNumber?: string | null;
@@ -208,7 +208,7 @@ export function WarehouseOperationWorkspace({
                   {suggestion.reason
                     ? (reasonLabels[suggestion.reason] ?? suggestion.reason)
                     : operation === "PICK"
-                      ? `Có ${suggestion.packageCount ?? 0} thùng`
+                      ? `Có ${suggestion.quantity ?? 0} thùng`
                       : `Chứa thêm ${suggestion.capacity ?? 0} thùng`}
                 </div>
                 {suggestion.lotNumber ? (

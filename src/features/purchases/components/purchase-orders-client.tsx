@@ -65,7 +65,7 @@ import {
   TableSkeleton,
 } from "@/features/admin-shell/components/operations-ui";
 import { createGoodsReceiptNoteFormSchema } from "@/features/purchases/schemas/goods-receipt-note.schema";
-import { getApiErrorMessage } from "@/lib/api-contract";
+import { getApiErrorCode, getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
@@ -89,7 +89,6 @@ import {
   PURCHASE_ORDER_STATUSES,
   type CreatePurchaseOrderItemInput,
   type PurchaseOrder,
-  type PurchaseOrderPackageSpec,
   type PurchaseOrderStatus,
   type ReceivingPurchaseOrder,
 } from "../services/purchase-order.service";
@@ -128,11 +127,11 @@ const purchaseKeys = {
 type PurchaseOrderItemForm = {
   expectedQty: string;
   itemId: string;
-  packageDepthCm: string;
+  itemDepth?: number;
+  itemWidth?: number;
+  itemHeight?: number;
   packageFactor: string;
-  packageHeightCm: string;
   packageUnit: string;
-  packageWidthCm: string;
   sku: string;
   unit: string;
   unitPrice: string;
@@ -146,8 +145,9 @@ type GoodsReceiptItemForm = {
   itemName: string;
   lotNumber: string;
   note: string;
-  packageCount: string;
-  packageSpec?: PurchaseOrderPackageSpec;
+  itemDepth?: number;
+  itemWidth?: number;
+  itemHeight?: number;
   sku: string;
   unit: string;
 };
@@ -155,11 +155,8 @@ type GoodsReceiptItemForm = {
 const defaultItemForm: PurchaseOrderItemForm = {
   expectedQty: "1",
   itemId: "",
-  packageDepthCm: "",
   packageFactor: "1",
-  packageHeightCm: "",
   packageUnit: "cái",
-  packageWidthCm: "",
   sku: "",
   unit: "thùng",
   unitPrice: "0",
@@ -172,7 +169,19 @@ const defaultCreateForm = {
 };
 
 function formatError(error: unknown) {
-  return getApiErrorMessage(error) ?? "Không kết nối được WMS.";
+  const code = getApiErrorCode(error);
+  const messages: Partial<Record<string, string>> = {
+    PO_UNIT_MUST_MATCH_ITEM:
+      "Đơn vị đặt hàng phải khớp đơn vị cơ sở (thùng) của mặt hàng.",
+    GRN_PACKAGE_SPEC_REQUIRED:
+      "Mặt hàng chưa khai đủ kích thước thùng — không thể duyệt phiếu nhập.",
+    GRN_PACKAGE_COUNT_REQUIRED: "Số thùng thực nhận phải lớn hơn 0.",
+  };
+  return (
+    (code && messages[code]) ||
+    getApiErrorMessage(error) ||
+    "Không kết nối được WMS."
+  );
 }
 
 function optionalText(value: string) {
@@ -183,6 +192,11 @@ function optionalText(value: string) {
 function parsePositiveNumber(value: string, fallback: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function parsePositiveInt(value: string, fallback: number) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 function toSafeNumber(value: unknown, fallback = 0) {
@@ -238,7 +252,7 @@ function toPurchaseOrderItems(
   return forms
     .filter((form) => form.itemId.trim() && form.sku.trim())
     .map((form) => ({
-      expectedQty: parsePositiveNumber(form.expectedQty, 0),
+      expectedQty: parsePositiveInt(form.expectedQty, 0),
       itemId: form.itemId.trim(),
       unit: "thùng",
       unitPrice: parsePositiveNumber(form.unitPrice, 0),
@@ -253,13 +267,11 @@ function toGoodsReceiptItems(
   return forms
     .filter((form) => form.itemId.trim() && form.sku.trim())
     .map((form) => ({
-      actualQty: parsePositiveNumber(form.actualQty, 0),
+      actualQty: parsePositiveInt(form.actualQty, 0),
       expiryDate: optionalText(form.expiryDate),
       itemId: form.itemId.trim(),
       lotNumber: optionalText(form.lotNumber),
       note: optionalText(form.note),
-      packageCount: parsePositiveNumber(form.packageCount, 0),
-      unit: form.unit.trim() || "cái",
     }))
     .filter((item) => item.actualQty > 0);
 }
@@ -281,12 +293,9 @@ function buildGoodsReceiptForms(
       itemName: item.itemName,
       lotNumber: "",
       note: "",
-      packageCount: String(
-        item.packageSpec?.factor
-          ? item.remainingQty / item.packageSpec.factor
-          : item.remainingQty,
-      ),
-      packageSpec: item.packageSpec,
+      itemDepth: item.itemDepth,
+      itemWidth: item.itemWidth,
+      itemHeight: item.itemHeight,
       sku: item.sku,
       unit: item.unit,
     })) ?? []
@@ -658,10 +667,11 @@ export function PurchaseOrdersClient({
         itemName: item.itemName ?? item.sku,
         lotNumber: item.lotNumber ?? "",
         note: item.note ?? "",
-        packageCount: String(item.packageCount ?? 0),
-        packageSpec: item.packageSpec,
+        itemDepth: item.itemDepth,
+        itemWidth: item.itemWidth,
+        itemHeight: item.itemHeight,
         sku: item.sku,
-        unit: item.unit,
+        unit: "thùng",
       })),
     );
     setGrnImages([]);
@@ -1054,12 +1064,7 @@ export function PurchaseOrdersClient({
                   !createForm.supplierId ||
                   itemForms.some(
                     (item) =>
-                      !item.itemId ||
-                      !item.sku ||
-                      item.unit !== "thùng" ||
-                      parsePositiveNumber(item.packageDepthCm, 0) <= 0 ||
-                      parsePositiveNumber(item.packageWidthCm, 0) <= 0 ||
-                      parsePositiveNumber(item.packageHeightCm, 0) <= 0,
+                      !item.itemId || !item.sku || item.unit !== "thùng",
                   ) ||
                   createMutation.isPending
                 }
@@ -1445,13 +1450,13 @@ function PurchaseOrderItemFields({
               ...item,
               expectedQty: String(Math.max(1, supplierItem?.minOrderQty ?? 1)),
               itemId: stockItem.id,
-              packageDepthCm: stockItem.depth ? String(stockItem.depth) : "",
+              itemDepth: stockItem.depth ?? undefined,
+              itemHeight: stockItem.height ?? undefined,
+              itemWidth: stockItem.width ?? undefined,
               packageFactor: String(
                 alternateUnit?.factor ?? alternateUnit?.quantity ?? 1,
               ),
-              packageHeightCm: stockItem.height ? String(stockItem.height) : "",
               packageUnit: alternateUnit?.unit ?? "cái",
-              packageWidthCm: stockItem.width ? String(stockItem.width) : "",
               sku: stockItem.sku,
               unit: "thùng",
               unitPrice: String(supplierItem?.purchasePrice ?? 0),
@@ -1526,8 +1531,8 @@ function PurchaseOrderItemFields({
             Quy cách mặt hàng:
           </span>{" "}
           1 thùng = {item.packageFactor || "1"} {item.packageUnit || "cái"} ·{" "}
-          {item.packageDepthCm || "—"} × {item.packageWidthCm || "—"} ×{" "}
-          {item.packageHeightCm || "—"} cm
+          {item.itemDepth ?? "—"} × {item.itemWidth ?? "—"} ×{" "}
+          {item.itemHeight ?? "—"} cm
         </div>
       </div>
     </div>
@@ -1719,51 +1724,34 @@ function GoodsReceiptItemFields({
           </span>
         ) : null}
       </div>
-      {item.packageSpec ? (
+      {item.itemDepth && item.itemWidth && item.itemHeight ? (
         <div className="border-b bg-blue-50/70 px-3 py-2 text-xs text-blue-900">
-          <span className="font-semibold">Quy cách:</span> 1{" "}
-          {item.packageSpec.unit}
-          {item.packageSpec.factor !== 1
-            ? ` = ${item.packageSpec.factor} ${item.unit}`
-            : ""}{" "}
-          · {item.packageSpec.depthCm} × {item.packageSpec.widthCm} ×{" "}
-          {item.packageSpec.heightCm} cm ·{" "}
-          {(
-            item.packageSpec.volumeCm3 ??
-            item.packageSpec.depthCm *
-              item.packageSpec.widthCm *
-              item.packageSpec.heightCm
-          ).toLocaleString("vi-VN")}{" "}
+          <span className="font-semibold">Quy cách 1 thùng:</span>{" "}
+          {item.itemDepth} × {item.itemWidth} × {item.itemHeight} cm ·{" "}
+          {(item.itemDepth * item.itemWidth * item.itemHeight).toLocaleString(
+            "vi-VN",
+          )}{" "}
           cm³/thùng
         </div>
       ) : (
         <div className="border-b bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
-          PO chưa có quy cách thùng. Hãy sửa master data hoặc tạo PO mới trước
+          Mặt hàng chưa khai đủ kích thước thùng. Hãy sửa master data trước
           khi gửi duyệt.
         </div>
       )}
       <div className="grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-12">
         <div className="min-w-0 space-y-2 lg:col-span-3">
-          <Label htmlFor={`${fieldId}-packages`}>Số thùng thực nhập</Label>
+          <Label htmlFor={`${fieldId}-packages`}>Số thùng thực nhận</Label>
           <Input
-            aria-label={`Số thùng thực nhập dòng ${index + 1}`}
+            aria-label={`Số thùng thực nhận dòng ${index + 1}`}
             id={`${fieldId}-packages`}
-            min="1"
+            min="0"
             step="1"
             type="number"
-            value={item.packageCount}
-            onChange={(event) => {
-              const packageCount = event.target.value;
-              const parsedCount = Number(packageCount);
-              onChange({
-                ...item,
-                packageCount,
-                actualQty:
-                  item.packageSpec?.factor && Number.isFinite(parsedCount)
-                    ? String(parsedCount * item.packageSpec.factor)
-                    : item.actualQty,
-              });
-            }}
+            value={item.actualQty}
+            onChange={(event) =>
+              onChange({ ...item, actualQty: event.target.value })
+            }
           />
         </div>
         <div className="min-w-0 space-y-2 lg:col-span-3">

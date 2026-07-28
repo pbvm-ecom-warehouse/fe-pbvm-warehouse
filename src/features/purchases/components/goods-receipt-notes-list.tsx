@@ -445,9 +445,7 @@ function GoodsReceiptItemRow({ item }: { item: GoodsReceiptNoteItem }) {
           </div>
         </div>
       </TableCell>
-      <TableCell>
-        {item.actualQty} {item.unit}
-      </TableCell>
+      <TableCell>{item.actualQty} thùng</TableCell>
       <TableCell className="text-xs text-muted-foreground">
         {hasPoReference ? (
           <>

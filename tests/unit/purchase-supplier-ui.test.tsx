@@ -266,14 +266,9 @@ describe("purchase and supplier UX", () => {
               expectedQty: 10,
               receivedQty: 0,
               remainingQty: 10,
-              packageSpec: {
-                unit: "thùng",
-                factor: 5,
-                depthCm: 40,
-                widthCm: 30,
-                heightCm: 25,
-                volumeCm3: 30000,
-              },
+              itemDepth: 40,
+              itemWidth: 30,
+              itemHeight: 25,
             },
           ],
         },
@@ -590,7 +585,7 @@ describe("purchase and supplier UX", () => {
     expect(within(createGrnDialog).getByText("Ly nhựa 500 ml")).toBeVisible();
     expect(within(createGrnDialog).getByText("SKU-001")).toBeVisible();
     expect(
-      within(createGrnDialog).getByText("Số thùng thực nhập", {
+      within(createGrnDialog).getByText("Số thùng thực nhận", {
         selector: "label",
       }),
     ).toBeVisible();
@@ -676,7 +671,7 @@ describe("purchase and supplier UX", () => {
           items: [
             {
               ...goodsReceiptNote.items[0],
-              packageCount: 2,
+              actualQty: 2,
             },
           ],
         },
@@ -696,7 +691,7 @@ describe("purchase and supplier UX", () => {
       name: "Chỉnh sửa phiếu nhập",
     });
     expect(
-      within(dialog).getByLabelText("Số thùng thực nhập dòng 1"),
+      within(dialog).getByLabelText("Số thùng thực nhận dòng 1"),
     ).toHaveValue(2);
     expect(
       within(dialog).getByRole("button", { name: "Lưu chỉnh sửa" }),

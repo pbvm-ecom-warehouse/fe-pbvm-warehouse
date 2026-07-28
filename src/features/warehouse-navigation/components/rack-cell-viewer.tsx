@@ -61,7 +61,7 @@ function CellGrid({
                 <div key={bay} className="h-24 rounded border border-dashed" />
               );
             const count = cell.contents.reduce(
-              (sum, item) => sum + item.packageCount,
+              (sum, item) => sum + item.quantity,
               0,
             );
             return (
@@ -213,7 +213,7 @@ export function RackCellViewer({
                         {item.itemName}
                       </div>
                       <div className="mt-1 font-medium">
-                        {item.packageCount} thùng · {item.quantity} {item.unit}
+                        {item.quantity} thùng
                       </div>
                       {item.lotNumber ? (
                         <div className="mt-1 text-muted-foreground">

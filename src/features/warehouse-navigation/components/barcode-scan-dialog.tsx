@@ -27,7 +27,7 @@ declare global {
 export type BarcodeConfirmation = {
   itemBarcode: string;
   cellBarcode: string;
-  packageCount: number;
+  quantity: number;
 };
 
 export function BarcodeScanDialog({
@@ -273,7 +273,7 @@ export function BarcodeScanDialog({
               onConfirm({
                 itemBarcode: itemBarcode.trim(),
                 cellBarcode: cellBarcode.trim(),
-                packageCount: parsedCount,
+                quantity: parsedCount,
               })
             }
             type="button"
