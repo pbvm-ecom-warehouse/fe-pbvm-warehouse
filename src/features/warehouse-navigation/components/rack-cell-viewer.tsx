@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { StorageCellView } from "../services/warehouse-operations.service";
+import { getRackMeasurements } from "../utils/rack-3d-layout";
 import { evaluateCellCapacity } from "../utils/cell-capacity";
 import type { PutawayPackageSpec } from "../utils/putaway-work-items";
 
@@ -154,6 +155,7 @@ export function RackCellViewer({
     () => cells.find((cell) => cell.id === selectedCellId),
     [cells, selectedCellId],
   );
+  const rackMeasurements = useMemo(() => getRackMeasurements(cells), [cells]);
 
   function getState(cell: StorageCellView): ViewerCellState {
     const suggested = suggestedSet.has(cell.id);
@@ -205,7 +207,10 @@ export function RackCellViewer({
             Mặt kệ {rackCode ?? "đã chọn"}
           </div>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            Màu khoang phản ánh tồn thật, sức chứa và khả năng đặt thùng.
+            Kệ {rackMeasurements.widthM.toLocaleString("vi-VN")} ×{" "}
+            {rackMeasurements.depthM.toLocaleString("vi-VN")} ×{" "}
+            {rackMeasurements.heightM.toLocaleString("vi-VN")} m ·{" "}
+            {rackMeasurements.levels} tầng · {rackMeasurements.bays} khoang
           </p>
         </div>
         <div className="flex gap-1">

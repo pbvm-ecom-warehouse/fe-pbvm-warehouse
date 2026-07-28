@@ -718,7 +718,8 @@ export function WarehouseFloorPlan({
           const rect = rackRect(rack);
           const invalid = invalidSelectionKeys.has(`rack:${rack.id}`);
           const selected = isSelected(selection, "rack", rack.id);
-          const bayWidth = rect.widthM / rack.bayCount;
+          const baySize =
+            (rack.rotation === 90 ? rect.heightM : rect.widthM) / rack.bayCount;
 
           return (
             <g
@@ -770,10 +771,26 @@ export function WarehouseFloorPlan({
                     key={index}
                     stroke="#94a3b8"
                     strokeWidth={0.04}
-                    x1={rect.xM + bayWidth * (index + 1)}
-                    x2={rect.xM + bayWidth * (index + 1)}
-                    y1={rect.yM}
-                    y2={rect.yM + rect.heightM}
+                    x1={
+                      rack.rotation === 90
+                        ? rect.xM
+                        : rect.xM + baySize * (index + 1)
+                    }
+                    x2={
+                      rack.rotation === 90
+                        ? rect.xM + rect.widthM
+                        : rect.xM + baySize * (index + 1)
+                    }
+                    y1={
+                      rack.rotation === 90
+                        ? rect.yM + baySize * (index + 1)
+                        : rect.yM
+                    }
+                    y2={
+                      rack.rotation === 90
+                        ? rect.yM + baySize * (index + 1)
+                        : rect.yM + rect.heightM
+                    }
                   />
                 ),
               )}

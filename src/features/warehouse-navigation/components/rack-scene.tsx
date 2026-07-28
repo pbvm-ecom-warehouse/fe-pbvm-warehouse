@@ -1,16 +1,21 @@
 "use client";
 
 import { Canvas, type ThreeEvent } from "@react-three/fiber";
-import { Edges, Html, OrbitControls } from "@react-three/drei";
+import { ContactShadows, Edges, Html, OrbitControls } from "@react-three/drei";
+import { useMemo } from "react";
 import type { StorageCellView } from "../services/warehouse-operations.service";
+import {
+  getCellPosition,
+  getRackMeasurements,
+  packCellBoxes,
+} from "../utils/rack-3d-layout";
 
-function cellColor(cell: StorageCellView, selected: boolean) {
-  if (selected) return "#f59e0b";
-  if (cell.status === "BLOCKED") return "#94a3b8";
-  if (cell.fillPercent >= 90) return "#dc2626";
-  if (cell.fillPercent >= 60) return "#f97316";
-  if (cell.fillPercent > 0) return "#2563eb";
-  return "#dbeafe";
+function skuColor(sku: string) {
+  let hash = 0;
+  for (const character of sku) {
+    hash = (hash * 31 + character.charCodeAt(0)) | 0;
+  }
+  return `hsl(${Math.abs(hash) % 360} 58% 56%)`;
 }
 
 function RackModel({
@@ -22,76 +27,139 @@ function RackModel({
   selectedCellId?: string;
   onSelectCell: (cell: StorageCellView) => void;
 }) {
-  const levels = Math.max(1, ...cells.map((cell) => cell.level));
-  const bays = Math.max(1, ...cells.map((cell) => cell.bay));
-  const width = bays * 1.45;
-  const height = levels * 1.15;
+  const rack = useMemo(() => getRackMeasurements(cells), [cells]);
+  const postThickness = Math.max(0.035, Math.min(0.09, rack.widthM / 100));
+  const beamThickness = Math.max(0.035, Math.min(0.08, rack.heightM / 60));
+  const xBoundaries = rack.bayWidthsM.reduce<number[]>(
+    (positions, width) => [...positions, positions.at(-1)! + width],
+    [-rack.widthM / 2],
+  );
+  const yBoundaries = rack.levelHeightsM.reduce<number[]>(
+    (positions, height) => [...positions, positions.at(-1)! + height],
+    [-rack.heightM / 2],
+  );
+
   return (
-    <group position={[0, -0.2, 0]}>
-      {Array.from({ length: bays + 1 }, (_, index) => (
-        <mesh
-          key={`post-${index}`}
-          position={[-width / 2 + index * 1.45, 0, 0]}
-        >
-          <boxGeometry args={[0.09, height + 0.5, 0.24]} />
-          <meshStandardMaterial
-            color="#334155"
-            metalness={0.55}
-            roughness={0.38}
-          />
-        </mesh>
+    <group position={[0, rack.heightM / 2, 0]}>
+      {xBoundaries.flatMap((x, index) =>
+        [-rack.depthM / 2, rack.depthM / 2].map((z, side) => (
+          <mesh key={`post-${index}-${side}`} castShadow position={[x, 0, z]}>
+            <boxGeometry
+              args={[
+                postThickness,
+                rack.heightM + beamThickness * 2,
+                postThickness,
+              ]}
+            />
+            <meshStandardMaterial
+              color="#233044"
+              metalness={0.72}
+              roughness={0.3}
+            />
+          </mesh>
+        )),
+      )}
+
+      {yBoundaries.map((y, index) => (
+        <group key={`level-frame-${index}`}>
+          <mesh receiveShadow position={[0, y, 0]}>
+            <boxGeometry args={[rack.widthM, beamThickness, rack.depthM]} />
+            <meshStandardMaterial
+              color="#64748b"
+              metalness={0.55}
+              roughness={0.42}
+            />
+          </mesh>
+          {[-rack.depthM / 2, rack.depthM / 2].map((z, side) => (
+            <mesh key={`beam-${index}-${side}`} castShadow position={[0, y, z]}>
+              <boxGeometry
+                args={[
+                  rack.widthM + postThickness,
+                  beamThickness * 1.5,
+                  postThickness,
+                ]}
+              />
+              <meshStandardMaterial
+                color="#334155"
+                metalness={0.65}
+                roughness={0.34}
+              />
+            </mesh>
+          ))}
+        </group>
       ))}
-      {Array.from({ length: levels + 1 }, (_, index) => (
-        <mesh
-          key={`beam-${index}`}
-          position={[0, -height / 2 + index * 1.15, 0]}
-        >
-          <boxGeometry args={[width + 0.12, 0.09, 0.28]} />
-          <meshStandardMaterial
-            color="#475569"
-            metalness={0.5}
-            roughness={0.42}
-          />
-        </mesh>
-      ))}
+
       {cells.map((cell) => {
-        const x = -width / 2 + (cell.bay - 0.5) * 1.45;
-        const y = -height / 2 + (cell.level - 0.5) * 1.15;
+        const [x, y, z] = getCellPosition(cell, rack);
+        const widthM = cell.innerWidth / 100;
+        const heightM = cell.innerHeight / 100;
+        const depthM = cell.innerDepth / 100;
         const selected = selectedCellId === cell.id;
+        const boxes = packCellBoxes(cell);
         return (
-          <group key={cell.id} position={[x, y, 0]}>
+          <group key={cell.id} position={[x, y, z]}>
             <mesh
               onClick={(event: ThreeEvent<MouseEvent>) => {
                 event.stopPropagation();
                 onSelectCell(cell);
               }}
             >
-              <boxGeometry args={[1.3, 1, 0.72]} />
+              <boxGeometry args={[widthM, heightM, depthM]} />
               <meshStandardMaterial
-                color={cellColor(cell, selected)}
+                color={
+                  cell.status === "BLOCKED"
+                    ? "#94a3b8"
+                    : selected
+                      ? "#f59e0b"
+                      : "#dbeafe"
+                }
                 transparent
-                opacity={selected ? 0.9 : 0.72}
+                opacity={selected ? 0.15 : 0.035}
                 roughness={0.55}
               />
-              <Edges color={selected ? "#92400e" : "#475569"} />
+              <Edges color={selected ? "#b45309" : "#94a3b8"} threshold={15} />
             </mesh>
-            <Html center distanceFactor={8} position={[0, 0, 0.39]} transform>
-              <button
-                className="w-28 rounded border border-white/60 bg-white/90 px-1.5 py-1 text-center text-[9px] leading-tight text-slate-900 shadow-sm"
-                onClick={() => onSelectCell(cell)}
-                type="button"
+
+            {boxes.map((box) => (
+              <mesh
+                key={box.id}
+                castShadow
+                onClick={(event: ThreeEvent<MouseEvent>) => {
+                  event.stopPropagation();
+                  onSelectCell(cell);
+                }}
+                position={box.position}
               >
-                <span className="block font-mono font-bold">{cell.code}</span>
-                <span className="block">
-                  {cell.fillPercent}% ·{" "}
-                  {cell.contents.reduce(
-                    (sum, item) => sum + item.quantity,
-                    0,
-                  )}{" "}
-                  thùng
-                </span>
-              </button>
-            </Html>
+                <boxGeometry args={box.size} />
+                <meshStandardMaterial
+                  color={skuColor(box.sku)}
+                  roughness={0.72}
+                />
+                <Edges color="#334155" threshold={15} />
+              </mesh>
+            ))}
+
+            {selected ? (
+              <Html
+                center
+                distanceFactor={Math.max(5, rack.widthM * 1.2)}
+                position={[0, 0, depthM / 2 + 0.08]}
+                transform
+              >
+                <button
+                  className="w-32 rounded-md border border-amber-300 bg-white/95 px-2 py-1.5 text-center text-[10px] leading-tight text-slate-900 shadow-md"
+                  onClick={() => onSelectCell(cell)}
+                  type="button"
+                >
+                  <span className="block font-mono font-bold">{cell.code}</span>
+                  <span className="mt-0.5 block text-slate-600">
+                    {widthM.toLocaleString("vi-VN")} ×{" "}
+                    {depthM.toLocaleString("vi-VN")} ×{" "}
+                    {heightM.toLocaleString("vi-VN")} m · {boxes.length} thùng
+                  </span>
+                </button>
+              </Html>
+            ) : null}
           </group>
         );
       })}
@@ -104,27 +172,45 @@ export default function RackScene(props: {
   selectedCellId?: string;
   onSelectCell: (cell: StorageCellView) => void;
 }) {
-  const levels = Math.max(1, ...props.cells.map((cell) => cell.level));
-  const bays = Math.max(1, ...props.cells.map((cell) => cell.bay));
-  const distance = Math.max(6, Math.max(levels, bays) * 2.15);
+  const rack = getRackMeasurements(props.cells);
+  const span = Math.max(rack.widthM, rack.heightM, rack.depthM);
+  const distance = Math.max(4.5, span * 1.55);
   return (
     <Canvas
       camera={{
-        position: [distance * 0.58, distance * 0.42, distance],
-        fov: 40,
+        position: [
+          distance * 0.78,
+          Math.max(rack.heightM * 0.78, distance * 0.4),
+          distance,
+        ],
+        fov: 38,
       }}
       dpr={[1, 1.5]}
       gl={{ antialias: true }}
+      shadows
     >
-      <color attach="background" args={["#f1f5f9"]} />
-      <ambientLight intensity={1.25} />
-      <directionalLight intensity={1.7} position={[5, 8, 6]} />
+      <color attach="background" args={["#eef3f7"]} />
+      <ambientLight intensity={1.15} />
+      <hemisphereLight color="#ffffff" groundColor="#cbd5e1" intensity={0.9} />
+      <directionalLight
+        castShadow
+        intensity={1.55}
+        position={[rack.widthM, rack.heightM * 1.8, rack.depthM * 3]}
+      />
       <RackModel {...props} />
+      <ContactShadows
+        blur={2.5}
+        far={rack.heightM + 2}
+        opacity={0.28}
+        position={[0, -0.02, 0]}
+        scale={Math.max(rack.widthM * 1.3, 5)}
+      />
       <OrbitControls
-        enablePan={false}
-        maxDistance={distance * 1.8}
-        minDistance={distance * 0.55}
-        target={[0, 0, 0]}
+        enableDamping
+        enablePan
+        maxDistance={distance * 2.2}
+        minDistance={Math.max(2.2, distance * 0.42)}
+        target={[0, rack.heightM / 2, 0]}
       />
     </Canvas>
   );

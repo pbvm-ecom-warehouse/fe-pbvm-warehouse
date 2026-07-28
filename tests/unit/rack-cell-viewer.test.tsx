@@ -61,6 +61,9 @@ describe("rack cell viewer", () => {
     render(<ControlledViewer value={cell()} onActivate={onActivate} />);
 
     expect(screen.getByRole("button", { name: "2D" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Kệ 0,8 × 1 × 0,6 m · 1 tầng · 1 khoang"),
+    ).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: /A-01-01/i }));
     expect(screen.getAllByText("Trống · có thể cất")).toHaveLength(2);
     fireEvent.click(

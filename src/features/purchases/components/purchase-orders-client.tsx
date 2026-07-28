@@ -186,6 +186,8 @@ function formatError(error: unknown) {
     GRN_PACKAGE_SPEC_REQUIRED:
       "Mặt hàng chưa khai đủ kích thước thùng — không thể duyệt phiếu nhập.",
     GRN_PACKAGE_COUNT_REQUIRED: "Số thùng thực nhận phải lớn hơn 0.",
+    GRN_IMAGE_REQUIRED:
+      "Bắt buộc chụp hoặc tải lên ít nhất một ảnh minh chứng.",
   };
   return (
     (code && messages[code]) ||
@@ -283,6 +285,7 @@ function toGoodsReceiptItems(
       expiryDate: optionalText(form.expiryDate),
       itemId: form.itemId.trim(),
       lotNumber: optionalText(form.lotNumber),
+      manufacturedDate: form.manufacturedDate,
       note: optionalText(form.note),
     }))
     .filter((item) => item.actualQty > 0);
@@ -598,15 +601,18 @@ export function PurchaseOrdersClient({
       let goodsReceiptNote = grnEditTarget
         ? await updateGoodsReceiptNoteItems(grnEditTarget.id, items)
         : await createGoodsReceiptNote({
+            images: grnImages,
             items,
             purchaseOrderId: grnPurchaseOrderId,
           });
 
-      for (const image of grnImages) {
-        goodsReceiptNote = await uploadGoodsReceiptNoteImage(
-          goodsReceiptNote.id,
-          image,
-        );
+      if (grnEditTarget) {
+        for (const image of grnImages) {
+          goodsReceiptNote = await uploadGoodsReceiptNoteImage(
+            goodsReceiptNote.id,
+            image,
+          );
+        }
       }
 
       return goodsReceiptNote;
@@ -684,6 +690,14 @@ export function PurchaseOrdersClient({
       toast.error(
         parsed.error.issues[0]?.message ?? "Thông tin phiếu nhập chưa hợp lệ",
       );
+      return;
+    }
+
+    if (
+      grnImages.length === 0 &&
+      (!grnEditTarget || !grnEditTarget.images?.length)
+    ) {
+      toast.error("Bắt buộc chụp hoặc tải lên ít nhất một ảnh minh chứng.");
       return;
     }
 
@@ -1369,7 +1383,9 @@ export function PurchaseOrdersClient({
               </section>
 
               <section className="space-y-2">
-                <h3 className="text-sm font-semibold">Ảnh minh chứng</h3>
+                <h3 className="text-sm font-semibold">
+                  Ảnh minh chứng <span className="text-destructive">*</span>
+                </h3>
                 <EvidenceImagePicker
                   disabled={
                     !canCreateGoodsReceiptNote || createGrnMutation.isPending
@@ -1391,8 +1407,8 @@ export function PurchaseOrdersClient({
                 ) : null}
                 {grnPurchaseOrder ? (
                   <p className="text-xs text-muted-foreground">
-                    Ảnh sẽ được lưu vào phiếu nhập tạo từ{" "}
-                    {grnPurchaseOrder.poNumber} của{" "}
+                    Bắt buộc chụp hoặc tải lên ít nhất một ảnh. Ảnh sẽ được lưu
+                    vào phiếu nhập tạo từ {grnPurchaseOrder.poNumber} của{" "}
                     {grnPurchaseOrderSupplierLabel}.
                   </p>
                 ) : null}
@@ -1404,7 +1420,9 @@ export function PurchaseOrdersClient({
                   !canCreateGoodsReceiptNote ||
                   !grnPurchaseOrder ||
                   createGrnMutation.isPending ||
-                  grnItemForms.length === 0
+                  grnItemForms.length === 0 ||
+                  (grnImages.length === 0 &&
+                    (!grnEditTarget || !grnEditTarget.images?.length))
                 }
                 type="submit"
               >
@@ -1606,8 +1624,8 @@ function PurchaseOrderItemFields({
         />
         {item.sku ? (
           <div className="mt-1 text-xs text-muted-foreground">
-            1 thùng = {item.packageFactor || "1"} {item.packageUnit || "cái"}{" "}
-            · {item.itemDepth ?? "—"} × {item.itemWidth ?? "—"} ×{" "}
+            1 thùng = {item.packageFactor || "1"} {item.packageUnit || "cái"} ·{" "}
+            {item.itemDepth ?? "—"} × {item.itemWidth ?? "—"} ×{" "}
             {item.itemHeight ?? "—"} cm
           </div>
         ) : null}
@@ -1891,7 +1909,10 @@ function GoodsReceiptItemCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="truncate text-sm font-medium" title={item.itemName}>
+            <span
+              className="truncate text-sm font-medium"
+              title={item.itemName}
+            >
               {item.itemName || "Chưa xác định mặt hàng"}
             </span>
             {item.isPerishable ? (

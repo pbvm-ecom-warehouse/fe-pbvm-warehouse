@@ -313,7 +313,9 @@ function WarehouseEditor({
             : item,
         );
       }
-      return target.kind === "rack" || target.kind === "aisle"
+      return target.kind === "rack" ||
+        target.kind === "aisle" ||
+        target.kind === "zone"
         ? reconnectRackAccessPoints(layout)
         : layout;
     };

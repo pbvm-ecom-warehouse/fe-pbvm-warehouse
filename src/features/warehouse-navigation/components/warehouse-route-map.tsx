@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Navigation, Warehouse } from "lucide-react";
 import type { WarehouseLayout } from "@/types/api";
 import { getRackRect } from "@/features/warehouse-layout/utils/warehouse-layout";
@@ -16,12 +17,13 @@ export function WarehouseRouteMap({
   selectedRackId?: string;
   onSelectRack: (rackId: string) => void;
 }) {
+  const [focusedRackId, setFocusedRackId] = useState("");
   const { widthM, heightM } = layout.canvas;
   const routePoints = path?.points
     .map((point) => `${point.xM},${point.yM}`)
     .join(" ");
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-300 bg-[#f4f7f6]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-300 bg-[#f4f7f6]">
       <div className="flex items-center justify-between border-b border-slate-200 bg-white px-3 py-2 text-xs">
         <span className="flex items-center gap-2 font-semibold text-slate-800">
           <Navigation className="size-3.5 text-blue-700" />
@@ -33,7 +35,7 @@ export function WarehouseRouteMap({
       </div>
       <svg
         aria-label="Sơ đồ đường đi trong kho"
-        className="h-[330px] w-full"
+        className="min-h-0 w-full flex-1"
         preserveAspectRatio="xMidYMid meet"
         role="img"
         viewBox={`-1 -1 ${widthM + 2} ${heightM + 2}`}
@@ -99,18 +101,25 @@ export function WarehouseRouteMap({
         ))}
         {layout.racks.map((rack) => {
           const rect = getRackRect(rack);
-          const active = rack.id === selectedRackId;
+          const active =
+            rack.id === selectedRackId || rack.id === focusedRackId;
           const target = rack.id === path?.targetRackId;
           return (
             <g
               key={rack.id}
+              aria-label={rack.code}
               className="cursor-pointer"
               onClick={() => onSelectRack(rack.id)}
+              onBlur={() => setFocusedRackId("")}
+              onFocus={() => setFocusedRackId(rack.id)}
               role="button"
+              style={{ outline: "none" }}
               tabIndex={0}
               onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ")
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
                   onSelectRack(rack.id);
+                }
               }}
             >
               <rect
@@ -203,7 +212,7 @@ export function WarehouseRouteMap({
       <div className="flex items-center gap-2 border-t px-3 py-2 text-xs text-slate-600">
         <Warehouse className="size-3.5" />
         {path
-          ? "Nhấn vào rack để mở mặt kệ và chọn khoang."
+          ? "Nhấn vào rack để chọn vị trí và cập nhật đường đi."
           : "Không có đường đi cho vị trí đang chọn."}
       </div>
     </div>

@@ -55,6 +55,40 @@ beforeAll(() => {
 });
 
 describe("WarehouseFloorPlan editor tools", () => {
+  it("vẽ đường chia khoang ngang khi rack xoay 90 độ", () => {
+    const rotatedLayout: WarehouseLayout = {
+      ...layout,
+      racks: [
+        {
+          id: "rack-rotated",
+          zoneId: "zone-1",
+          code: "RACK-90",
+          name: "Rack xoay",
+          xM: 2,
+          yM: 2,
+          widthM: 5,
+          depthM: 1.5,
+          rotation: 90,
+          levelCount: 3,
+          bayCount: 3,
+          shelfCodes: ["RACK-90-T1", "RACK-90-T2", "RACK-90-T3"],
+          accessPoint: { xM: 2, yM: 4.5 },
+        },
+      ],
+    };
+
+    render(<WarehouseFloorPlan layout={rotatedLayout} tool="select" />);
+
+    const rack = screen.getByRole("button", { name: "Rack xoay" });
+    const dividers = rack.querySelectorAll("line");
+
+    expect(dividers).toHaveLength(2);
+    dividers.forEach((divider) => {
+      expect(divider.getAttribute("y1")).toBe(divider.getAttribute("y2"));
+      expect(divider.getAttribute("x1")).not.toBe(divider.getAttribute("x2"));
+    });
+  });
+
   it("phát create event đã snap khi dùng công cụ khu vực", () => {
     const onCreate = vi.fn();
     render(

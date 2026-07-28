@@ -253,6 +253,29 @@ describe("warehouse architectural layout", () => {
     ]);
   });
 
+  it("cập nhật zoneId khi rack được chuyển hoàn toàn sang zone khác", () => {
+    const layout = cloneWarehouseLayout(editorLayout);
+    layout.zones.push({
+      id: "zone-b",
+      code: "B",
+      name: "Zone B",
+      xM: 20,
+      yM: 1,
+      widthM: 16,
+      heightM: 22,
+      rotation: 0,
+    });
+    layout.racks[0] = {
+      ...layout.racks[0],
+      xM: 22,
+      zoneId: "zone-a",
+    };
+
+    const reconnected = reconnectRackAccessPoints(layout);
+
+    expect(reconnected.racks[0].zoneId).toBe("zone-b");
+  });
+
   it("nhận diện backend cũ từ lỗi whitelist heightM", () => {
     expect(
       isRackHeightWhitelistIssue([

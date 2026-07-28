@@ -135,12 +135,24 @@ export function reconnectRackAccessPoints(
 ): WarehouseLayout {
   return {
     ...layout,
-    racks: layout.racks.map((rack) => ({
-      ...rack,
-      accessPoint:
-        findRackAccessPoint(rack, layout.aisles, layout.canvas.gridM) ??
-        rack.accessPoint,
-    })),
+    racks: layout.racks.map((rack) => {
+      const rackRect = getRackRect(rack);
+      const assignedZone = layout.zones.find(
+        (zone) =>
+          zone.id === rack.zoneId && isRectInside(rackRect, getZoneRect(zone)),
+      );
+      const containingZone =
+        assignedZone ??
+        layout.zones.find((zone) => isRectInside(rackRect, getZoneRect(zone)));
+
+      return {
+        ...rack,
+        zoneId: containingZone?.id ?? rack.zoneId,
+        accessPoint:
+          findRackAccessPoint(rack, layout.aisles, layout.canvas.gridM) ??
+          rack.accessPoint,
+      };
+    }),
   };
 }
 
