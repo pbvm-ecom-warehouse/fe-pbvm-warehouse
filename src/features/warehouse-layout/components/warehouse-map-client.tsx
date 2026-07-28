@@ -51,7 +51,9 @@ import {
   findRackAccessPoint,
   getAisleRect,
   getZoneRect,
+  isRackHeightWhitelistIssue,
   isRectInside,
+  reconnectRackAccessPoints,
   snapToGrid,
   validateWarehouseLayoutClient,
 } from "../utils/warehouse-layout";
@@ -181,32 +183,29 @@ function WarehouseEditor({
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [viewportResetKey, setViewportResetKey] = useState(0);
 
-  const invalidSelectionKeys = useMemo(
-    () => {
-      const keys = new Set(
-        issues.flatMap((issue) => {
-          const id = issue.id ?? issue.clientId;
-          return id ? [`${issue.entity.toLowerCase()}:${id}`] : [];
-        }),
+  const invalidSelectionKeys = useMemo(() => {
+    const keys = new Set(
+      issues.flatMap((issue) => {
+        const id = issue.id ?? issue.clientId;
+        return id ? [`${issue.entity.toLowerCase()}:${id}`] : [];
+      }),
+    );
+    editor.draftLayout.racks.forEach((rack) => {
+      const connected = editor.draftLayout.aisles.some((aisle) =>
+        isRectInside(
+          {
+            xM: rack.accessPoint.xM,
+            yM: rack.accessPoint.yM,
+            widthM: 0,
+            heightM: 0,
+          },
+          getAisleRect(aisle),
+        ),
       );
-      editor.draftLayout.racks.forEach((rack) => {
-        const connected = editor.draftLayout.aisles.some((aisle) =>
-          isRectInside(
-            {
-              xM: rack.accessPoint.xM,
-              yM: rack.accessPoint.yM,
-              widthM: 0,
-              heightM: 0,
-            },
-            getAisleRect(aisle),
-          ),
-        );
-        if (!connected) keys.add(`rack:${rack.id}`);
-      });
-      return keys;
-    },
-    [editor.draftLayout, issues],
-  );
+      if (!connected) keys.add(`rack:${rack.id}`);
+    });
+    return keys;
+  }, [editor.draftLayout, issues]);
 
   const activeSelection =
     selection && selectionExists(editor.draftLayout, selection)
@@ -232,6 +231,12 @@ function WarehouseEditor({
       const details = getErrorDetails(error);
       if (code === "LAYOUT_REVISION_CONFLICT") {
         setConflictRevision(details?.currentRevision ?? null);
+        return;
+      }
+      if (isRackHeightWhitelistIssue(details?.issues)) {
+        toast.error(
+          "Backend đang chạy phiên bản cũ, chưa hỗ trợ chiều cao kệ. Hãy build và khởi động lại backend từ nhánh develop.",
+        );
         return;
       }
       if (code === "LAYOUT_VALIDATION_FAILED") {
@@ -308,7 +313,9 @@ function WarehouseEditor({
             : item,
         );
       }
-      return layout;
+      return target.kind === "rack" || target.kind === "aisle"
+        ? reconnectRackAccessPoints(layout)
+        : layout;
     };
 
     if (live) editor.updateLive(updater);
@@ -364,7 +371,7 @@ function WarehouseEditor({
           : item;
       });
 
-      return layout;
+      return reconnectRackAccessPoints(layout);
     };
 
     if (live) editor.updateLive(updater);
@@ -451,20 +458,15 @@ function WarehouseEditor({
         ),
         accessPoint: { xM: rackX, yM: rackY },
       };
-      const accessPoint = findRackAccessPoint(
-        rackDraft,
-        layout.aisles,
-        grid,
-      );
+      const accessPoint = findRackAccessPoint(rackDraft, layout.aisles, grid);
       if (!accessPoint) {
         toast.error(
-          "Hãy tạo lối đi trước, sau đó đặt rack sát lối đi (khoảng cách tối đa 2 m).",
+          "Hãy tạo Đường chính hoặc Lối đi giữa rack trước khi tạo rack.",
         );
         return;
       }
       const rack = { ...rackDraft, accessPoint };
-      const innerHeight =
-        (template.heightM * 100) / template.levelCount;
+      const innerHeight = (template.heightM * 100) / template.levelCount;
       const shelves = rack.shelfCodes.map((shelfCode, index) => ({
         id: temporaryId(),
         rackId: id,
@@ -496,7 +498,12 @@ function WarehouseEditor({
         widthM,
         heightM,
       };
-      editor.commit((next) => ({ ...next, aisles: [...next.aisles, aisle] }));
+      editor.commit((next) =>
+        reconnectRackAccessPoints({
+          ...next,
+          aisles: [...next.aisles, aisle],
+        }),
+      );
       setSelection({ kind, id });
     } else {
       const gate = {
@@ -560,7 +567,9 @@ function WarehouseEditor({
           (item) => item.id !== currentSelection.id,
         );
       }
-      return layout;
+      return currentSelection.kind === "aisle"
+        ? reconnectRackAccessPoints(layout)
+        : layout;
     });
     setSelection(null);
     setIssues([]);

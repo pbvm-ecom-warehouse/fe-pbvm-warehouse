@@ -12,6 +12,25 @@ export type LayoutRect = {
   heightM: number;
 };
 
+export type LayoutIssueShape = {
+  entity?: string;
+  field?: string;
+  code?: string;
+};
+
+export function isRackHeightWhitelistIssue(
+  issues: LayoutIssueShape[] | undefined,
+): boolean {
+  return Boolean(
+    issues?.some(
+      (issue) =>
+        issue.entity === "RACK_TEMPLATE" &&
+        issue.field === "heightM" &&
+        issue.code === "whitelistValidation",
+    ),
+  );
+}
+
 export function cloneWarehouseLayout(layout: WarehouseLayout): WarehouseLayout {
   return structuredClone(layout);
 }
@@ -68,15 +87,14 @@ export function doRectsOverlap(left: LayoutRect, right: LayoutRect) {
 export function findRackAccessPoint(
   rack: WarehouseLayoutRack,
   aisles: WarehouseLayoutAisle[],
-  gridM: number,
+  _gridM: number,
 ): { xM: number; yM: number } | null {
+  void _gridM;
   const rackRect = getRackRect(rack);
   const rackCenter = {
     xM: rackRect.xM + rackRect.widthM / 2,
     yM: rackRect.yM + rackRect.heightM / 2,
   };
-  const maximumGapM = Math.max(2, gridM * 4);
-
   const candidates = aisles
     .map((aisle) => {
       const rect = getAisleRect(aisle);
@@ -98,12 +116,32 @@ export function findRackAccessPoint(
         rackRect.yM - (rect.yM + rect.heightM),
         0,
       );
-      return { point: { xM, yM }, distance: Math.hypot(deltaX, deltaY) };
+      return {
+        point: { xM, yM },
+        distance: Math.hypot(deltaX, deltaY),
+        priority: aisle.type === "RACK" ? 0 : 1,
+      };
     })
-    .filter((candidate) => candidate.distance <= maximumGapM)
-    .sort((left, right) => left.distance - right.distance);
+    .sort(
+      (left, right) =>
+        left.distance - right.distance || left.priority - right.priority,
+    );
 
   return candidates[0]?.point ?? null;
+}
+
+export function reconnectRackAccessPoints(
+  layout: WarehouseLayout,
+): WarehouseLayout {
+  return {
+    ...layout,
+    racks: layout.racks.map((rack) => ({
+      ...rack,
+      accessPoint:
+        findRackAccessPoint(rack, layout.aisles, layout.canvas.gridM) ??
+        rack.accessPoint,
+    })),
+  };
 }
 
 export function validateWarehouseLayoutClient(

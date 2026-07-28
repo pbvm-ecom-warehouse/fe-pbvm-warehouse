@@ -658,8 +658,7 @@ export function WarehouseFloorPlan({
               data-layout-element
               key={aisle.id}
               onFocus={() =>
-                tool === "select" &&
-                onSelect?.({ kind: "aisle", id: aisle.id })
+                tool === "select" && onSelect?.({ kind: "aisle", id: aisle.id })
               }
               onPointerDown={(event) =>
                 startDrag(event, { kind: "aisle", id: aisle.id }, rect, "move")
@@ -671,18 +670,10 @@ export function WarehouseFloorPlan({
               tabIndex={0}
             >
               <rect
-                fill={isMain ? "#dfe5e7" : "#edf0ef"}
+                fill="#e6ebeb"
                 height={rect.heightM}
-                stroke={
-                  invalid
-                    ? "#dc2626"
-                    : selected
-                      ? "#1d4ed8"
-                      : isMain
-                        ? "#94a3b8"
-                        : "#cbd5e1"
-                }
-                strokeWidth={invalid || selected ? 0.16 : 0.06}
+                stroke={invalid ? "#dc2626" : selected ? "#1d4ed8" : "none"}
+                strokeWidth={invalid || selected ? 0.16 : 0}
                 width={rect.widthM}
                 x={rect.xM}
                 y={rect.yM}
