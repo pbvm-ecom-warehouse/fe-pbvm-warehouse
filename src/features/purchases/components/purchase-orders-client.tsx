@@ -158,10 +158,10 @@ const defaultItemForm: PurchaseOrderItemForm = {
   packageDepthCm: "",
   packageFactor: "1",
   packageHeightCm: "",
-  packageUnit: "thùng",
+  packageUnit: "cái",
   packageWidthCm: "",
   sku: "",
-  unit: "cái",
+  unit: "thùng",
   unitPrice: "0",
 };
 
@@ -240,24 +240,10 @@ function toPurchaseOrderItems(
     .map((form) => ({
       expectedQty: parsePositiveNumber(form.expectedQty, 0),
       itemId: form.itemId.trim(),
-      unit: form.unit.trim() || "cái",
+      unit: "thùng",
       unitPrice: parsePositiveNumber(form.unitPrice, 0),
-      packageSpec: {
-        unit: form.packageUnit.trim() || "thùng",
-        factor: parsePositiveNumber(form.packageFactor, 0),
-        depthCm: parsePositiveNumber(form.packageDepthCm, 0),
-        widthCm: parsePositiveNumber(form.packageWidthCm, 0),
-        heightCm: parsePositiveNumber(form.packageHeightCm, 0),
-      },
     }))
-    .filter(
-      (item) =>
-        item.expectedQty > 0 &&
-        item.packageSpec.factor > 0 &&
-        item.packageSpec.depthCm > 0 &&
-        item.packageSpec.widthCm > 0 &&
-        item.packageSpec.heightCm > 0,
-    );
+    .filter((item) => item.expectedQty > 0);
 }
 
 function toGoodsReceiptItems(
@@ -1070,9 +1056,7 @@ export function PurchaseOrdersClient({
                     (item) =>
                       !item.itemId ||
                       !item.sku ||
-                      !item.unit ||
-                      !item.packageUnit.trim() ||
-                      parsePositiveNumber(item.packageFactor, 0) <= 0 ||
+                      item.unit !== "thùng" ||
                       parsePositiveNumber(item.packageDepthCm, 0) <= 0 ||
                       parsePositiveNumber(item.packageWidthCm, 0) <= 0 ||
                       parsePositiveNumber(item.packageHeightCm, 0) <= 0,
@@ -1454,23 +1438,22 @@ function PurchaseOrderItemFields({
           selectedSku={item.sku}
           onSelect={(stockItem) => {
             const supplierItem = supplierItemByItemId.get(stockItem.id);
-            const packageUnit =
-              stockItem.altUnits?.find((candidate) =>
-                candidate.unit.toLocaleLowerCase("vi").includes("thùng"),
-              ) ?? stockItem.altUnits?.[0];
+            const alternateUnit = stockItem.altUnits?.find(
+              (candidate) => candidate.unit !== "thùng",
+            );
             onChange({
               ...item,
               expectedQty: String(Math.max(1, supplierItem?.minOrderQty ?? 1)),
               itemId: stockItem.id,
               packageDepthCm: stockItem.depth ? String(stockItem.depth) : "",
               packageFactor: String(
-                packageUnit?.factor ?? packageUnit?.quantity ?? 1,
+                alternateUnit?.factor ?? alternateUnit?.quantity ?? 1,
               ),
               packageHeightCm: stockItem.height ? String(stockItem.height) : "",
-              packageUnit: packageUnit?.unit ?? "thùng",
+              packageUnit: alternateUnit?.unit ?? "cái",
               packageWidthCm: stockItem.width ? String(stockItem.width) : "",
               sku: stockItem.sku,
-              unit: stockItem.unit,
+              unit: "thùng",
               unitPrice: String(supplierItem?.purchasePrice ?? 0),
             });
           }}
@@ -1489,12 +1472,13 @@ function PurchaseOrderItemFields({
         />
       </div>
       <div className="min-w-0 space-y-2 lg:col-span-2">
-        <Label htmlFor={`${itemId}-quantity`}>Số lượng</Label>
+        <Label htmlFor={`${itemId}-quantity`}>Số thùng đặt</Label>
         <Input
-          aria-label={`Số lượng dòng ${index + 1}`}
+          aria-label={`Số thùng đặt dòng ${index + 1}`}
           id={`${itemId}-quantity`}
-          min="0"
+          min="1"
           required
+          step="1"
           type="number"
           value={item.expectedQty}
           onChange={(event) =>
@@ -1537,85 +1521,15 @@ function PurchaseOrderItemFields({
         </Button>
       </div>
       <div className="border-t pt-3 sm:col-span-2 lg:col-span-12">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Quy cách thùng bắt buộc
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-          <PackageField
-            id={`${itemId}-package-unit`}
-            label="Đơn vị thùng"
-            value={item.packageUnit}
-            onChange={(value) => onChange({ ...item, packageUnit: value })}
-          />
-          <PackageField
-            id={`${itemId}-package-factor`}
-            label="Số đơn vị / thùng"
-            numeric
-            value={item.packageFactor}
-            onChange={(value) => onChange({ ...item, packageFactor: value })}
-          />
-          <PackageField
-            id={`${itemId}-package-depth`}
-            label="Sâu (cm)"
-            numeric
-            value={item.packageDepthCm}
-            onChange={(value) => onChange({ ...item, packageDepthCm: value })}
-          />
-          <PackageField
-            id={`${itemId}-package-width`}
-            label="Rộng (cm)"
-            numeric
-            value={item.packageWidthCm}
-            onChange={(value) => onChange({ ...item, packageWidthCm: value })}
-          />
-          <PackageField
-            id={`${itemId}-package-height`}
-            label="Cao (cm)"
-            numeric
-            value={item.packageHeightCm}
-            onChange={(value) => onChange({ ...item, packageHeightCm: value })}
-          />
-          <div className="space-y-2">
-            <Label>Thể tích / thùng</Label>
-            <div className="flex h-8 items-center rounded-md border bg-muted/40 px-2.5 text-sm font-medium">
-              {(
-                parsePositiveNumber(item.packageDepthCm, 0) *
-                parsePositiveNumber(item.packageWidthCm, 0) *
-                parsePositiveNumber(item.packageHeightCm, 0)
-              ).toLocaleString("vi-VN")}{" "}
-              cm³
-            </div>
-          </div>
+        <div className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">
+            Quy cách mặt hàng:
+          </span>{" "}
+          1 thùng = {item.packageFactor || "1"} {item.packageUnit || "cái"} ·{" "}
+          {item.packageDepthCm || "—"} × {item.packageWidthCm || "—"} ×{" "}
+          {item.packageHeightCm || "—"} cm
         </div>
       </div>
-    </div>
-  );
-}
-
-function PackageField({
-  id,
-  label,
-  numeric = false,
-  value,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  numeric?: boolean;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
-      <Input
-        id={id}
-        min={numeric ? "1" : undefined}
-        required
-        type={numeric ? "number" : "text"}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
     </div>
   );
 }
@@ -1807,9 +1721,12 @@ function GoodsReceiptItemFields({
       </div>
       {item.packageSpec ? (
         <div className="border-b bg-blue-50/70 px-3 py-2 text-xs text-blue-900">
-          <span className="font-semibold">Quy cách:</span>{" "}
-          {item.packageSpec.unit} × {item.packageSpec.factor} {item.unit} ·{" "}
-          {item.packageSpec.depthCm} × {item.packageSpec.widthCm} ×{" "}
+          <span className="font-semibold">Quy cách:</span> 1{" "}
+          {item.packageSpec.unit}
+          {item.packageSpec.factor !== 1
+            ? ` = ${item.packageSpec.factor} ${item.unit}`
+            : ""}{" "}
+          · {item.packageSpec.depthCm} × {item.packageSpec.widthCm} ×{" "}
           {item.packageSpec.heightCm} cm ·{" "}
           {(
             item.packageSpec.volumeCm3 ??
@@ -1827,24 +1744,12 @@ function GoodsReceiptItemFields({
       )}
       <div className="grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-12">
         <div className="min-w-0 space-y-2 lg:col-span-3">
-          <Label htmlFor={`${fieldId}-quantity`}>Số lượng thực nhập</Label>
-          <Input
-            aria-label={`Số lượng thực nhập dòng ${index + 1}`}
-            id={`${fieldId}-quantity`}
-            min="0"
-            type="number"
-            value={item.actualQty}
-            onChange={(event) =>
-              onChange({ ...item, actualQty: event.target.value })
-            }
-          />
-        </div>
-        <div className="min-w-0 space-y-2 lg:col-span-2">
-          <Label htmlFor={`${fieldId}-packages`}>Số thùng</Label>
+          <Label htmlFor={`${fieldId}-packages`}>Số thùng thực nhập</Label>
           <Input
             aria-label={`Số thùng thực nhập dòng ${index + 1}`}
             id={`${fieldId}-packages`}
-            min="0"
+            min="1"
+            step="1"
             type="number"
             value={item.packageCount}
             onChange={(event) => {
@@ -1859,17 +1764,6 @@ function GoodsReceiptItemFields({
                     : item.actualQty,
               });
             }}
-          />
-        </div>
-        <div className="min-w-0 space-y-2 lg:col-span-2">
-          <Label htmlFor={`${fieldId}-unit`}>Đơn vị</Label>
-          <Input
-            aria-label={`Đơn vị phiếu nhập dòng ${index + 1}`}
-            id={`${fieldId}-unit`}
-            value={item.unit}
-            onChange={(event) =>
-              onChange({ ...item, unit: event.target.value })
-            }
           />
         </div>
         <div className="min-w-0 space-y-2 lg:col-span-3">
