@@ -459,18 +459,17 @@ describe("purchase and supplier UX", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Tạo đơn mua" }));
 
     const dialog = screen.getByRole("dialog");
+    const dialogScope = within(dialog);
     expect(dialog).toHaveClass("overflow-hidden");
     expect(screen.getByTestId("purchase-order-dialog-body")).toHaveClass(
       "overflow-y-auto",
     );
-    expect(screen.getByText("Mặt hàng", { selector: "label" })).toBeVisible();
-    expect(screen.getByText("SKU", { selector: "label" })).toBeVisible();
-    expect(
-      screen.getByText("Số thùng đặt", { selector: "label" }),
-    ).toBeVisible();
-    expect(screen.getByText("Đơn vị", { selector: "label" })).toBeVisible();
-    expect(screen.getByText("Đơn giá", { selector: "label" })).toBeVisible();
-    expect(screen.getByLabelText("Ngày dự kiến").parentElement).not.toHaveClass(
+    expect(dialogScope.getByText("Mặt hàng", { selector: "th" })).toBeVisible();
+    expect(dialogScope.getByText("SKU", { selector: "th" })).toBeVisible();
+    expect(dialogScope.getByText("SL", { selector: "th" })).toBeVisible();
+    expect(dialogScope.getByText("Đơn vị", { selector: "th" })).toBeVisible();
+    expect(dialogScope.getByText("Đơn giá", { selector: "th" })).toBeVisible();
+    expect(dialogScope.getByLabelText("Ngày dự kiến").parentElement).not.toHaveClass(
       "md:col-span-2",
     );
 
