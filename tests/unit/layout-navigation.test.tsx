@@ -92,6 +92,20 @@ describe("dashboard navigation chrome", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("places Cất hàng immediately after Nhận hàng for RECEIVER", () => {
+    mockedUseSessionUser.mockReturnValue(sessionUser(["RECEIVER"]));
+
+    render(<SidebarContent />);
+
+    const receiptLink = screen.getByRole("link", { name: /Nhận hàng/i });
+    const putawayLink = screen.getByRole("link", { name: /Cất hàng/i });
+    const navigationLinks = screen.getAllByRole("link");
+
+    expect(putawayLink).toHaveAttribute("href", "/putaway-tasks");
+    expect(navigationLinks.indexOf(putawayLink)).toBe(
+      navigationLinks.indexOf(receiptLink) + 1,
+    );
+  });
   it("keeps Kho active on the canonical editor route", () => {
     mockedUseSessionUser.mockReturnValue(sessionUser(["MANAGER"]));
     mockedUsePathname.mockReturnValue("/locations");

@@ -596,12 +596,22 @@ describe("purchase and supplier UX", () => {
       within(createGrnDialog).queryByLabelText("Đơn vị phiếu nhập dòng 1"),
     ).not.toBeInTheDocument();
     expect(
-      within(createGrnDialog).getByText("Mã lô", { selector: "label" }),
+      within(createGrnDialog).getByText("Ngày sản xuất", {
+        selector: "label",
+      }),
     ).toBeVisible();
-    // isPerishable chỉ tra được sau khi getWarehouseItem (query riêng, enabled khi dialog mở)
-    // resolve xong — chờ input trở thành required thay vì assert ngay lập tức.
-    await waitFor(() =>
-      expect(screen.getByLabelText("Mã lô phiếu nhập dòng 1")).toBeRequired(),
+    expect(
+      within(createGrnDialog).getByText("SEQ trong ngày", {
+        selector: "label",
+      }),
+    ).toBeVisible();
+    expect(
+      screen.getByLabelText("Ngày sản xuất phiếu nhập dòng 1"),
+    ).toBeRequired();
+    expect(screen.getByLabelText("SEQ số lô phiếu nhập dòng 1")).toBeRequired();
+    expect(screen.getByLabelText("Mã lô phiếu nhập dòng 1")).toBeRequired();
+    expect(screen.getByLabelText("Mã lô phiếu nhập dòng 1")).toHaveAttribute(
+      "readonly",
     );
     expect(
       screen.getByText("Hạn sử dụng", { selector: "label" }),
@@ -726,9 +736,15 @@ describe("purchase and supplier UX", () => {
       ),
     ).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Mã lô phiếu nhập dòng 1"), {
-      target: { value: "LOT-1" },
+    fireEvent.change(screen.getByLabelText("Ngày sản xuất phiếu nhập dòng 1"), {
+      target: { value: "2026-07-28" },
     });
+    fireEvent.change(screen.getByLabelText("SEQ số lô phiếu nhập dòng 1"), {
+      target: { value: "1" },
+    });
+    expect(screen.getByLabelText("Mã lô phiếu nhập dòng 1")).toHaveValue(
+      "LOT-260728-001",
+    );
     fireEvent.change(screen.getByLabelText("Hạn sử dụng phiếu nhập dòng 1"), {
       target: { value: "2026-12-31" },
     });
@@ -744,7 +760,14 @@ describe("purchase and supplier UX", () => {
 
     await waitFor(() =>
       expect(mockedCreateGrn).toHaveBeenCalledWith(
-        expect.objectContaining({ purchaseOrderId: "po-1" }),
+        expect.objectContaining({
+          items: [
+            expect.objectContaining({
+              lotNumber: "LOT-260728-001",
+            }),
+          ],
+          purchaseOrderId: "po-1",
+        }),
       ),
     );
     await waitFor(() =>

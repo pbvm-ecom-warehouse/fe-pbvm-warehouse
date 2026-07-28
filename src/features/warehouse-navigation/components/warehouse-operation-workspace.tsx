@@ -52,6 +52,7 @@ export function WarehouseOperationWorkspace({
   operation,
   sku,
   remainingPackageCount,
+  packageSpec,
   suggestions,
   suggestionsLoading,
   suggestionsError,
@@ -61,6 +62,12 @@ export function WarehouseOperationWorkspace({
   operation: "PUTAWAY" | "PICK";
   sku: string;
   remainingPackageCount: number;
+  packageSpec?: {
+    depthCm: number;
+    widthCm: number;
+    heightCm: number;
+    volumeCm3: number;
+  };
   suggestions: WarehouseOperationSuggestion[];
   suggestionsLoading?: boolean;
   suggestionsError?: unknown;
@@ -211,6 +218,11 @@ export function WarehouseOperationWorkspace({
                       ? `Có ${suggestion.quantity ?? 0} thùng`
                       : `Chứa thêm ${suggestion.capacity ?? 0} thùng`}
                 </div>
+                {suggestion.expiryDate ? (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    HSD {suggestion.expiryDate}
+                  </div>
+                ) : null}
                 {suggestion.lotNumber ? (
                   <div className="mt-1 text-xs text-muted-foreground">
                     Lô {suggestion.lotNumber}
@@ -250,8 +262,16 @@ export function WarehouseOperationWorkspace({
             rackCode={selectedRack?.code}
             cells={cells}
             selectedCellId={selectedCell?.id}
-            onSelectCell={(cell) => setChosenCellId(cell.id)}
+            onSelectCell={(cell) => {
+              setChosenRackId(selectedRackId);
+              setChosenCellId(cell.id);
+            }}
             onActivateCell={activateCell}
+            operation={operation}
+            packageSpec={packageSpec}
+            suggestedCellIds={suggestions.map(
+              (suggestion) => suggestion.cellId,
+            )}
           />
         )
       ) : (

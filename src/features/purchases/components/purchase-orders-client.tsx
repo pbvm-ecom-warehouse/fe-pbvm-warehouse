@@ -65,6 +65,11 @@ import {
   TableSkeleton,
 } from "@/features/admin-shell/components/operations-ui";
 import { createGoodsReceiptNoteFormSchema } from "@/features/purchases/schemas/goods-receipt-note.schema";
+import {
+  formatLotNumber,
+  parseLotNumber,
+  todayInHoChiMinh,
+} from "@/features/purchases/utils/lot-number";
 import { getApiErrorCode, getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
@@ -144,6 +149,8 @@ type GoodsReceiptItemForm = {
   itemId: string;
   itemName: string;
   lotNumber: string;
+  lotSequence: string;
+  manufacturedDate: string;
   note: string;
   itemDepth?: number;
   itemWidth?: number;
@@ -292,6 +299,8 @@ function buildGoodsReceiptForms(
       itemId: item.itemId,
       itemName: item.itemName,
       lotNumber: "",
+      lotSequence: "",
+      manufacturedDate: "",
       note: "",
       itemDepth: item.itemDepth,
       itemWidth: item.itemWidth,
@@ -659,20 +668,26 @@ export function PurchaseOrdersClient({
     setGrnEditTarget(grn);
     setGrnPurchaseOrderId(grn.purchaseOrderId);
     setGrnItemForms(
-      grn.items.map((item) => ({
-        actualQty: String(item.actualQty),
-        expiryDate: item.expiryDate ?? "",
-        isPerishable: item.isPerishable ?? false,
-        itemId: item.itemId,
-        itemName: item.itemName ?? item.sku,
-        lotNumber: item.lotNumber ?? "",
-        note: item.note ?? "",
-        itemDepth: item.itemDepth,
-        itemWidth: item.itemWidth,
-        itemHeight: item.itemHeight,
-        sku: item.sku,
-        unit: "thùng",
-      })),
+      grn.items.map((item) => {
+        const parsedLot = parseLotNumber(item.lotNumber ?? "");
+        return {
+          actualQty: String(item.actualQty),
+          expiryDate: item.expiryDate ?? "",
+          isPerishable: item.isPerishable ?? false,
+          itemId: item.itemId,
+          itemName: item.itemName ?? item.sku,
+          lotNumber: item.lotNumber ?? "",
+          lotSequence: parsedLot?.lotSequence ?? "",
+          manufacturedDate:
+            item.manufacturedDate ?? parsedLot?.manufacturedDate ?? "",
+          note: item.note ?? "",
+          itemDepth: item.itemDepth,
+          itemWidth: item.itemWidth,
+          itemHeight: item.itemHeight,
+          sku: item.sku,
+          unit: "thùng",
+        };
+      }),
     );
     setGrnImages([]);
     setGrnDialogOpen(true);
@@ -1813,8 +1828,8 @@ function GoodsReceiptItemFields({
         </div>
       ) : (
         <div className="border-b bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
-          Mặt hàng chưa khai đủ kích thước thùng. Hãy sửa master data trước
-          khi gửi duyệt.
+          Mặt hàng chưa khai đủ kích thước thùng. Hãy sửa master data trước khi
+          gửi duyệt.
         </div>
       )}
       <div className="grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-12">
@@ -1833,21 +1848,63 @@ function GoodsReceiptItemFields({
           />
         </div>
         <div className="min-w-0 space-y-2 lg:col-span-3">
+          <Label htmlFor={`${fieldId}-manufactured`}>
+            Ngày sản xuất <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            aria-label={`Ngày sản xuất phiếu nhập dòng ${index + 1}`}
+            id={`${fieldId}-manufactured`}
+            max={todayInHoChiMinh()}
+            required
+            type="date"
+            value={item.manufacturedDate}
+            onChange={(event) => {
+              const manufacturedDate = event.target.value;
+              onChange({
+                ...item,
+                manufacturedDate,
+                lotNumber: formatLotNumber(manufacturedDate, item.lotSequence),
+              });
+            }}
+          />
+        </div>
+        <div className="min-w-0 space-y-2 lg:col-span-2">
+          <Label htmlFor={`${fieldId}-lot-sequence`}>
+            SEQ trong ngày <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            aria-label={`SEQ số lô phiếu nhập dòng ${index + 1}`}
+            id={`${fieldId}-lot-sequence`}
+            inputMode="numeric"
+            max="999"
+            min="1"
+            placeholder="001"
+            required
+            step="1"
+            type="number"
+            value={item.lotSequence}
+            onChange={(event) => {
+              const lotSequence = event.target.value;
+              onChange({
+                ...item,
+                lotSequence,
+                lotNumber: formatLotNumber(item.manufacturedDate, lotSequence),
+              });
+            }}
+          />
+        </div>
+        <div className="min-w-0 space-y-2 lg:col-span-4">
           <Label htmlFor={`${fieldId}-lot`}>
-            Mã lô
-            {item.isPerishable ? (
-              <span className="text-destructive"> *</span>
-            ) : null}
+            Mã lô <span className="text-destructive">*</span>
           </Label>
           <Input
             aria-label={`Mã lô phiếu nhập dòng ${index + 1}`}
+            className="font-mono font-semibold tracking-wide"
             id={`${fieldId}-lot`}
-            placeholder="Nhập mã lô"
-            required={item.isPerishable}
+            placeholder="LOT-YYMMDD-SEQ"
+            readOnly
+            required
             value={item.lotNumber}
-            onChange={(event) =>
-              onChange({ ...item, lotNumber: event.target.value })
-            }
           />
         </div>
         <div className="min-w-0 space-y-2 lg:col-span-4">
@@ -1868,7 +1925,7 @@ function GoodsReceiptItemFields({
             }
           />
         </div>
-        <div className="min-w-0 space-y-2 sm:col-span-2 lg:col-span-12">
+        <div className="min-w-0 space-y-2 sm:col-span-2 lg:col-span-8">
           <Label htmlFor={`${fieldId}-note`}>Ghi chú</Label>
           <Input
             aria-label={`Ghi chú phiếu nhập dòng ${index + 1}`}

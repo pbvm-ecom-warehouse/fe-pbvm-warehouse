@@ -30,6 +30,7 @@ export type GoodsReceiptNoteItem = {
   /** Số thùng thực nhận — luôn là số nguyên, luôn theo đơn vị cơ sở (thùng). */
   actualQty: number;
   lotNumber?: string | null;
+  manufacturedDate?: string | null;
   expiryDate?: string | null;
   note?: string | null;
   wholePackageOnly?: boolean;
