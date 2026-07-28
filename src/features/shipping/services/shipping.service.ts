@@ -160,7 +160,6 @@ export async function updateShipmentStatus(
   const response = await apiClient.patch<ApiEnvelope<Shipment> | Shipment>(
     `/shipments/${encodeURIComponent(shipmentId)}/status`,
     formData,
-    { headers: { "Content-Type": "multipart/form-data" } },
   );
 
   return unwrapApiData(response.data);

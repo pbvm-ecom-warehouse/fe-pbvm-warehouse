@@ -119,9 +119,6 @@ export async function countStockCountItem({
   const response = await apiClient.post<ApiEnvelope<StockCount> | StockCount>(
     `/stock-counts/${encodeURIComponent(stockCountId)}/items/${encodeURIComponent(itemId)}/count`,
     formData,
-    {
-      headers: { "Content-Type": "multipart/form-data" },
-    },
   );
 
   return unwrapApiData(response.data);

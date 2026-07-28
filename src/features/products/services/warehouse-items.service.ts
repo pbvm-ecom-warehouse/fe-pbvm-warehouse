@@ -202,9 +202,7 @@ export async function createWarehouseItem(input: CreateWarehouseItemInput) {
 
   const response = await apiClient.post<
     ApiEnvelope<WarehouseItem> | WarehouseItem
-  >("/stock/items", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+  >("/stock/items", formData);
 
   return unwrapApiData(response.data);
 }

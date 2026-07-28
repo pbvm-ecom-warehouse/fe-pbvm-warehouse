@@ -16,10 +16,10 @@ import {
 } from "@/features/products/services/warehouse-items.service";
 import {
   approveGoodsReceiptNote,
-  confirmGoodsReceiptNote,
   createGoodsReceiptNote,
   listGoodsReceiptNotes,
   normalizeGoodsReceiptNoteListResponse,
+  submitGoodsReceiptNote,
   updateGoodsReceiptNoteItems,
 } from "@/features/purchases/services/goods-receipt-note.service";
 import {
@@ -356,7 +356,6 @@ describe("Swagger-backed WMS services", () => {
     expect(mockedPost).toHaveBeenCalledWith(
       "/stock/items",
       expect.any(FormData),
-      { headers: { "Content-Type": "multipart/form-data" } },
     );
     expect(mockedPatch).toHaveBeenCalledWith("/stock/items/item-1", {
       name: "Ly trắng 500ml mới",
@@ -456,7 +455,7 @@ describe("Swagger-backed WMS services", () => {
       purchaseOrderId: "po-1",
     });
     await updateGoodsReceiptNoteItems("grn-1", grn.items);
-    await confirmGoodsReceiptNote("grn-1");
+    await submitGoodsReceiptNote("grn-1");
     await approveGoodsReceiptNote("grn-1");
 
     expect(mockedGet).toHaveBeenCalledWith("/goods-receipt-notes", {
@@ -628,7 +627,6 @@ describe("Swagger-backed WMS services", () => {
     expect(mockedPost).toHaveBeenCalledWith(
       "/goods-returns/return-1/inspect",
       expect.any(FormData),
-      { headers: { "Content-Type": "multipart/form-data" } },
     );
     expect(mockedPost).toHaveBeenCalledWith("/goods-returns/return-1/confirm");
     expect(mockedPost).toHaveBeenCalledWith("/goods-returns/return-1/cancel");
@@ -731,7 +729,6 @@ describe("Swagger-backed WMS services", () => {
     expect(mockedPost).toHaveBeenCalledWith(
       "/stock-counts/sc-1/items/item-1/count",
       expect.any(FormData),
-      { headers: { "Content-Type": "multipart/form-data" } },
     );
     expect(mockedPost).toHaveBeenCalledWith("/stock-counts/sc-1/approve", {
       reason: "Duyệt kiểm kê",
@@ -786,7 +783,6 @@ describe("Swagger-backed WMS services", () => {
     expect(mockedPost).toHaveBeenCalledWith(
       "/scrap-notes",
       expect.any(FormData),
-      { headers: { "Content-Type": "multipart/form-data" } },
     );
     expect(mockedPost).toHaveBeenCalledWith("/scrap-notes/scrap-1/approve");
     expect(mockedPost).toHaveBeenCalledWith("/scrap-notes/scrap-1/reject", {
@@ -874,7 +870,6 @@ describe("Swagger-backed WMS services", () => {
     expect(mockedPatch).toHaveBeenCalledWith(
       "/shipments/shipment-1/status",
       expect.any(FormData),
-      { headers: { "Content-Type": "multipart/form-data" } },
     );
   });
 });

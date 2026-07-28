@@ -16,6 +16,7 @@ import {
   Save,
   Search,
   ShoppingCart,
+  TriangleAlert,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -99,14 +100,15 @@ import {
 } from "../services/purchase-order.service";
 import {
   approveGoodsReceiptNote,
-  confirmGoodsReceiptNote,
   rejectGoodsReceiptNote,
   createGoodsReceiptNote,
   listGoodsReceiptNotes,
+  submitGoodsReceiptNote,
   updateGoodsReceiptNoteItems,
   uploadGoodsReceiptNoteImage,
   type CreateGoodsReceiptNoteItemInput,
   type GoodsReceiptNote,
+  type GoodsReceiptNoteStatus,
 } from "../services/goods-receipt-note.service";
 
 import {
@@ -116,9 +118,10 @@ import {
 
 const PAGE_SIZE = 20;
 const purchaseKeys = {
-  allGrns: ["goods-receipt-notes", "all"] as const,
   detail: (purchaseOrderId: string) =>
     ["purchase-orders", "detail", purchaseOrderId] as const,
+  grns: (params: { page: number; status: string; purchaseOrderId: string }) =>
+    ["goods-receipt-notes", "list", params] as const,
   list: (params: { page: number; status: string; supplierId: string }) =>
     ["purchase-orders", "list", params] as const,
 
@@ -244,7 +247,9 @@ function getPurchaseOrderSupplierLabel(
   return purchaseOrder.supplierName ?? "Chưa xác định";
 }
 
-function getPurchaseOrderSelectLabel(purchaseOrder: ReceivingPurchaseOrder) {
+function getPurchaseOrderSelectLabel(
+  purchaseOrder: PurchaseOrder | ReceivingPurchaseOrder,
+) {
   return [
     purchaseOrder.poNumber,
     getPurchaseOrderSupplierLabel(purchaseOrder),
@@ -353,7 +358,7 @@ export function PurchaseOrdersClient({
     "ADMIN",
     "RECEIVER",
   ]);
-  const canConfirmGoodsReceiptNote = hasAnyRole(user?.roles, [
+  const canSubmitGoodsReceiptNote = hasAnyRole(user?.roles, [
     "ADMIN",
     "RECEIVER",
   ]);
@@ -384,6 +389,11 @@ export function PurchaseOrdersClient({
   const [grnItemForms, setGrnItemForms] = useState<GoodsReceiptItemForm[]>([]);
   const [grnImages, setGrnImages] = useState<File[]>([]);
   const [grnEditTarget, setGrnEditTarget] = useState<GoodsReceiptNote>();
+  const [grnStatusFilter, setGrnStatusFilter] = useState<
+    GoodsReceiptNoteStatus | "ALL"
+  >("ALL");
+  const [grnPurchaseOrderFilter, setGrnPurchaseOrderFilter] = useState("");
+  const [grnPage, setGrnPage] = useState(1);
 
   const purchaseOrdersQuery = useQuery({
     enabled: canReadPurchaseOrders,
@@ -487,14 +497,44 @@ export function PurchaseOrdersClient({
   const grnPurchaseOrder = receivingPurchaseOrders.find(
     (purchaseOrder) => purchaseOrder.id === grnPurchaseOrderId,
   );
-  const allGrnsQuery = useQuery({
+  const grnsQuery = useQuery({
     enabled: canReadGoodsReceiptNotes && activeTab === "goods-receipts",
-    queryFn: () => listGoodsReceiptNotes({ limit: 100, page: 1 }),
-    queryKey: purchaseKeys.allGrns,
+    queryFn: () =>
+      listGoodsReceiptNotes({
+        limit: PAGE_SIZE,
+        page: grnPage,
+        purchaseOrderId: grnPurchaseOrderFilter,
+        status: grnStatusFilter,
+      }),
+    queryKey: purchaseKeys.grns({
+      page: grnPage,
+      purchaseOrderId: grnPurchaseOrderFilter,
+      status: grnStatusFilter,
+    }),
   });
-  const allGoodsReceiptNotes = useMemo(
-    () => allGrnsQuery.data?.data ?? [],
-    [allGrnsQuery.data?.data],
+  const goodsReceiptNotes = useMemo(
+    () => grnsQuery.data?.data ?? [],
+    [grnsQuery.data?.data],
+  );
+  const grnTotal = grnsQuery.data?.total ?? 0;
+  const grnTotalPages = Math.max(1, Math.ceil(grnTotal / PAGE_SIZE));
+  // Danh sách PO cho dropdown filter GRN — độc lập với receivingPurchaseOrders
+  // (chỉ PO còn nhận dở) vì GRN có thể thuộc PO đã COMPLETED.
+  const grnPurchaseOrderFilterQuery = useQuery({
+    enabled:
+      canReadGoodsReceiptNotes &&
+      activeTab === "goods-receipts" &&
+      canReadPurchaseOrders,
+    queryFn: () => listPurchaseOrders({ limit: 100, page: 1, status: "ALL" }),
+    queryKey: ["purchase-orders", "grn-filter-options"],
+  });
+  const grnPurchaseOrderOptions = useMemo(
+    () =>
+      (grnPurchaseOrderFilterQuery.data?.data ?? []).map((purchaseOrder) => ({
+        id: purchaseOrder.id,
+        label: getPurchaseOrderSelectLabel(purchaseOrder),
+      })),
+    [grnPurchaseOrderFilterQuery.data?.data],
   );
   // isPerishable không có sẵn trong ReceivingPurchaseOrderItem (chỉ WarehouseItem đầy đủ mới
   // có) — tra riêng, CHỈ cho item của PO đang chọn để tạo GRN (không phải toàn bộ PO/GRN đang
@@ -585,14 +625,13 @@ export function PurchaseOrdersClient({
       );
     },
   });
-  const confirmGrnMutation = useMutation({
+  const submitGrnMutation = useMutation({
     mutationFn: (goodsReceiptNoteId: string) =>
-      confirmGoodsReceiptNote(goodsReceiptNoteId),
+      submitGoodsReceiptNote(goodsReceiptNoteId),
     onError: (error) => toast.error(formatError(error)),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["goods-receipt-notes"] });
-      void queryClient.invalidateQueries({ queryKey: ["putaway-tasks"] });
-      toast.success("Đã xác nhận nhận hàng");
+      toast.success("Đã gửi phiếu nhập chờ duyệt");
     },
   });
 
@@ -942,37 +981,52 @@ export function PurchaseOrdersClient({
                 : undefined
             }
             canApprove={canApproveGoodsReceiptNote}
-            canConfirm={canConfirmGoodsReceiptNote}
             canCreate={canCreateGoodsReceiptNote}
-            confirmBusyId={
-              confirmGrnMutation.isPending
-                ? confirmGrnMutation.variables
-                : undefined
-            }
-            grns={allGoodsReceiptNotes}
-            loading={allGrnsQuery.isLoading}
+            canSubmit={canSubmitGoodsReceiptNote}
+            filters={{
+              purchaseOrderId: grnPurchaseOrderFilter,
+              status: grnStatusFilter,
+            }}
+            grns={goodsReceiptNotes}
+            loading={grnsQuery.isLoading}
             onApprove={(goodsReceiptNoteId) =>
               approveGrnMutation.mutate(goodsReceiptNoteId)
             }
+            onCreate={openGrnDialog}
+            onEdit={openEditGrnDialog}
+            onFilterChange={(next) => {
+              if (next.status !== undefined) setGrnStatusFilter(next.status);
+              if (next.purchaseOrderId !== undefined)
+                setGrnPurchaseOrderFilter(next.purchaseOrderId);
+            }}
+            onFilterSubmit={() => setGrnPage(1)}
+            onPageChange={setGrnPage}
             onReject={(goodsReceiptNoteId, reason) =>
               rejectGrnMutation.mutate({ id: goodsReceiptNoteId, reason })
             }
+            onSelect={setSelectedGoodsReceiptNote}
+            onSubmit={(goodsReceiptNoteId) =>
+              submitGrnMutation.mutate(goodsReceiptNoteId)
+            }
+            page={grnPage}
+            purchaseOrderOptions={grnPurchaseOrderOptions}
             rejectBusyId={
               rejectGrnMutation.isPending
                 ? rejectGrnMutation.variables?.id
                 : undefined
             }
-            onConfirm={(goodsReceiptNoteId) =>
-              confirmGrnMutation.mutate(goodsReceiptNoteId)
+            submitBusyId={
+              submitGrnMutation.isPending
+                ? submitGrnMutation.variables
+                : undefined
             }
-            onCreate={openGrnDialog}
-            onEdit={openEditGrnDialog}
-            onSelect={setSelectedGoodsReceiptNote}
+            total={grnTotal}
+            totalPages={grnTotalPages}
           />
         </TabsContent>
       </Tabs>
 
-      {allGrnsQuery.error ? <ErrorBanner error={allGrnsQuery.error} /> : null}
+      {grnsQuery.error ? <ErrorBanner error={grnsQuery.error} /> : null}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent
@@ -1296,27 +1350,22 @@ export function PurchaseOrdersClient({
                     </span>
                   ) : null}
                 </div>
-                <div className="space-y-3">
-                  {grnItemForms.length === 0 ? (
-                    <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                      Chọn một đơn mua để hiển thị dòng hàng cần nhập.
-                    </div>
-                  ) : null}
-                  {grnItemForms.map((item, index) => (
-                    <GoodsReceiptItemFields
-                      index={index}
-                      item={item}
-                      key={`${item.itemId}-${index}`}
-                      onChange={(next) =>
-                        setGrnItemForms((current) =>
-                          current.map((currentItem, itemIndex) =>
-                            itemIndex === index ? next : currentItem,
-                          ),
-                        )
-                      }
-                    />
-                  ))}
-                </div>
+                {grnItemForms.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                    Chọn một đơn mua để hiển thị dòng hàng cần nhập.
+                  </div>
+                ) : (
+                  <GoodsReceiptItemsTable
+                    items={grnItemForms}
+                    onChange={(index, next) =>
+                      setGrnItemForms((current) =>
+                        current.map((currentItem, itemIndex) =>
+                          itemIndex === index ? next : currentItem,
+                        ),
+                      )
+                    }
+                  />
+                )}
               </section>
 
               <section className="space-y-2">
@@ -1788,7 +1837,39 @@ function PurchaseOrderDetail({
   );
 }
 
-function GoodsReceiptItemFields({
+function GoodsReceiptItemsTable({
+  items,
+  onChange,
+}: {
+  items: GoodsReceiptItemForm[];
+  onChange: (index: number, item: GoodsReceiptItemForm) => void;
+}) {
+  const totalPackageCount = items.reduce(
+    (sum, item) => sum + parsePositiveInt(item.actualQty, 0),
+    0,
+  );
+
+  return (
+    <div className="space-y-3">
+      {items.map((item, index) => (
+        <GoodsReceiptItemCard
+          index={index}
+          item={item}
+          key={`${item.itemId}-${index}`}
+          onChange={(next) => onChange(index, next)}
+        />
+      ))}
+      <div className="flex items-center justify-between rounded-lg border-t-2 border-primary/30 bg-muted/40 px-4 py-3">
+        <span className="text-sm font-semibold">Tổng cộng</span>
+        <span className="text-sm font-semibold">
+          {totalPackageCount.toLocaleString("vi-VN")} thùng
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function GoodsReceiptItemCard({
   index,
   item,
   onChange,
@@ -1798,6 +1879,9 @@ function GoodsReceiptItemFields({
   onChange: (item: GoodsReceiptItemForm) => void;
 }) {
   const fieldId = `goods-receipt-item-${index}`;
+  const hasPackageSpec = Boolean(
+    item.itemDepth && item.itemWidth && item.itemHeight,
+  );
 
   return (
     <div className="overflow-hidden rounded-lg border border-border/70">
@@ -1805,35 +1889,41 @@ function GoodsReceiptItemFields({
         <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
           {index + 1}
         </span>
-        <span className="truncate text-sm font-medium" title={item.itemName}>
-          {item.itemName || "Chưa xác định mặt hàng"}
-        </span>
-        <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground">
-          {item.sku}
-        </span>
-        {item.isPerishable ? (
-          <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
-            Có hạn sử dụng
-          </span>
-        ) : null}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-sm font-medium" title={item.itemName}>
+              {item.itemName || "Chưa xác định mặt hàng"}
+            </span>
+            {item.isPerishable ? (
+              <span
+                className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+                title="Mặt hàng có hạn sử dụng"
+              >
+                HSD
+              </span>
+            ) : null}
+            {!hasPackageSpec ? (
+              <span
+                className="shrink-0"
+                title="Mặt hàng chưa khai đủ kích thước thùng. Hãy sửa master data trước khi gửi duyệt."
+              >
+                <TriangleAlert
+                  className="size-3.5 text-rose-600"
+                  aria-label="Mặt hàng chưa khai đủ kích thước thùng — không thể gửi duyệt"
+                />
+              </span>
+            ) : null}
+          </div>
+          <div className="truncate font-mono text-xs text-muted-foreground">
+            {item.sku}
+            {hasPackageSpec
+              ? ` · ${item.itemDepth}×${item.itemWidth}×${item.itemHeight}cm`
+              : ""}
+          </div>
+        </div>
       </div>
-      {item.itemDepth && item.itemWidth && item.itemHeight ? (
-        <div className="border-b bg-blue-50/70 px-3 py-2 text-xs text-blue-900">
-          <span className="font-semibold">Quy cách 1 thùng:</span>{" "}
-          {item.itemDepth} × {item.itemWidth} × {item.itemHeight} cm ·{" "}
-          {(item.itemDepth * item.itemWidth * item.itemHeight).toLocaleString(
-            "vi-VN",
-          )}{" "}
-          cm³/thùng
-        </div>
-      ) : (
-        <div className="border-b bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
-          Mặt hàng chưa khai đủ kích thước thùng. Hãy sửa master data trước khi
-          gửi duyệt.
-        </div>
-      )}
-      <div className="grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-12">
-        <div className="min-w-0 space-y-2 lg:col-span-3">
+      <div className="grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="min-w-0 space-y-2">
           <Label htmlFor={`${fieldId}-packages`}>Số thùng thực nhận</Label>
           <Input
             aria-label={`Số thùng thực nhận dòng ${index + 1}`}
@@ -1847,7 +1937,7 @@ function GoodsReceiptItemFields({
             }
           />
         </div>
-        <div className="min-w-0 space-y-2 lg:col-span-3">
+        <div className="min-w-0 space-y-2">
           <Label htmlFor={`${fieldId}-manufactured`}>
             Ngày sản xuất <span className="text-destructive">*</span>
           </Label>
@@ -1868,7 +1958,7 @@ function GoodsReceiptItemFields({
             }}
           />
         </div>
-        <div className="min-w-0 space-y-2 lg:col-span-2">
+        <div className="min-w-0 space-y-2">
           <Label htmlFor={`${fieldId}-lot-sequence`}>
             SEQ trong ngày <span className="text-destructive">*</span>
           </Label>
@@ -1893,13 +1983,13 @@ function GoodsReceiptItemFields({
             }}
           />
         </div>
-        <div className="min-w-0 space-y-2 lg:col-span-4">
+        <div className="min-w-0 space-y-2">
           <Label htmlFor={`${fieldId}-lot`}>
             Mã lô <span className="text-destructive">*</span>
           </Label>
           <Input
             aria-label={`Mã lô phiếu nhập dòng ${index + 1}`}
-            className="font-mono font-semibold tracking-wide"
+            className="font-mono text-xs font-semibold tracking-wide"
             id={`${fieldId}-lot`}
             placeholder="LOT-YYMMDD-SEQ"
             readOnly
@@ -1907,7 +1997,7 @@ function GoodsReceiptItemFields({
             value={item.lotNumber}
           />
         </div>
-        <div className="min-w-0 space-y-2 lg:col-span-4">
+        <div className="min-w-0 space-y-2">
           <Label htmlFor={`${fieldId}-expiry`}>
             Hạn sử dụng
             {item.isPerishable ? (
@@ -1925,7 +2015,7 @@ function GoodsReceiptItemFields({
             }
           />
         </div>
-        <div className="min-w-0 space-y-2 sm:col-span-2 lg:col-span-8">
+        <div className="min-w-0 space-y-2">
           <Label htmlFor={`${fieldId}-note`}>Ghi chú</Label>
           <Input
             aria-label={`Ghi chú phiếu nhập dòng ${index + 1}`}

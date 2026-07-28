@@ -82,6 +82,14 @@ apiClient.interceptors.request.use((config) => {
 
   config.headers["X-Tenant-ID"] = tenantId;
 
+  // apiClient set cứng Content-Type: application/json cho mọi request (dòng
+  // trên) — với FormData (upload ảnh) phải xóa header này để axios tự set
+  // đúng multipart/form-data kèm boundary. Giữ nguyên "application/json" ở
+  // đây sẽ khiến BE (Multer/FileInterceptor) không parse được file.
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
+  }
+
   return config;
 });
 

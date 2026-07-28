@@ -9,6 +9,7 @@ import {
   LoaderCircle,
   Pencil,
   Plus,
+  Search,
   XCircle,
 } from "lucide-react";
 
@@ -30,6 +31,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -42,11 +50,12 @@ import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/features/admin-shell/components/operations-ui";
 import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
 
-import type {
-  GoodsReceiptNote,
-  GoodsReceiptNoteItem,
+import {
+  GOODS_RECEIPT_NOTE_STATUSES,
+  type GoodsReceiptNote,
+  type GoodsReceiptNoteItem,
+  type GoodsReceiptNoteStatus,
 } from "../services/goods-receipt-note.service";
-import { GoodsReceiptPutawayPanel } from "./goods-receipt-putaway-panel";
 
 function formatCurrency(value?: number) {
   if (value == null) return "—";
@@ -67,33 +76,54 @@ function formatDate(value?: string | null) {
 export function GoodsReceiptNotesList({
   approveBusyId,
   canApprove,
-  canConfirm,
   canCreate,
-  confirmBusyId,
+  canSubmit,
+  filters,
   grns,
   loading,
   onApprove,
-  onConfirm,
   onCreate,
   onEdit,
+  onFilterChange,
+  onFilterSubmit,
+  onPageChange,
   onReject,
   onSelect,
+  onSubmit,
+  page,
+  purchaseOrderOptions,
   rejectBusyId,
+  submitBusyId,
+  total,
+  totalPages,
 }: {
   approveBusyId?: string;
   canApprove: boolean;
-  canConfirm: boolean;
   canCreate: boolean;
-  confirmBusyId?: string;
+  canSubmit: boolean;
+  filters: { status: GoodsReceiptNoteStatus | "ALL"; purchaseOrderId: string };
   grns: GoodsReceiptNote[];
   loading: boolean;
+  page: number;
+  purchaseOrderOptions: { id: string; label: string }[];
   rejectBusyId?: string;
+  submitBusyId?: string;
+  total: number;
+  totalPages: number;
   onApprove: (grnId: string) => void;
-  onConfirm: (grnId: string) => void;
   onCreate: () => void;
   onEdit: (grn: GoodsReceiptNote) => void;
+  onFilterChange: (
+    filters: Partial<{
+      status: GoodsReceiptNoteStatus | "ALL";
+      purchaseOrderId: string;
+    }>,
+  ) => void;
+  onFilterSubmit: () => void;
+  onPageChange: (page: number) => void;
   onReject: (grnId: string, reason: string) => void;
   onSelect: (grn: GoodsReceiptNote) => void;
+  onSubmit: (grnId: string) => void;
 }) {
   const [rejectTarget, setRejectTarget] = useState<GoodsReceiptNote>();
   const [rejectReason, setRejectReason] = useState("");
@@ -108,7 +138,7 @@ export function GoodsReceiptNotesList({
                 <ClipboardCheck className="size-4 text-primary" />
                 Phiếu nhập
               </CardTitle>
-              <CardDescription>{grns.length} bản ghi</CardDescription>
+              <CardDescription>{total} bản ghi</CardDescription>
             </div>
             {canCreate ? (
               <Button onClick={onCreate} type="button">
@@ -118,7 +148,66 @@ export function GoodsReceiptNotesList({
             ) : null}
           </div>
         </CardHeader>
-        <CardContent className="pt-4">
+        <CardContent className="space-y-4 pt-4">
+          <form
+            className="grid gap-3 md:grid-cols-[200px_1fr_auto]"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onFilterSubmit();
+            }}
+          >
+            <div className="space-y-2">
+              <Label>Trạng thái</Label>
+              <Select
+                value={filters.status}
+                onValueChange={(value) =>
+                  onFilterChange({
+                    status: value as GoodsReceiptNoteStatus | "ALL",
+                  })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Tất cả</SelectItem>
+                  {GOODS_RECEIPT_NOTE_STATUSES.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {statusLabel(status)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Đơn mua</Label>
+              <Select
+                value={filters.purchaseOrderId || "ALL"}
+                onValueChange={(value) =>
+                  onFilterChange({
+                    purchaseOrderId: value === "ALL" ? "" : value,
+                  })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Tất cả</SelectItem>
+                  {purchaseOrderOptions.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button className="self-end" type="submit">
+              <Search data-icon="inline-start" />
+              Lọc
+            </Button>
+          </form>
+
           {loading ? (
             <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-muted-foreground">
               <LoaderCircle className="size-4 animate-spin" />
@@ -172,7 +261,7 @@ export function GoodsReceiptNotesList({
                             <Eye data-icon="inline-start" />
                             Xem chi tiết
                           </Button>
-                          {canConfirm &&
+                          {canSubmit &&
                           (grn.status === "DRAFT" ||
                             grn.status === "REJECTED") ? (
                             <>
@@ -188,13 +277,13 @@ export function GoodsReceiptNotesList({
                                 </Button>
                               ) : null}
                               <Button
-                                disabled={confirmBusyId === grn.id}
-                                onClick={() => onConfirm(grn.id)}
+                                disabled={submitBusyId === grn.id}
+                                onClick={() => onSubmit(grn.id)}
                                 size="sm"
                                 type="button"
                                 variant="outline"
                               >
-                                {confirmBusyId === grn.id ? (
+                                {submitBusyId === grn.id ? (
                                   <LoaderCircle
                                     className="animate-spin"
                                     data-icon="inline-start"
@@ -247,6 +336,27 @@ export function GoodsReceiptNotesList({
               </TableBody>
             </Table>
           )}
+          <div className="flex items-center justify-between gap-3">
+            <Button
+              disabled={page <= 1}
+              onClick={() => onPageChange(Math.max(1, page - 1))}
+              type="button"
+              variant="outline"
+            >
+              Trang trước
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              {page}/{totalPages}
+            </span>
+            <Button
+              disabled={page >= totalPages}
+              onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+              type="button"
+              variant="outline"
+            >
+              Trang sau
+            </Button>
+          </div>
         </CardContent>
       </Card>
       <Dialog
@@ -321,78 +431,79 @@ export function GoodsReceiptNoteDetailDialog({
 }) {
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent size="3xl" className="max-h-[90dvh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent size="3xl" className="max-h-[90dvh] overflow-y-auto p-0">
+        <DialogHeader className="sr-only">
           <DialogTitle>Chi tiết phiếu nhập</DialogTitle>
           <DialogDescription>{grn.grnNumber}</DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-3 text-sm sm:grid-cols-3">
-          <Info
-            label="Đơn mua"
-            value={grn.purchaseOrderNumber ?? grn.purchaseOrderId}
-          />
-          <Info label="NCC" value={grn.supplierName ?? "Chưa xác định"} />
-          <Info label="Trạng thái" value={statusLabel(grn.status)} />
-          <Info label="Ngày tạo" value={formatDate(grn.createdAt)} />
-          <Info label="Ngày cập nhật" value={formatDate(grn.updatedAt)} />
-          <Info label="Số dòng" value={String(grn.items.length)} />
-          <Info
-            label="Tổng số thùng"
-            value={String(grn.totalPackageCount ?? "—")}
-          />
-          <Info
-            label="Tổng thể tích"
-            value={
-              grn.totalVolumeCm3 == null
-                ? "—"
-                : `${(grn.totalVolumeCm3 / 1_000_000).toLocaleString("vi-VN", {
-                    maximumFractionDigits: 3,
-                  })} m³`
-            }
-          />
-        </div>
-
-        {grn.rejectionReason ? (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
-            <div className="font-semibold text-destructive">Lý do từ chối</div>
-            <p className="mt-1 text-muted-foreground">{grn.rejectionReason}</p>
+        <div className="divide-y divide-border/70 rounded-xl border border-border/70">
+          <div className="flex flex-wrap items-start justify-between gap-3 py-4 pr-14 pl-5">
+            <div>
+              <div className="text-xs text-muted-foreground">Phiếu nhập</div>
+              <div className="text-lg font-semibold">{grn.grnNumber}</div>
+            </div>
+            <StatusBadge tone={statusTone(grn.status)}>
+              {statusLabel(grn.status)}
+            </StatusBadge>
           </div>
-        ) : null}
 
-        <Table scrollable>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Mặt hàng</TableHead>
-              <TableHead>Thực nhập</TableHead>
-              <TableHead>Đối chiếu PO</TableHead>
-              <TableHead>Đơn giá</TableHead>
-              <TableHead>Mã lô</TableHead>
-              <TableHead>Hạn sử dụng</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {grn.items.map((item) => (
-              <GoodsReceiptItemRow
-                item={item}
-                key={`${item.itemId}-${item.sku}-${item.lotNumber}`}
-              />
-            ))}
-          </TableBody>
-        </Table>
+          <div className="grid gap-3 px-5 py-4 text-sm sm:grid-cols-2">
+            <Info
+              label="Đơn mua"
+              value={grn.purchaseOrderNumber ?? grn.purchaseOrderId}
+            />
+            <Info label="NCC" value={grn.supplierName ?? "Chưa xác định"} />
+            <Info label="Ngày tạo" value={formatDate(grn.createdAt)} />
+            <Info label="Ngày cập nhật" value={formatDate(grn.updatedAt)} />
+          </div>
 
-        <GoodsReceiptPutawayPanel grn={grn} />
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold">
-            Ảnh minh chứng{" "}
-            {grn.purchaseOrderNumber
-              ? `cho ${grn.purchaseOrderNumber}`
-              : "nhận hàng"}
-          </h3>
-          <EvidenceImageGallery
-            emptyLabel="Chưa có ảnh minh chứng"
-            images={grn.images}
-          />
+          {grn.rejectionReason ? (
+            <div className="bg-destructive/5 px-5 py-4 text-sm">
+              <div className="font-semibold text-destructive">
+                Lý do từ chối
+              </div>
+              <p className="mt-1 text-muted-foreground">
+                {grn.rejectionReason}
+              </p>
+            </div>
+          ) : null}
+
+          <div className="space-y-3 px-5 py-4">
+            <div className="flex items-baseline justify-between">
+              <h3 className="text-sm font-semibold">Danh sách hàng nhập</h3>
+              <span className="text-xs text-muted-foreground">
+                {grn.items.length} dòng hàng
+              </span>
+            </div>
+            <div className="space-y-3">
+              {grn.items.map((item) => (
+                <GoodsReceiptItemCardReadOnly
+                  item={item}
+                  key={`${item.itemId}-${item.sku}-${item.lotNumber}`}
+                />
+              ))}
+            </div>
+            <div className="flex items-center justify-between rounded-lg border-t-2 border-primary/30 bg-muted/40 px-4 py-3">
+              <span className="text-sm font-semibold">Tổng cộng</span>
+              <span className="text-sm font-semibold">
+                {(grn.totalPackageCount ?? 0).toLocaleString("vi-VN")} thùng
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-2 px-5 py-4">
+            <h3 className="text-sm font-semibold">
+              Ảnh minh chứng{" "}
+              {grn.purchaseOrderNumber
+                ? `cho ${grn.purchaseOrderNumber}`
+                : "nhận hàng"}
+            </h3>
+            <EvidenceImageGallery
+              emptyLabel="Chưa có ảnh minh chứng"
+              images={grn.images}
+            />
+          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -408,57 +519,81 @@ function Info({ label, value }: { label: string; value: string }) {
   );
 }
 
-function GoodsReceiptItemRow({ item }: { item: GoodsReceiptNoteItem }) {
+function GoodsReceiptItemCardReadOnly({
+  item,
+}: {
+  item: GoodsReceiptNoteItem;
+}) {
   const thumbnail = item.images?.find(Boolean);
   const hasPoReference = item.expectedQty != null;
 
   return (
-    <TableRow>
-      <TableCell className="font-medium">
-        <div className="flex items-center gap-2">
-          {thumbnail ? (
-            <span
-              aria-hidden
-              className="size-8 shrink-0 rounded-md border bg-muted bg-cover bg-center"
-              style={{ backgroundImage: `url("${thumbnail}")` }}
-            />
-          ) : null}
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 truncate">
+    <div className="overflow-hidden rounded-lg border border-border/70">
+      <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-2">
+        {thumbnail ? (
+          <span
+            aria-hidden
+            className="size-8 shrink-0 rounded-md border bg-muted bg-cover bg-center"
+            style={{ backgroundImage: `url("${thumbnail}")` }}
+          />
+        ) : null}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-sm font-medium">
               {item.itemName ?? item.sku}
-              {item.isPerishable ? (
-                <span
-                  className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
-                  title="Mặt hàng có hạn sử dụng"
-                >
-                  HSD
-                </span>
-              ) : null}
-            </div>
-            <div
-              className="truncate font-mono text-xs text-muted-foreground"
-              title={item.barcode ? `SKU · Mã vạch: ${item.barcode}` : "SKU"}
-            >
-              {item.sku}
-              {item.barcode ? ` · ${item.barcode}` : ""}
-            </div>
+            </span>
+            {item.isPerishable ? (
+              <span
+                className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+                title="Mặt hàng có hạn sử dụng"
+              >
+                HSD
+              </span>
+            ) : null}
+          </div>
+          <div
+            className="truncate font-mono text-xs text-muted-foreground"
+            title={item.barcode ? `SKU · Mã vạch: ${item.barcode}` : "SKU"}
+          >
+            {item.sku}
+            {item.barcode ? ` · ${item.barcode}` : ""}
           </div>
         </div>
-      </TableCell>
-      <TableCell>{item.actualQty} thùng</TableCell>
-      <TableCell className="text-xs text-muted-foreground">
-        {hasPoReference ? (
-          <>
-            Đặt: {item.expectedQty} · Đã nhận: {item.receivedQty ?? 0} · Còn:{" "}
-            {item.remainingQty ?? 0}
-          </>
-        ) : (
-          "—"
-        )}
-      </TableCell>
-      <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
-      <TableCell>{item.lotNumber || "Không có"}</TableCell>
-      <TableCell>{formatDate(item.expiryDate)}</TableCell>
-    </TableRow>
+      </div>
+      <div className="grid grid-cols-2 gap-3 p-3 text-sm sm:grid-cols-4">
+        <div className="min-w-0">
+          <div className="text-xs text-muted-foreground">Thực nhập</div>
+          <div className="mt-0.5 font-medium">{item.actualQty} thùng</div>
+        </div>
+        <div className="min-w-0">
+          <div className="text-xs text-muted-foreground">Đối chiếu PO</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">
+            {hasPoReference ? (
+              <>
+                Đặt: {item.expectedQty} · Nhận: {item.receivedQty ?? 0} · Còn:{" "}
+                {item.remainingQty ?? 0}
+              </>
+            ) : (
+              "—"
+            )}
+          </div>
+        </div>
+        <div className="min-w-0">
+          <div className="text-xs text-muted-foreground">Lô / Hạn dùng</div>
+          <div className="mt-0.5 font-medium">
+            {item.lotNumber || "Không có"}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {formatDate(item.expiryDate)}
+          </div>
+        </div>
+        <div className="min-w-0">
+          <div className="text-xs text-muted-foreground">Đơn giá</div>
+          <div className="mt-0.5 font-medium">
+            {formatCurrency(item.unitPrice)}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -88,9 +88,6 @@ export async function createScrapNote(input: CreateScrapNoteInput) {
   const response = await apiClient.post<ApiEnvelope<ScrapNote> | ScrapNote>(
     "/scrap-notes",
     formData,
-    {
-      headers: { "Content-Type": "multipart/form-data" },
-    },
   );
 
   return unwrapApiData(response.data);

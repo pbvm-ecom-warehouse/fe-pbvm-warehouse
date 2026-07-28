@@ -124,9 +124,6 @@ export async function inspectGoodsReturn(
   const response = await apiClient.post<ApiEnvelope<GoodsReturn> | GoodsReturn>(
     `/goods-returns/${encodeURIComponent(goodsReturnId)}/inspect`,
     formData,
-    {
-      headers: { "Content-Type": "multipart/form-data" },
-    },
   );
 
   return unwrapApiData(response.data);

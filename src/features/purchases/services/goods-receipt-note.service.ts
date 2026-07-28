@@ -6,7 +6,6 @@ import { type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
 export const GOODS_RECEIPT_NOTE_STATUSES = [
   "DRAFT",
   "PENDING_APPROVAL",
-  "CONFIRMED",
   "APPROVED",
   "REJECTED",
 ] as const;
@@ -56,7 +55,6 @@ export type GoodsReceiptNote = {
   rejectedAt?: string;
   rejectionReason?: string;
   totalPackageCount?: number;
-  totalVolumeCm3?: number;
 };
 
 export type QueryGoodsReceiptNotesInput = {
@@ -192,8 +190,6 @@ export async function approveGoodsReceiptNote(goodsReceiptNoteId: string) {
 
   return unwrapApiData(response.data);
 }
-
-export const confirmGoodsReceiptNote = submitGoodsReceiptNote;
 
 export async function rejectGoodsReceiptNote(
   goodsReceiptNoteId: string,

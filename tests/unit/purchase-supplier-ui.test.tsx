@@ -582,7 +582,9 @@ describe("purchase and supplier UX", () => {
       within(createGrnDialog).getByText("Đơn mua", { selector: "label" }),
     ).toBeVisible();
     expect(within(createGrnDialog).getByText("Ly nhựa 500 ml")).toBeVisible();
-    expect(within(createGrnDialog).getByText("SKU-001")).toBeVisible();
+    expect(
+      within(createGrnDialog).getByText("SKU-001", { exact: false }),
+    ).toBeVisible();
     expect(
       within(createGrnDialog).getByText("Số thùng thực nhận", {
         selector: "label",
@@ -613,9 +615,14 @@ describe("purchase and supplier UX", () => {
       "readonly",
     );
     expect(
-      screen.getByText("Hạn sử dụng", { selector: "label" }),
+      within(createGrnDialog).getByText("Hạn sử dụng", { selector: "label" }),
     ).toBeVisible();
-    expect(screen.getByText("Ghi chú", { selector: "label" })).toBeVisible();
+    expect(
+      within(createGrnDialog).getByText("Ghi chú", { selector: "label" }),
+    ).toBeVisible();
+    expect(
+      within(createGrnDialog).getByText("Tổng cộng"),
+    ).toBeVisible();
   });
 
   it("BE luôn trả sẵn supplier trong PO response — không cần fallback getSupplier theo supplierId", async () => {
