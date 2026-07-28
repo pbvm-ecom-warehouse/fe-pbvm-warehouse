@@ -1074,7 +1074,7 @@ export function PurchaseOrdersClient({
                         <TableHead>Mặt hàng</TableHead>
                         <TableHead className="w-28">SKU</TableHead>
                         <TableHead className="w-24 text-right">SL</TableHead>
-                        <TableHead className="w-20 text-center">
+                        <TableHead className="w-24 text-center">
                           Đơn vị
                         </TableHead>
                         <TableHead className="w-32 text-right">
@@ -1589,7 +1589,7 @@ function PurchaseOrderItemFields({
           }
         />
       </TableCell>
-      <TableCell className="w-20 align-middle">
+      <TableCell className="w-24 align-middle">
         <Input
           aria-label={`Đơn vị dòng ${index + 1}`}
           className="bg-muted/50 text-center text-muted-foreground"
@@ -1731,7 +1731,7 @@ function PurchaseOrderDetail({
                 <TableHead>Mặt hàng</TableHead>
                 <TableHead>SKU</TableHead>
                 <TableHead className="text-right">SL</TableHead>
-                <TableHead>Đơn vị</TableHead>
+                <TableHead className="w-24">Đơn vị</TableHead>
                 <TableHead className="text-right">Đơn giá</TableHead>
                 <TableHead className="text-right">Thành tiền</TableHead>
               </TableRow>
