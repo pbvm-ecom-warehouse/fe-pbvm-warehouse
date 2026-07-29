@@ -5,6 +5,7 @@ import type {
 import type {
   PutawayTask,
   PutawayTaskItem,
+  PutawayTaskStatus,
 } from "../services/putaway-task.service";
 
 export type PutawayPackageSpec = {
@@ -17,6 +18,7 @@ export type PutawayPackageSpec = {
 export type PutawayWorkItem = {
   key: string;
   taskId: string;
+  taskStatus: PutawayTaskStatus;
   grnId: string;
   grnNumber: string;
   itemId: string;
@@ -82,6 +84,7 @@ export function buildPutawayWorkItems(
         {
           key: `${task.id}:${line.itemId}:${lotId ?? lotNumber ?? "none"}`,
           taskId: task.id,
+          taskStatus: task.status,
           grnId: task.grnId,
           grnNumber: receipt?.grnNumber ?? task.grnNumber ?? task.grnId,
           itemId: line.itemId,

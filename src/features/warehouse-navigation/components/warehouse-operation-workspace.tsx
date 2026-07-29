@@ -66,6 +66,8 @@ export function WarehouseOperationWorkspace({
   suggestionsLoading,
   suggestionsError,
   pending,
+  readOnly = false,
+  readOnlyMessage,
   onConfirm,
 }: {
   operation: "PUTAWAY" | "PICK";
@@ -81,6 +83,8 @@ export function WarehouseOperationWorkspace({
   suggestionsLoading?: boolean;
   suggestionsError?: unknown;
   pending?: boolean;
+  readOnly?: boolean;
+  readOnlyMessage?: string;
   onConfirm: (
     value: BarcodeConfirmation & {
       suggestedCellId?: string;
@@ -158,6 +162,128 @@ export function WarehouseOperationWorkspace({
 
   return (
     <div className="space-y-4">
+      {readOnly ? (
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b bg-muted/20">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <MapPinned className="size-4 text-primary" />
+                Vị trí đã cất
+              </CardTitle>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge className="font-mono" variant="secondary">
+                  {sku}
+                </Badge>
+                <Button
+                  disabled={!selectedRackId || !selectedRack}
+                  onClick={() => setRackOpen(true)}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  <Map data-icon="inline-start" />
+                  {selectedRack
+                    ? `Xem mặt kệ ${selectedRack.code}`
+                    : "Xem mặt kệ"}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-4">
+            {suggestionsLoading ? (
+              <div className="text-sm text-muted-foreground">
+                <LoaderCircle className="mr-2 inline size-4 animate-spin" />
+                Đang tải vị trí thực tế...
+              </div>
+            ) : null}
+            {suggestionsError ? (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                {getApiErrorMessage(suggestionsError) ??
+                  "Không tải được vị trí đã cất."}
+              </div>
+            ) : null}
+            {!suggestionsLoading &&
+            !suggestionsError &&
+            suggestions.length === 0 ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                <AlertTriangle className="mr-2 inline size-4" />
+                Chưa tìm thấy vị trí thực tế trên sơ đồ cho dòng đã hoàn tất.
+              </div>
+            ) : null}
+            {layoutQuery.isLoading ? (
+              <div className="grid h-[55dvh] place-items-center rounded-xl border bg-[#f4f7f6]">
+                <LoaderCircle className="size-5 animate-spin text-primary" />
+              </div>
+            ) : layoutQuery.data && path ? (
+              <WarehouseRouteMap
+                layout={layoutQuery.data}
+                path={path}
+                selectedRackId={selectedRackId}
+                onSelectRack={(rackId) => {
+                  setChosenRackId(rackId);
+                  setChosenCellId("");
+                }}
+              />
+            ) : null}
+            {suggestions.length > 0 ? (
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {suggestions.map((suggestion) => (
+                  <button
+                    key={`${suggestion.cellId}-${suggestion.lotNumber ?? "none"}`}
+                    className={cn(
+                      "rounded-xl border p-4 text-left transition hover:border-blue-400 hover:bg-blue-50/70",
+                      selectedCellId === suggestion.cellId
+                        ? "border-primary bg-primary/5 shadow-[0_16px_36px_-30px_rgba(29,78,216,0.4)]"
+                        : "bg-white",
+                    )}
+                    onClick={() => chooseSuggestion(suggestion)}
+                    type="button"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-mono text-sm font-bold">
+                          {suggestion.cellCode}
+                        </div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          Tầng {suggestion.level} · Khoang {suggestion.bay}
+                        </div>
+                      </div>
+                      <Badge
+                        className="shrink-0 rounded-md px-2 py-0.5 text-[11px]"
+                        variant={
+                          selectedCellId === suggestion.cellId
+                            ? "default"
+                            : "secondary"
+                        }
+                      >
+                        {suggestion.path.distanceM.toLocaleString("vi-VN")} m
+                      </Badge>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1.5 text-[11px]">
+                      {typeof suggestion.quantity === "number" ? (
+                        <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700">
+                          {suggestion.quantity} thùng
+                        </span>
+                      ) : null}
+                      {suggestion.lotNumber ? (
+                        <span className="rounded-full bg-muted px-2 py-1 text-muted-foreground">
+                          Lô {suggestion.lotNumber}
+                        </span>
+                      ) : null}
+                      {suggestion.expiryDate ? (
+                        <span className="rounded-full bg-muted px-2 py-1 text-muted-foreground">
+                          HSD {suggestion.expiryDate}
+                        </span>
+                      ) : null}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+      {!readOnly ? (
       <Card className="overflow-hidden">
         <CardHeader className="border-b bg-muted/20">
           <CardTitle className="flex items-center justify-between gap-3 text-base">
@@ -206,7 +332,9 @@ export function WarehouseOperationWorkspace({
           suggestions.length === 0 ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
               <AlertTriangle className="mr-2 inline size-4" />
-              Chưa có khoang đủ điều kiện hoặc rack chưa nối với lối đi.
+              {readOnly
+                ? "Chưa tìm thấy vị trí thực tế trên sơ đồ cho dòng đã hoàn tất."
+                : "Chưa có khoang đủ điều kiện hoặc rack chưa nối với lối đi."}
             </div>
           ) : null}
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
@@ -256,6 +384,8 @@ export function WarehouseOperationWorkspace({
           </div>
         </CardContent>
       </Card>
+      ) : null}
+      {!readOnly ? (
       <Dialog open={mapOpen} onOpenChange={setMapOpen}>
         <DialogContent
           className="flex h-[92dvh] max-h-[92dvh] flex-col gap-0 overflow-hidden p-0"
@@ -316,6 +446,7 @@ export function WarehouseOperationWorkspace({
           </div>
         </DialogContent>
       </Dialog>
+      ) : null}
       <Dialog open={rackOpen} onOpenChange={setRackOpen}>
         <DialogContent
           className="max-h-[92dvh] gap-0 overflow-hidden p-0"
@@ -324,7 +455,9 @@ export function WarehouseOperationWorkspace({
           <DialogHeader className="border-b px-5 py-4 pr-14">
             <DialogTitle>Mặt kệ {selectedRack?.code ?? "đã chọn"}</DialogTitle>
             <DialogDescription>
-              Xem sức chứa rồi nhấn vào khoang hợp lệ để quét mã.
+              {readOnly
+                ? "Xem vị trí thực tế của hàng trên rack."
+                : "Xem sức chứa rồi nhấn vào khoang hợp lệ để quét mã."}
             </DialogDescription>
             <Button
               className="mt-1 w-fit"
@@ -354,7 +487,7 @@ export function WarehouseOperationWorkspace({
                   setChosenRackId(selectedRackId);
                   setChosenCellId(cell.id);
                 }}
-                onActivateCell={activateCell}
+                onActivateCell={readOnly ? () => {} : activateCell}
                 operation={operation}
                 packageSpec={packageSpec}
                 suggestedCellIds={suggestions.map(
@@ -365,17 +498,26 @@ export function WarehouseOperationWorkspace({
           </div>
         </DialogContent>
       </Dialog>
-      <BarcodeScanDialog
-        open={scanOpen}
-        onOpenChange={setScanOpen}
-        initialCellBarcode={scanCell?.barcode}
-        maxPackageCount={Math.max(1, remainingPackageCount)}
-        pending={pending}
-        actionLabel={
-          operation === "PUTAWAY" ? "Xác nhận cất hàng" : "Xác nhận lấy hàng"
-        }
-        onConfirm={(value) => void confirm(value)}
-      />
+      {readOnlyMessage && !readOnly ? (
+        <Card>
+          <CardContent className="py-4 text-sm text-muted-foreground">
+            {readOnlyMessage}
+          </CardContent>
+        </Card>
+      ) : null}
+      {!readOnly ? (
+        <BarcodeScanDialog
+          open={scanOpen}
+          onOpenChange={setScanOpen}
+          initialCellBarcode={scanCell?.barcode}
+          maxPackageCount={Math.max(1, remainingPackageCount)}
+          pending={pending}
+          actionLabel={
+            operation === "PUTAWAY" ? "Xác nhận cất hàng" : "Xác nhận lấy hàng"
+          }
+          onConfirm={(value) => void confirm(value)}
+        />
+      ) : null}
     </div>
   );
 }

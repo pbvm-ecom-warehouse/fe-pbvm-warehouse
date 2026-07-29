@@ -56,6 +56,7 @@ describe("put-away work item hydration", () => {
       expect.objectContaining({
         key: "task-1:item-1:lot-1",
         taskId: "task-1",
+        taskStatus: "PENDING",
         grnNumber: "GRN-001",
         sku: "SKU-CAFE",
         itemName: "Cà phê rang",

@@ -49,17 +49,22 @@ import { useSessionUser } from "@/hooks/use-session-user";
 import { getApiErrorCode, getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
+import { fetchWarehouseLayout } from "@/features/warehouse-layout/services/warehouse-layout.service";
 import { listPutawaySuggestionResult } from "../services/putaway-navigation.service";
 import {
   confirmPutawayLine,
   listPutawayTasks,
   type PutawayTaskStatus,
 } from "../services/putaway-task.service";
+import {
+  getNavigationPath,
+  listRackCells,
+} from "../services/warehouse-operations.service";
 import { buildPutawayWorkItems } from "../utils/putaway-work-items";
 import { WarehouseOperationWorkspace } from "./warehouse-operation-workspace";
 
 const keys = {
-  list: (status: PutawayTaskStatus) =>
+  list: (status: PutawayTaskStatus | "ALL") =>
     ["putaway-tasks", "list", status] as const,
   receipt: (id: string) => ["goods-receipt-notes", "detail", id] as const,
   suggestions: (key: string, remainingQty: number) =>
@@ -88,7 +93,7 @@ export function PutawayTasksClient() {
   const queryClient = useQueryClient();
   const canView = hasAnyRole(user?.roles, ["ADMIN", "MANAGER", "RECEIVER"]);
   const canConfirm = hasAnyRole(user?.roles, ["ADMIN", "RECEIVER"]);
-  const [status, setStatus] = useState<PutawayTaskStatus>("PENDING");
+  const [status, setStatus] = useState<PutawayTaskStatus | "ALL">("ALL");
   const [search, setSearch] = useState("");
   const [selectedKey, setSelectedKey] = useState("");
 
@@ -113,7 +118,7 @@ export function PutawayTasksClient() {
     .map((query) => query.data)
     .filter((receipt): receipt is GoodsReceiptNote => Boolean(receipt));
   const workItems = buildPutawayWorkItems(tasks, receipts, {
-    includeCompleted: status === "COMPLETED",
+    includeCompleted: status !== "PENDING",
   });
   const normalizedSearch = search.trim().toLocaleLowerCase("vi");
   const visibleItems = normalizedSearch
@@ -128,9 +133,11 @@ export function PutawayTasksClient() {
   const selected = workItems.find((item) => item.key === selectedKey);
   const receiptsLoading = receiptQueries.some((query) => query.isLoading);
   const firstReceiptError = receiptQueries.find((query) => query.error)?.error;
+  const selectedStatus = selected?.taskStatus ?? "PENDING";
+  const isCompletedDetail = selectedStatus === "COMPLETED";
 
   const suggestionQuery = useQuery({
-    enabled: canConfirm && status === "PENDING" && Boolean(selected),
+    enabled: canConfirm && !isCompletedDetail && Boolean(selected),
     queryKey: keys.suggestions(
       selected?.key ?? "none",
       selected?.remainingQty ?? 0,
@@ -143,6 +150,95 @@ export function PutawayTasksClient() {
         packageSpec: selected!.packageSpec,
       }),
   });
+  const layoutQuery = useQuery({
+    enabled: canView && isCompletedDetail,
+    queryKey: ["warehouse-operation", "layout"],
+    queryFn: fetchWarehouseLayout,
+  });
+  const completedRackCellQueries = useQueries({
+    queries: (layoutQuery.data?.racks ?? []).map((rack) => ({
+      enabled: canView && isCompletedDetail,
+      queryKey: ["warehouse-operation", "rack-cells", "completed", rack.id],
+      queryFn: () => listRackCells(rack.id),
+    })),
+  });
+  const completedMatches = useMemo(() => {
+    if (!selected || !isCompletedDetail) return [];
+
+    return completedRackCellQueries.flatMap((query) =>
+      (query.data ?? []).flatMap((cell) => {
+        const matchedContents = cell.contents.filter((content) => {
+          const sameSku = content.sku === selected.sku;
+          const sameLot = selected.lotNumber
+            ? content.lotNumber === selected.lotNumber
+            : true;
+          return sameSku && sameLot;
+        });
+
+        if (matchedContents.length === 0) {
+          return [];
+        }
+
+        return [
+          {
+            cell,
+            matchedQuantity: matchedContents.reduce(
+              (total, content) => total + content.quantity,
+              0,
+            ),
+          },
+        ];
+      }),
+    );
+  }, [completedRackCellQueries, isCompletedDetail, selected]);
+  const completedRackIds = useMemo(
+    () => [...new Set(completedMatches.map((match) => match.cell.rackId))],
+    [completedMatches],
+  );
+  const completedPathQueries = useQueries({
+    queries: completedRackIds.map((rackId) => ({
+      enabled: canView && isCompletedDetail,
+      queryKey: ["warehouse-operation", "path", "completed", rackId],
+      queryFn: () => getNavigationPath(rackId),
+    })),
+  });
+  const completedPathsByRackId = useMemo(
+    () =>
+      new Map(
+        completedRackIds.map((rackId, index) => [
+          rackId,
+          completedPathQueries[index]?.data,
+        ]),
+      ),
+    [completedPathQueries, completedRackIds],
+  );
+  const completedSuggestions = useMemo(
+    () => {
+      const suggestions = completedMatches.flatMap((match) => {
+        const path = completedPathsByRackId.get(match.cell.rackId);
+        if (!path) return [];
+
+        return [
+          {
+            cellId: match.cell.id,
+            cellCode: match.cell.code,
+            rackId: match.cell.rackId,
+            level: match.cell.level,
+            bay: match.cell.bay,
+            path,
+            quantity: match.matchedQuantity,
+            fillPercent: match.cell.fillPercent,
+            reason: `Đã cất tại đây · ${match.matchedQuantity} thùng`,
+            lotNumber: selected?.lotNumber ?? null,
+            expiryDate: selected?.expiryDate ?? null,
+          },
+        ];
+      });
+
+      return suggestions.sort((left, right) => left.path.distanceM - right.path.distanceM);
+    },
+    [completedMatches, completedPathsByRackId, selected],
+  );
 
   const confirmMutation = useMutation({
     mutationFn: async (input: {
@@ -261,8 +357,10 @@ export function PutawayTasksClient() {
                     {selected.sku}
                   </div>
                 </div>
-                <StatusBadge tone={statusTone(status)}>
-                  {status === "PENDING" ? "Đang cất" : statusLabel(status)}
+                <StatusBadge tone={statusTone(selectedStatus)}>
+                  {selectedStatus === "PENDING"
+                    ? "Đang cất"
+                    : statusLabel(selectedStatus)}
                 </StatusBadge>
               </div>
             </CardHeader>
@@ -301,7 +399,7 @@ export function PutawayTasksClient() {
             </CardContent>
           </Card>
 
-          {status === "PENDING" && canConfirm ? (
+          {selectedStatus === "PENDING" && canConfirm ? (
             <WarehouseOperationWorkspace
               key={selected.key}
               operation="PUTAWAY"
@@ -317,13 +415,33 @@ export function PutawayTasksClient() {
               }}
             />
           ) : (
-            <Card>
-              <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                {status === "COMPLETED"
-                  ? "Dòng hàng này đã được cất hoàn tất."
-                  : "Chế độ theo dõi không cho phép quét xác nhận."}
-              </CardContent>
-            </Card>
+            <WarehouseOperationWorkspace
+              key={`${selected.key}:readonly`}
+              operation="PUTAWAY"
+              sku={selected.sku}
+              remainingPackageCount={selected.remainingQty}
+              packageSpec={selected.packageSpec}
+              suggestions={completedSuggestions}
+              suggestionsLoading={
+                layoutQuery.isLoading ||
+                completedRackCellQueries.some((query) => query.isLoading) ||
+                completedPathQueries.some((query) => query.isLoading)
+              }
+              suggestionsError={
+                layoutQuery.error ??
+                completedRackCellQueries.find((query) => query.error)?.error ??
+                completedPathQueries.find((query) => query.error)?.error
+              }
+              readOnly
+              readOnlyMessage={
+                selectedStatus === "COMPLETED"
+                  ? completedSuggestions.length > 0
+                    ? "Dòng hàng này đã được cất hoàn tất. Bản đồ bên dưới hiển thị vị trí đang chứa hàng."
+                    : "Dòng hàng này đã được cất hoàn tất nhưng chưa tìm thấy vị trí tồn thực tế khớp trên sơ đồ."
+                  : "Chế độ theo dõi không cho phép quét xác nhận."
+              }
+              onConfirm={async () => {}}
+            />
           )}
         </div>
       ) : (
@@ -359,7 +477,7 @@ export function PutawayTasksClient() {
               <Select
                 value={status}
                 onValueChange={(value) => {
-                  setStatus(value as PutawayTaskStatus);
+                  setStatus(value as PutawayTaskStatus | "ALL");
                   setSelectedKey("");
                 }}
               >
@@ -367,6 +485,7 @@ export function PutawayTasksClient() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="ALL">Tất cả</SelectItem>
                   <SelectItem value="PENDING">Đang cất</SelectItem>
                   <SelectItem value="COMPLETED">Đã hoàn tất</SelectItem>
                 </SelectContent>
@@ -418,10 +537,10 @@ export function PutawayTasksClient() {
                           {item.grnNumber}
                         </TableCell>
                         <TableCell>
-                          <StatusBadge tone={statusTone(status)}>
-                            {status === "PENDING"
+                          <StatusBadge tone={statusTone(item.taskStatus)}>
+                            {item.taskStatus === "PENDING"
                               ? "Đang cất"
-                              : statusLabel(status)}
+                              : statusLabel(item.taskStatus)}
                           </StatusBadge>
                         </TableCell>
                         <TableCell>{item.remainingQty} thùng</TableCell>
