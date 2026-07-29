@@ -46,6 +46,31 @@ describe("login page", () => {
     expect(screen.queryByText(/role preview local/i)).not.toBeInTheDocument();
   });
 
+  it("submits trimmed username and password values", async () => {
+    mockedLogin.mockResolvedValueOnce({
+      accessToken: "access-token",
+      refreshToken: "refresh-token",
+      mustChangePassword: false,
+    });
+
+    render(<LoginPageClient />);
+
+    fireEvent.change(screen.getByLabelText("Tên đăng nhập"), {
+      target: { value: "  receiver_1  " },
+    });
+    fireEvent.change(screen.getByLabelText("Mật khẩu"), {
+      target: { value: "  TempPass123!  " },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /Vào trang tổng quan/i }),
+    );
+
+    expect(mockedLogin).toHaveBeenCalledWith({
+      username: "receiver_1",
+      password: "TempPass123!",
+    });
+  });
+
   it("does not copy the login password into the forced password-change form", async () => {
     mockedLogin.mockImplementationOnce(async () => {
       useAuthStore.getState().setUser({
@@ -96,5 +121,24 @@ describe("login page", () => {
     expect(screen.getByText("Đang chuyển vào WMS...")).toBeInTheDocument();
     expect(screen.queryByText("Phiên WMS hiện tại")).not.toBeInTheDocument();
     expect(router.replace).toHaveBeenCalledWith("/dashboard");
+  });
+
+  it("shows the forced password-change form for a persisted session that still requires it", () => {
+    useAuthStore.setState({
+      hasHydrated: true,
+      user: {
+        id: "receiver-1",
+        name: "Receiver 1",
+        roles: ["RECEIVER"],
+        tenantId: "demo-tenant",
+        type: "user",
+        mustChangePassword: true,
+      },
+    });
+
+    render(<LoginPageClient />);
+
+    expect(screen.getByText("Đổi mật khẩu tạm")).toBeInTheDocument();
+    expect(router.replace).not.toHaveBeenCalledWith("/dashboard");
   });
 });

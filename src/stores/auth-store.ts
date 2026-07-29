@@ -34,6 +34,7 @@ function migrateUser(user: unknown): SessionUser | null {
       avatarUrl: persistedUser.avatarUrl,
       email: persistedUser.email,
       id: persistedUser.id,
+      mustChangePassword: persistedUser.mustChangePassword,
       name: persistedUser.name,
       roles,
       tenantId: persistedUser.tenantId,

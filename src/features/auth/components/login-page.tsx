@@ -45,6 +45,8 @@ export function LoginPageClient() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [needsPasswordChange, setNeedsPasswordChange] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const requiresPasswordChange =
+    needsPasswordChange || Boolean(user?.mustChangePassword);
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -53,6 +55,7 @@ export function LoginPageClient() {
     const parsed = loginSchema.safeParse({
       ...credentials,
       username: credentials.username.trim(),
+      password: credentials.password.trim(),
     });
 
     if (!parsed.success) {
@@ -66,7 +69,6 @@ export function LoginPageClient() {
 
     try {
       const result = await login(parsed.data);
-      toast.success("Đăng nhập WMS thành công");
 
       if (result.mustChangePassword) {
         setPasswordChange(defaultPasswordChange);
@@ -75,6 +77,7 @@ export function LoginPageClient() {
         return;
       }
 
+      toast.success("Đăng nhập WMS thành công");
       router.replace("/dashboard");
     } catch (error) {
       if (isAxiosError(error)) {
@@ -133,12 +136,12 @@ export function LoginPageClient() {
   }
 
   useEffect(() => {
-    if (user && !needsPasswordChange) {
+    if (user && !requiresPasswordChange) {
       router.replace("/dashboard");
     }
-  }, [needsPasswordChange, router, user]);
+  }, [requiresPasswordChange, router, user]);
 
-  if (!hasHydrated || (user && !needsPasswordChange)) {
+  if (!hasHydrated || (user && !requiresPasswordChange)) {
     return (
       <main className="grid min-h-screen place-items-center bg-background px-4 py-10">
         <Card className="w-full max-w-md">
@@ -153,7 +156,7 @@ export function LoginPageClient() {
     );
   }
 
-  if (user && needsPasswordChange) {
+  if (user && requiresPasswordChange) {
     return (
       <main className="grid min-h-screen place-items-center bg-background px-4 py-10">
         <Card className="w-full max-w-md">
