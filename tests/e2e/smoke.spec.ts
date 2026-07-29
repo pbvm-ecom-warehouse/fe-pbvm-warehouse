@@ -456,6 +456,10 @@ test("counter proposes scrap only from a counted stock-count line", async ({
   expect(scrapRequestBody).toContain("Hai thùng bị vỡ");
   expect(scrapRequestBody).toContain("shelf-1");
 
+  await page
+    .getByRole("dialog", { name: "Chi tiết phiếu kiểm kho" })
+    .getByRole("button", { name: "Đóng" })
+    .click();
   await page.getByRole("tab", { name: "Phiếu hủy" }).click();
   await expect(page.getByRole("button", { name: "Tạo phiếu hủy" })).toHaveCount(
     0,
@@ -894,6 +898,7 @@ test("printer can use print jobs but not purchases", async ({ page }) => {
       name: new RegExp(["Theo dõi", "lệnh in"].join(" "), "i"),
     }),
   ).toHaveCount(0);
+  await page.getByRole("button", { name: "Xem chi tiết" }).click();
   await page.getByRole("row", { name: /CUP-BLANK-500/i }).click();
   await page.getByLabel("Mã vạch mặt hàng").fill("2000000000015");
   await page.getByLabel("Mã vị trí").fill("A1-S02");
@@ -958,6 +963,7 @@ test("manager can view print jobs without processing controls", async ({
 
   await page.goto("/print-jobs");
   await expect(page.getByRole("heading", { name: /^In ly$/i })).toBeVisible();
+  await page.getByRole("button", { name: "Xem chi tiết" }).click();
   await expect(
     page.getByRole("cell", { name: /^CUP-BLANK-500$/i }),
   ).toBeVisible();
@@ -1230,6 +1236,7 @@ test("picker follows the suggested cell and confirms whole-package issue", async
   await page.getByRole("button", { name: "Xem chi tiết" }).click();
   await page.getByRole("row", { name: /CUP-500ML-RED/i }).click();
   await expect(page.getByText("R01-T1-B1").first()).toBeVisible();
+  await page.getByRole("button", { name: /R01-T1-B1.*Ưu tiên/i }).click();
   await page.getByRole("button", { name: "Chọn khoang và quét mã" }).click();
   const scanner = page.getByRole("dialog", { name: "Quét xác nhận vị trí" });
   await scanner.getByLabel("Mã vạch mặt hàng").fill("2000000000015");

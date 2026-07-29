@@ -59,13 +59,13 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  EmptyState,
   PageHeader,
   PermissionNotice,
   StatusBadge,
   TablePanel,
   TableSkeleton,
 } from "@/features/admin-shell/components/operations-ui";
+import { EntityDetailDialog } from "@/features/admin-shell/components/entity-detail-dialog";
 import { getApiErrorCode, getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
@@ -467,6 +467,17 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
     });
   }
 
+  function closeStockCountDetail() {
+    setSelectedId("");
+    setCountTarget(null);
+    setCountForm(defaultCountForm);
+    setCountImages([]);
+    setScrapTarget(null);
+    setScrapForm(defaultScrapForm);
+    setScrapImages([]);
+    setApproveReason("");
+  }
+
   return (
     <div className="space-y-4">
       {!canUseApi ? (
@@ -580,24 +591,33 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
         <Pager page={page} totalPages={totalPages} onPageChange={setPage} />
       </TablePanel>
 
-      {detailQuery.error ? <ErrorBanner error={detailQuery.error} /> : null}
-
-      {detail ? (
-        <StockCountDetail
-          canApprove={canApprove}
-          canCount={canCount}
-          detail={detail}
-          approveBusy={approveMutation.isPending}
-          approveReason={approveReason}
-          onApprove={() => approveMutation.mutate(detail.id)}
-          onApproveReasonChange={setApproveReason}
-          onCount={openCountDialog}
-          canCreateScrap={canCreateScrap}
-          onCreateScrap={openScrapDialog}
-        />
-      ) : (
-        <EmptyState title="Chọn phiếu kiểm để xem chi tiết" />
-      )}
+      <EntityDetailDialog
+        description={`ID phiếu nội bộ: ${selectedId}`}
+        onOpenChange={(open) => {
+          if (!open) closeStockCountDetail();
+        }}
+        open={Boolean(selectedId)}
+        title="Chi tiết phiếu kiểm kho"
+      >
+        {detailQuery.isLoading && !detail ? (
+          <TableSkeleton columns={7} />
+        ) : null}
+        {detailQuery.error ? <ErrorBanner error={detailQuery.error} /> : null}
+        {detail ? (
+          <StockCountDetail
+            canApprove={canApprove}
+            canCount={canCount}
+            detail={detail}
+            approveBusy={approveMutation.isPending}
+            approveReason={approveReason}
+            onApprove={() => approveMutation.mutate(detail.id)}
+            onApproveReasonChange={setApproveReason}
+            onCount={openCountDialog}
+            canCreateScrap={canCreateScrap}
+            onCreateScrap={openScrapDialog}
+          />
+        ) : null}
+      </EntityDetailDialog>
 
       <Dialog
         open={Boolean(scrapTarget)}
@@ -775,7 +795,7 @@ function StockCountTable({
     <Table scrollable>
       <TableHeader>
         <TableRow>
-          <TableHead>Mã phiếu</TableHead>
+          <TableHead>ID phiếu nội bộ</TableHead>
           <TableHead>Khu vực</TableHead>
           <TableHead>Trạng thái</TableHead>
           <TableHead>Số dòng</TableHead>
@@ -852,7 +872,9 @@ function StockCountDetail({
   return (
     <Card>
       <CardHeader className="border-b bg-muted/20">
-        <CardTitle className="text-base">{detail.id}</CardTitle>
+        <CardTitle className="text-base">
+          ID phiếu nội bộ: {detail.id}
+        </CardTitle>
         <CardDescription>
           Tạo ngày {formatDate(detail.createdAt)}
         </CardDescription>
@@ -1042,6 +1064,11 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
     setPage(1);
   }
 
+  function closeScrapNoteDetail() {
+    setSelectedId("");
+    setRejectReason("");
+  }
+
   return (
     <div className="space-y-4">
       {!canUseApi ? (
@@ -1101,33 +1128,42 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
         <Pager page={page} totalPages={totalPages} onPageChange={setPage} />
       </TablePanel>
 
-      {detailQuery.error ? <ErrorBanner error={detailQuery.error} /> : null}
-      {sourceStockCountQuery.error ? (
-        <ErrorBanner error={sourceStockCountQuery.error} />
-      ) : null}
+      <EntityDetailDialog
+        description={`ID phiếu nội bộ: ${selectedId}`}
+        onOpenChange={(open) => {
+          if (!open) closeScrapNoteDetail();
+        }}
+        open={Boolean(selectedId)}
+        title="Chi tiết phiếu hủy hàng"
+      >
+        {detailQuery.isLoading && !detail ? (
+          <TableSkeleton columns={7} />
+        ) : null}
+        {detailQuery.error ? <ErrorBanner error={detailQuery.error} /> : null}
+        {sourceStockCountQuery.error ? (
+          <ErrorBanner error={sourceStockCountQuery.error} />
+        ) : null}
+        {detail ? (
+          <ScrapNoteDetail
+            approveBusy={approveMutation.isPending}
+            approvalSourceReady={sourceApprovalReady}
+            canApprove={canApprove}
+            detail={detail}
+            rejectBusy={rejectMutation.isPending}
+            rejectReason={rejectReason}
+            onApprove={() => approveMutation.mutate(detail.id)}
+            onReject={() => {
+              if (!rejectReason.trim()) {
+                toast.error("Cần nhập lý do từ chối.");
+                return;
+              }
 
-      {detail ? (
-        <ScrapNoteDetail
-          approveBusy={approveMutation.isPending}
-          approvalSourceReady={sourceApprovalReady}
-          canApprove={canApprove}
-          detail={detail}
-          rejectBusy={rejectMutation.isPending}
-          rejectReason={rejectReason}
-          onApprove={() => approveMutation.mutate(detail.id)}
-          onReject={() => {
-            if (!rejectReason.trim()) {
-              toast.error("Cần nhập lý do từ chối.");
-              return;
-            }
-
-            rejectMutation.mutate(detail.id);
-          }}
-          onRejectReasonChange={setRejectReason}
-        />
-      ) : (
-        <EmptyState title="Chọn phiếu hủy để xem chi tiết" />
-      )}
+              rejectMutation.mutate(detail.id);
+            }}
+            onRejectReasonChange={setRejectReason}
+          />
+        ) : null}
+      </EntityDetailDialog>
     </div>
   );
 }
@@ -1145,7 +1181,7 @@ function ScrapNoteTable({
     <Table scrollable>
       <TableHeader>
         <TableRow>
-          <TableHead>Mã phiếu</TableHead>
+          <TableHead>ID phiếu nội bộ</TableHead>
           <TableHead>Trạng thái</TableHead>
           <TableHead>Số dòng</TableHead>
           <TableHead>Ngày tạo</TableHead>
@@ -1220,7 +1256,9 @@ function ScrapNoteDetail({
   return (
     <Card>
       <CardHeader className="border-b bg-muted/20">
-        <CardTitle className="text-base">{detail.id}</CardTitle>
+        <CardTitle className="text-base">
+          ID phiếu nội bộ: {detail.id}
+        </CardTitle>
         <CardDescription>
           Tạo ngày {formatDate(detail.createdAt)}
         </CardDescription>
@@ -1239,7 +1277,7 @@ function ScrapNoteDetail({
         {detail.sourceStockCountId ? (
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_2fr]">
             <InfoBox
-              label="Phiếu kiểm nguồn"
+              label="ID phiếu kiểm nguồn"
               value={detail.sourceStockCountId}
             />
             {!approvalSourceReady ? (

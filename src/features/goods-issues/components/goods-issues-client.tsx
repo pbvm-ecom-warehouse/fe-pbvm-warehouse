@@ -41,6 +41,7 @@ import {
   StatusBadge,
   TableSkeleton,
 } from "@/features/admin-shell/components/operations-ui";
+import { EntityDetailDialog } from "@/features/admin-shell/components/entity-detail-dialog";
 import { WarehouseOperationWorkspace } from "@/features/warehouse-navigation/components/warehouse-operation-workspace";
 import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
@@ -158,6 +159,10 @@ export function GoodsIssuesClient() {
     setSelectedIssueId(issue.id);
     setSelectedItemId("");
   }
+  function closeIssueDetail() {
+    setSelectedIssueId("");
+    setSelectedItemId("");
+  }
   function handleFilter(event: FormEvent) {
     event.preventDefault();
     setPage(1);
@@ -239,8 +244,8 @@ export function GoodsIssuesClient() {
             <Table scrollable>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Mã phiếu</TableHead>
-                  <TableHead>Mã đơn hàng</TableHead>
+                  <TableHead>ID phiếu nội bộ</TableHead>
+                  <TableHead>ID đơn hàng nội bộ</TableHead>
                   <TableHead>Trạng thái</TableHead>
                   <TableHead>Số dòng</TableHead>
                   <TableHead className="text-right">Thao tác</TableHead>
@@ -291,90 +296,105 @@ export function GoodsIssuesClient() {
           )}
         </CardContent>
       </Card>
-      {detail ? (
-        <Card>
-          <CardHeader className="border-b bg-muted/20">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-base">
-                  Mã đơn hàng: {detail.orderId}
-                </CardTitle>
-                <CardDescription className="mt-1">
-                  {canPick
-                    ? "Nhấn vào dòng hàng để xem vị trí lấy theo FEFO và đường đi."
-                    : "Vai trò hiện tại chỉ xem thông tin."}
-                </CardDescription>
-              </div>
-              <StatusBadge tone={statusTone(detail.status)}>
-                {statusLabel(detail.status)}
-              </StatusBadge>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-4">
-            <Table scrollable>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Cần xuất</TableHead>
-                  <TableHead>Còn lại</TableHead>
-                  <TableHead>Đơn vị</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {detail.items.length === 0 ? (
-                  <EmptyRow colSpan={4} text="Phiếu chưa có dòng hàng." />
-                ) : (
-                  detail.items.map((item: GoodsIssueItem) => (
-                    <TableRow
-                      key={item.itemId}
-                      className={cn(
-                        "cursor-pointer hover:bg-accent/60",
-                        selectedItemId === item.itemId &&
-                          "border-l-4 border-l-primary bg-primary/10",
-                      )}
-                      onClick={() => {
-                        if (canPick) setSelectedItemId(item.itemId);
-                      }}
-                    >
-                      <TableCell className="font-mono font-semibold">
-                        {item.sku}
-                      </TableCell>
-                      <TableCell>{item.quantity}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{item.remainingQty}</Badge>
-                      </TableCell>
-                      <TableCell>thùng</TableCell>
+      <EntityDetailDialog
+        description={`ID phiếu nội bộ: ${selectedIssueId}`}
+        onOpenChange={(open) => {
+          if (!open) closeIssueDetail();
+        }}
+        open={Boolean(selectedIssueId)}
+        title="Chi tiết phiếu xuất kho"
+      >
+        {detailQuery.isLoading && !detail ? (
+          <TableSkeleton columns={4} />
+        ) : null}
+        {detailQuery.error ? <ErrorBanner error={detailQuery.error} /> : null}
+        {detail ? (
+          <div className="space-y-4">
+            <Card>
+              <CardHeader className="border-b bg-muted/20">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-base">
+                      ID đơn hàng nội bộ: {detail.orderId}
+                    </CardTitle>
+                    <CardDescription className="mt-1">
+                      {canPick
+                        ? "Nhấn vào dòng hàng để xem vị trí lấy theo FEFO và đường đi."
+                        : "Vai trò hiện tại chỉ xem thông tin."}
+                    </CardDescription>
+                  </div>
+                  <StatusBadge tone={statusTone(detail.status)}>
+                    {statusLabel(detail.status)}
+                  </StatusBadge>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <Table scrollable>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>SKU</TableHead>
+                      <TableHead>Cần xuất</TableHead>
+                      <TableHead>Còn lại</TableHead>
+                      <TableHead>Đơn vị</TableHead>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      ) : null}
-      {selectedItem && canPick ? (
-        <WarehouseOperationWorkspace
-          key={`${selectedIssueId}:${selectedItemId}`}
-          operation="PICK"
-          sku={selectedItem.sku}
-          remainingPackageCount={remainingPackageCount}
-          suggestions={suggestions.map((item) => ({
-            ...item,
-            capacity: item.quantity,
-          }))}
-          suggestionsLoading={suggestionsQuery.isLoading}
-          suggestionsError={suggestionsQuery.error}
-          pending={confirmMutation.isPending}
-          onConfirm={async (value) => {
-            await confirmMutation.mutateAsync({
-              itemBarcode: value.itemBarcode,
-              cellBarcode: value.cellBarcode,
-              quantity: value.quantity,
-              suggestedCellId: value.suggestedCellId,
-            });
-          }}
-        />
-      ) : null}
+                  </TableHeader>
+                  <TableBody>
+                    {detail.items.length === 0 ? (
+                      <EmptyRow colSpan={4} text="Phiếu chưa có dòng hàng." />
+                    ) : (
+                      detail.items.map((item: GoodsIssueItem) => (
+                        <TableRow
+                          key={item.itemId}
+                          className={cn(
+                            "cursor-pointer hover:bg-accent/60",
+                            selectedItemId === item.itemId &&
+                              "border-l-4 border-l-primary bg-primary/10",
+                          )}
+                          onClick={() => {
+                            if (canPick) setSelectedItemId(item.itemId);
+                          }}
+                        >
+                          <TableCell className="font-mono font-semibold">
+                            {item.sku}
+                          </TableCell>
+                          <TableCell>{item.quantity}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{item.remainingQty}</Badge>
+                          </TableCell>
+                          <TableCell>thùng</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+            {selectedItem && canPick ? (
+              <WarehouseOperationWorkspace
+                key={`${selectedIssueId}:${selectedItemId}`}
+                operation="PICK"
+                sku={selectedItem.sku}
+                remainingPackageCount={remainingPackageCount}
+                suggestions={suggestions.map((item) => ({
+                  ...item,
+                  capacity: item.quantity,
+                }))}
+                suggestionsLoading={suggestionsQuery.isLoading}
+                suggestionsError={suggestionsQuery.error}
+                pending={confirmMutation.isPending}
+                onConfirm={async (value) => {
+                  await confirmMutation.mutateAsync({
+                    itemBarcode: value.itemBarcode,
+                    cellBarcode: value.cellBarcode,
+                    quantity: value.quantity,
+                    suggestedCellId: value.suggestedCellId,
+                  });
+                }}
+              />
+            ) : null}
+          </div>
+        ) : null}
+      </EntityDetailDialog>
       <div className="flex items-center justify-between">
         <Button
           variant="outline"
