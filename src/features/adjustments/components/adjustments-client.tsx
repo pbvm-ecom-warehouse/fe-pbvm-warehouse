@@ -66,7 +66,7 @@ import {
   TablePanel,
   TableSkeleton,
 } from "@/features/admin-shell/components/operations-ui";
-import { getApiErrorMessage } from "@/lib/api-contract";
+import { getApiErrorCode, getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
@@ -74,7 +74,7 @@ import { useSessionUser } from "@/hooks/use-session-user";
 
 import {
   approveScrapNote,
-  createScrapNote,
+  createStockCountScrap,
   getScrapNote,
   listScrapNotes,
   rejectScrapNote,
@@ -121,15 +121,28 @@ const defaultCountForm = {
 };
 
 const defaultScrapForm = {
-  itemId: "",
+  itemBarcode: "",
   lotId: "",
-  note: "",
   quantity: "1",
   reason: "",
   shelfId: "",
 };
 
+const ADJUSTMENT_ERROR_MESSAGES: Record<string, string> = {
+  SCRAP_NOTE_BARCODE_MISMATCH: "Barcode không thuộc SKU của dòng kiểm kê này.",
+  SCRAP_NOTE_QTY_EXCEEDS_ACTUAL:
+    "Số lượng hủy không được vượt quá số lượng thực tế đã đếm.",
+  SCRAP_NOTE_SOURCE_LINE_NOT_COUNTED:
+    "Cần nhập số đếm thực tế trước khi đề xuất hủy.",
+  SCRAP_NOTE_SOURCE_NOT_APPROVED:
+    "Cần duyệt phiếu kiểm nguồn trước khi duyệt phiếu hủy.",
+};
+
 function formatError(error: unknown) {
+  const code = getApiErrorCode(error);
+  if (code && ADJUSTMENT_ERROR_MESSAGES[code]) {
+    return ADJUSTMENT_ERROR_MESSAGES[code];
+  }
   return getApiErrorMessage(error) ?? "Không kết nối được WMS.";
 }
 
@@ -140,11 +153,6 @@ function optionalText(value: string) {
 
 function requiredText(value: string) {
   return value.trim();
-}
-
-function parsePositiveNumber(value: string) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
 
 function parseNonNegativeNumber(value: string) {
@@ -346,27 +354,30 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
   });
 
   const scrapMutation = useMutation({
-    mutationFn: () =>
-      createScrapNote({
-        itemImages: [scrapImages],
-        items: [
-          {
-            itemId: requiredText(scrapForm.itemId),
-            lotId: optionalText(scrapForm.lotId),
-            quantity: parsePositiveNumber(scrapForm.quantity),
-            reason: requiredText(scrapForm.reason),
-            shelfId: requiredText(scrapForm.shelfId),
-          },
-        ],
-        note: optionalText(scrapForm.note),
-      }),
+    mutationFn: () => {
+      if (!activeId || !scrapTarget) {
+        throw new Error("Chưa chọn dòng kiểm kê để đề xuất hủy.");
+      }
+      return createStockCountScrap({
+        input: {
+          images: scrapImages,
+          itemBarcode: requiredText(scrapForm.itemBarcode),
+          lotId: optionalText(scrapForm.lotId),
+          quantity: Number(scrapForm.quantity),
+          reason: requiredText(scrapForm.reason),
+          shelfId: requiredText(scrapForm.shelfId),
+        },
+        itemId: scrapTarget.itemId,
+        stockCountId: activeId,
+      });
+    },
     onError: (error) => toast.error(formatError(error)),
     onSuccess: () => {
       setScrapTarget(null);
       setScrapForm(defaultScrapForm);
       setScrapImages([]);
       void queryClient.invalidateQueries({ queryKey: ["scrap-notes"] });
-      toast.success("Đã tạo phiếu hủy");
+      toast.success("Đã gửi đề xuất hủy");
     },
   });
 
@@ -404,30 +415,39 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
   }
 
   function openScrapDialog(item: StockCountItem) {
-    const shortage =
-      typeof item.delta === "number" && item.delta < 0
-        ? Math.abs(item.delta)
-        : 1;
     setScrapTarget(item);
     setScrapImages([]);
     setScrapForm({
-      itemId: item.itemId,
+      itemBarcode: "",
       lotId: item.lotId ?? "",
-      note: activeId ? `Tạo từ phiếu kiểm ${activeId}` : "",
-      quantity: String(shortage),
+      quantity: "1",
       reason: "",
       shelfId: item.shelfId,
     });
   }
 
+  function closeScrapDialog() {
+    setScrapTarget(null);
+    setScrapForm(defaultScrapForm);
+    setScrapImages([]);
+  }
+
   function handleScrapCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!scrapForm.itemBarcode.trim() || !scrapForm.reason.trim()) {
+      toast.error("Cần quét barcode SKU và nhập lý do hủy.");
+      return;
+    }
+    const quantity = Number(scrapForm.quantity);
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      toast.error("Số lượng hủy phải là số nguyên từ 1 trở lên.");
+      return;
+    }
     if (
-      !scrapForm.itemId.trim() ||
-      !scrapForm.shelfId.trim() ||
-      !scrapForm.reason.trim()
+      typeof scrapTarget?.actualQty === "number" &&
+      quantity > scrapTarget.actualQty
     ) {
-      toast.error("Cần nhập mặt hàng, vị trí và lý do hủy.");
+      toast.error("Số lượng hủy không được vượt số thực đếm.");
       return;
     }
     scrapMutation.mutate();
@@ -581,40 +601,40 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
 
       <Dialog
         open={Boolean(scrapTarget)}
-        onOpenChange={(open) => !open && setScrapTarget(null)}
+        onOpenChange={(open) => !open && closeScrapDialog()}
       >
         <DialogContent size="lg" className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Tạo phiếu hủy hàng</DialogTitle>
+            <DialogTitle>Đề xuất hủy từ dòng kiểm kê</DialogTitle>
             <DialogDescription>
-              {scrapTarget?.sku ?? "Dòng kiểm"} · dữ liệu đã lấy từ phiếu kiểm.
+              Quét barcode của đúng SKU trước khi gửi đề xuất.
             </DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={handleScrapCreate}>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <InfoBox label="SKU" value={scrapTarget?.sku ?? "Chưa có"} />
+              <InfoBox
+                label="Vị trí"
+                value={scrapTarget?.shelfId ?? "Chưa có"}
+              />
+              <InfoBox label="Lô" value={scrapTarget?.lotId ?? "Không có"} />
+              <InfoBox
+                label="Số thực đếm"
+                value={formatQty(scrapTarget?.actualQty)}
+              />
+            </div>
+            <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800">
+              Số thực đếm gồm toàn bộ hàng nhìn thấy, kể cả hàng hỏng. Số lượng
+              đề xuất sẽ được trừ riêng sau khi phiếu kiểm và phiếu hủy được
+              duyệt.
+            </div>
             <div className="grid gap-3 md:grid-cols-2">
               <TextField
-                id="stock-count-scrap-item"
-                label="Mã mặt hàng"
-                value={scrapForm.itemId}
-                onChange={(itemId) =>
-                  setScrapForm((current) => ({ ...current, itemId }))
-                }
-              />
-              <TextField
-                id="stock-count-scrap-shelf"
-                label="Mã vị trí"
-                value={scrapForm.shelfId}
-                onChange={(shelfId) =>
-                  setScrapForm((current) => ({ ...current, shelfId }))
-                }
-              />
-              <TextField
-                id="stock-count-scrap-lot"
-                label="Mã lô"
-                required={false}
-                value={scrapForm.lotId}
-                onChange={(lotId) =>
-                  setScrapForm((current) => ({ ...current, lotId }))
+                id="stock-count-scrap-barcode"
+                label="Barcode SKU"
+                value={scrapForm.itemBarcode}
+                onChange={(itemBarcode) =>
+                  setScrapForm((current) => ({ ...current, itemBarcode }))
                 }
               />
               <TextField
@@ -633,15 +653,6 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
               value={scrapForm.reason}
               onChange={(reason) =>
                 setScrapForm((current) => ({ ...current, reason }))
-              }
-            />
-            <TextAreaField
-              id="stock-count-scrap-note"
-              label="Ghi chú phiếu"
-              required={false}
-              value={scrapForm.note}
-              onChange={(note) =>
-                setScrapForm((current) => ({ ...current, note }))
               }
             />
             <EvidenceImagePicker
@@ -664,7 +675,7 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
                 ) : (
                   <Trash2 data-icon="inline-start" />
                 )}
-                Tạo phiếu hủy
+                Gửi đề xuất hủy
               </Button>
             </DialogFooter>
           </form>
@@ -901,7 +912,9 @@ function StockCountDetail({
                         </Button>
                         <Button
                           disabled={
-                            !canCreateScrap || detail.status === "APPROVED"
+                            !canCreateScrap ||
+                            detail.status === "APPROVED" ||
+                            typeof item.actualQty !== "number"
                           }
                           onClick={() => onCreateScrap(item)}
                           size="sm"
@@ -909,7 +922,7 @@ function StockCountDetail({
                           variant="outline"
                         >
                           <Trash2 data-icon="inline-start" />
-                          Tạo phiếu hủy
+                          Đề xuất hủy
                         </Button>
                       </div>
                     </TableCell>
@@ -957,16 +970,12 @@ function StockCountDetail({
 function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
   const user = useSessionUser();
   const queryClient = useQueryClient();
-  const canCreate = hasAnyRole(user?.roles, ["ADMIN", "COUNTER"]);
   const canApprove = hasAnyRole(user?.roles, ["ADMIN", "MANAGER"]);
   const [statusFilter, setStatusFilter] = useState<ScrapNoteStatus | "ALL">(
     "ALL",
   );
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState("");
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createForm, setCreateForm] = useState(defaultScrapForm);
-  const [scrapImages, setScrapImages] = useState<File[]>([]);
   const [rejectReason, setRejectReason] = useState("");
 
   const listQuery = useQuery({
@@ -997,32 +1006,14 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
     queryKey: scrapNoteKeys.detail(activeId),
   });
   const detail = detailQuery.data;
-
-  const createMutation = useMutation({
-    mutationFn: () =>
-      createScrapNote({
-        note: optionalText(createForm.note),
-        itemImages: [scrapImages],
-        items: [
-          {
-            itemId: requiredText(createForm.itemId),
-            lotId: optionalText(createForm.lotId),
-            quantity: parsePositiveNumber(createForm.quantity),
-            reason: requiredText(createForm.reason),
-            shelfId: requiredText(createForm.shelfId),
-          },
-        ],
-      }),
-    onError: (error) => toast.error(formatError(error)),
-    onSuccess: (scrapNote) => {
-      setCreateForm(defaultScrapForm);
-      setScrapImages([]);
-      setCreateOpen(false);
-      setSelectedId(scrapNote.id);
-      void queryClient.invalidateQueries({ queryKey: ["scrap-notes"] });
-      toast.success("Đã tạo phiếu hủy");
-    },
+  const sourceStockCountQuery = useQuery({
+    enabled: Boolean(detail?.sourceStockCountId),
+    queryFn: () => getStockCount(detail!.sourceStockCountId!),
+    queryKey: stockCountKeys.detail(detail?.sourceStockCountId ?? ""),
   });
+  const sourceApprovalReady =
+    !detail?.sourceStockCountId ||
+    sourceStockCountQuery.data?.status === "APPROVED";
 
   const approveMutation = useMutation({
     mutationFn: (scrapNoteId: string) => approveScrapNote(scrapNoteId),
@@ -1051,21 +1042,6 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
     setPage(1);
   }
 
-  function handleCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (
-      !createForm.itemId.trim() ||
-      !createForm.shelfId.trim() ||
-      !createForm.reason.trim()
-    ) {
-      toast.error("Cần nhập mặt hàng, vị trí và lý do hủy.");
-      return;
-    }
-
-    createMutation.mutate();
-  }
-
   return (
     <div className="space-y-4">
       {!canUseApi ? (
@@ -1085,7 +1061,7 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
           </span>
         }
       >
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
           <form
             className="grid flex-1 gap-3 md:grid-cols-[220px_1fr_auto]"
             onSubmit={handleFilter}
@@ -1110,101 +1086,6 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
               Lọc
             </Button>
           </form>
-
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogTrigger asChild>
-              <Button disabled={!canCreate}>
-                <Plus data-icon="inline-start" />
-                Tạo phiếu hủy
-              </Button>
-            </DialogTrigger>
-            <DialogContent size="lg" className="max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Tạo phiếu hủy hàng</DialogTitle>
-                <DialogDescription>
-                  Ghi nhận hàng hỏng, vỡ hoặc hết hạn để quản lý duyệt trừ tồn.
-                </DialogDescription>
-              </DialogHeader>
-              <form className="space-y-4" onSubmit={handleCreate}>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <TextField
-                    id="scrap-create-item"
-                    label="Mã mặt hàng"
-                    value={createForm.itemId}
-                    onChange={(itemId) =>
-                      setCreateForm((current) => ({ ...current, itemId }))
-                    }
-                  />
-                  <TextField
-                    id="scrap-create-shelf"
-                    label="Mã vị trí"
-                    value={createForm.shelfId}
-                    onChange={(shelfId) =>
-                      setCreateForm((current) => ({ ...current, shelfId }))
-                    }
-                  />
-                  <TextField
-                    id="scrap-create-lot"
-                    label="Mã lô"
-                    required={false}
-                    value={createForm.lotId}
-                    onChange={(lotId) =>
-                      setCreateForm((current) => ({ ...current, lotId }))
-                    }
-                  />
-                  <TextField
-                    id="scrap-create-qty"
-                    label="Số lượng hủy"
-                    type="number"
-                    value={createForm.quantity}
-                    onChange={(quantity) =>
-                      setCreateForm((current) => ({ ...current, quantity }))
-                    }
-                  />
-                </div>
-                <TextAreaField
-                  id="scrap-create-reason"
-                  label="Lý do hủy"
-                  value={createForm.reason}
-                  onChange={(reason) =>
-                    setCreateForm((current) => ({ ...current, reason }))
-                  }
-                />
-                <TextAreaField
-                  id="scrap-create-note"
-                  label="Ghi chú phiếu"
-                  required={false}
-                  value={createForm.note}
-                  onChange={(note) =>
-                    setCreateForm((current) => ({ ...current, note }))
-                  }
-                />
-                <EvidenceImagePicker
-                  files={scrapImages}
-                  id="scrap-create-images"
-                  onChange={setScrapImages}
-                />
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button type="button" variant="outline">
-                      Hủy
-                    </Button>
-                  </DialogClose>
-                  <Button disabled={createMutation.isPending} type="submit">
-                    {createMutation.isPending ? (
-                      <LoaderCircle
-                        className="animate-spin"
-                        data-icon="inline-start"
-                      />
-                    ) : (
-                      <Plus data-icon="inline-start" />
-                    )}
-                    Tạo phiếu hủy
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
         </div>
 
         {listQuery.isLoading ? (
@@ -1221,10 +1102,14 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
       </TablePanel>
 
       {detailQuery.error ? <ErrorBanner error={detailQuery.error} /> : null}
+      {sourceStockCountQuery.error ? (
+        <ErrorBanner error={sourceStockCountQuery.error} />
+      ) : null}
 
       {detail ? (
         <ScrapNoteDetail
           approveBusy={approveMutation.isPending}
+          approvalSourceReady={sourceApprovalReady}
           canApprove={canApprove}
           detail={detail}
           rejectBusy={rejectMutation.isPending}
@@ -1313,6 +1198,7 @@ function ScrapNoteTable({
 
 function ScrapNoteDetail({
   approveBusy,
+  approvalSourceReady,
   canApprove,
   detail,
   onApprove,
@@ -1322,6 +1208,7 @@ function ScrapNoteDetail({
   rejectReason,
 }: {
   approveBusy: boolean;
+  approvalSourceReady: boolean;
   canApprove: boolean;
   detail: ScrapNote;
   onApprove: () => void;
@@ -1348,6 +1235,20 @@ function ScrapNoteDetail({
           />
           <InfoBox label="Số dòng" value={detail.items.length.toString()} />
         </div>
+
+        {detail.sourceStockCountId ? (
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_2fr]">
+            <InfoBox
+              label="Phiếu kiểm nguồn"
+              value={detail.sourceStockCountId}
+            />
+            {!approvalSourceReady ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                Cần duyệt phiếu kiểm nguồn trước khi duyệt phiếu hủy.
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {detail.rejectReason ? (
           <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
@@ -1406,7 +1307,12 @@ function ScrapNoteDetail({
           />
           <Button
             className="self-end"
-            disabled={!canApprove || detail.status !== "DRAFT" || approveBusy}
+            disabled={
+              !canApprove ||
+              !approvalSourceReady ||
+              detail.status !== "DRAFT" ||
+              approveBusy
+            }
             onClick={onApprove}
             type="button"
           >

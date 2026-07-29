@@ -1,4 +1,7 @@
-import { appendIndexedEvidenceImages } from "@/components/evidence-images/evidence-image-utils";
+import {
+  appendEvidenceImages,
+  appendIndexedEvidenceImages,
+} from "@/components/evidence-images/evidence-image-utils";
 import { apiClient } from "@/lib/api-client";
 import { normalizeApiList, type ApiListLike } from "@/lib/api-list";
 import { type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
@@ -19,6 +22,7 @@ export type ScrapNoteItem = {
 
 export type ScrapNote = {
   id: string;
+  sourceStockCountId?: string | null;
   status: ScrapNoteStatus;
   note?: string;
   createdBy: string;
@@ -51,6 +55,15 @@ export type CreateScrapNoteInput = {
 
 export type RejectScrapNoteInput = {
   rejectReason: string;
+};
+
+export type CreateStockCountScrapInput = {
+  itemBarcode: string;
+  shelfId: string;
+  lotId?: string;
+  quantity: number;
+  reason: string;
+  images?: File[];
 };
 
 export function normalizeScrapNoteListResponse(
@@ -87,6 +100,31 @@ export async function createScrapNote(input: CreateScrapNoteInput) {
 
   const response = await apiClient.post<ApiEnvelope<ScrapNote> | ScrapNote>(
     "/scrap-notes",
+    formData,
+  );
+
+  return unwrapApiData(response.data);
+}
+
+export async function createStockCountScrap({
+  input,
+  itemId,
+  stockCountId,
+}: {
+  input: CreateStockCountScrapInput;
+  itemId: string;
+  stockCountId: string;
+}) {
+  const formData = new FormData();
+  formData.append("itemBarcode", input.itemBarcode);
+  formData.append("shelfId", input.shelfId);
+  if (input.lotId) formData.append("lotId", input.lotId);
+  formData.append("quantity", String(input.quantity));
+  formData.append("reason", input.reason);
+  appendEvidenceImages(formData, input.images);
+
+  const response = await apiClient.post<ApiEnvelope<ScrapNote> | ScrapNote>(
+    `/stock-counts/${encodeURIComponent(stockCountId)}/items/${encodeURIComponent(itemId)}/scrap`,
     formData,
   );
 

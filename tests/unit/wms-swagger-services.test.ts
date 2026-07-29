@@ -57,6 +57,7 @@ import {
 import {
   approveScrapNote,
   createScrapNote,
+  createStockCountScrap,
   listScrapNotes,
   normalizeScrapNoteListResponse,
   rejectScrapNote,
@@ -716,6 +717,17 @@ describe("Swagger-backed WMS services", () => {
       itemId: "item-1",
       stockCountId: "sc-1",
     });
+    await createStockCountScrap({
+      input: {
+        images: [],
+        itemBarcode: "8938500000123",
+        quantity: 2,
+        reason: "Hai thùng bị vỡ",
+        shelfId: "shelf-1",
+      },
+      itemId: "item-1",
+      stockCountId: "sc-1",
+    });
     await approveStockCount("sc-1", { reason: "Duyệt kiểm kê" });
 
     expect(mockedGet).toHaveBeenCalledWith("/stock-counts", {
@@ -741,6 +753,15 @@ describe("Swagger-backed WMS services", () => {
       "/stock-counts/sc-1/items/item-1/count",
       expect.any(FormData),
     );
+    const scrapFromCountBody = mockedPost.mock.calls.find(
+      ([url]) => url === "/stock-counts/sc-1/items/item-1/scrap",
+    )?.[1] as FormData;
+    expect(Object.fromEntries(scrapFromCountBody.entries())).toEqual({
+      itemBarcode: "8938500000123",
+      quantity: "2",
+      reason: "Hai thùng bị vỡ",
+      shelfId: "shelf-1",
+    });
     expect(mockedPost).toHaveBeenCalledWith("/stock-counts/sc-1/approve", {
       reason: "Duyệt kiểm kê",
     });
