@@ -69,7 +69,11 @@ import { EntityDetailDialog } from "@/features/admin-shell/components/entity-det
 import { getApiErrorCode, getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
-import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
+import {
+  businessCodeLabel,
+  statusLabel,
+  statusTone,
+} from "@/lib/wms-ui-labels";
 import { useSessionUser } from "@/hooks/use-session-user";
 
 import {
@@ -592,7 +596,7 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
       </TablePanel>
 
       <EntityDetailDialog
-        description={`ID phiếu nội bộ: ${selectedId}`}
+        description={`Mã phiếu kiểm: ${businessCodeLabel(detail?.stockCountNumber)}`}
         onOpenChange={(open) => {
           if (!open) closeStockCountDetail();
         }}
@@ -795,7 +799,7 @@ function StockCountTable({
     <Table scrollable>
       <TableHeader>
         <TableRow>
-          <TableHead>ID phiếu nội bộ</TableHead>
+          <TableHead>Mã phiếu kiểm</TableHead>
           <TableHead>Khu vực</TableHead>
           <TableHead>Trạng thái</TableHead>
           <TableHead>Số dòng</TableHead>
@@ -816,7 +820,7 @@ function StockCountTable({
               onClick={() => onSelect(item.id)}
             >
               <TableCell className="font-mono font-semibold">
-                {item.id}
+                {businessCodeLabel(item.stockCountNumber)}
               </TableCell>
               <TableCell>{item.zoneId ?? "Toàn kho"}</TableCell>
               <TableCell>
@@ -873,7 +877,7 @@ function StockCountDetail({
     <Card>
       <CardHeader className="border-b bg-muted/20">
         <CardTitle className="text-base">
-          ID phiếu nội bộ: {detail.id}
+          Mã phiếu kiểm: {businessCodeLabel(detail.stockCountNumber)}
         </CardTitle>
         <CardDescription>
           Tạo ngày {formatDate(detail.createdAt)}
@@ -1129,7 +1133,7 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
       </TablePanel>
 
       <EntityDetailDialog
-        description={`ID phiếu nội bộ: ${selectedId}`}
+        description={`Mã phiếu hủy: ${businessCodeLabel(detail?.scrapNoteNumber)}`}
         onOpenChange={(open) => {
           if (!open) closeScrapNoteDetail();
         }}
@@ -1149,6 +1153,9 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
             approvalSourceReady={sourceApprovalReady}
             canApprove={canApprove}
             detail={detail}
+            sourceStockCountNumber={
+              sourceStockCountQuery.data?.stockCountNumber
+            }
             rejectBusy={rejectMutation.isPending}
             rejectReason={rejectReason}
             onApprove={() => approveMutation.mutate(detail.id)}
@@ -1181,7 +1188,7 @@ function ScrapNoteTable({
     <Table scrollable>
       <TableHeader>
         <TableRow>
-          <TableHead>ID phiếu nội bộ</TableHead>
+          <TableHead>Mã phiếu hủy</TableHead>
           <TableHead>Trạng thái</TableHead>
           <TableHead>Số dòng</TableHead>
           <TableHead>Ngày tạo</TableHead>
@@ -1202,7 +1209,7 @@ function ScrapNoteTable({
               onClick={() => onSelect(item.id)}
             >
               <TableCell className="font-mono font-semibold">
-                {item.id}
+                {businessCodeLabel(item.scrapNoteNumber)}
               </TableCell>
               <TableCell>
                 <StatusBadge tone={statusTone(item.status)}>
@@ -1242,6 +1249,7 @@ function ScrapNoteDetail({
   onRejectReasonChange,
   rejectBusy,
   rejectReason,
+  sourceStockCountNumber,
 }: {
   approveBusy: boolean;
   approvalSourceReady: boolean;
@@ -1252,12 +1260,13 @@ function ScrapNoteDetail({
   onRejectReasonChange: (value: string) => void;
   rejectBusy: boolean;
   rejectReason: string;
+  sourceStockCountNumber?: string | null;
 }) {
   return (
     <Card>
       <CardHeader className="border-b bg-muted/20">
         <CardTitle className="text-base">
-          ID phiếu nội bộ: {detail.id}
+          Mã phiếu hủy: {businessCodeLabel(detail.scrapNoteNumber)}
         </CardTitle>
         <CardDescription>
           Tạo ngày {formatDate(detail.createdAt)}
@@ -1277,8 +1286,8 @@ function ScrapNoteDetail({
         {detail.sourceStockCountId ? (
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_2fr]">
             <InfoBox
-              label="ID phiếu kiểm nguồn"
-              value={detail.sourceStockCountId}
+              label="Mã phiếu kiểm nguồn"
+              value={businessCodeLabel(sourceStockCountNumber)}
             />
             {!approvalSourceReady ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">

@@ -33,6 +33,10 @@ const printJobLineStatusLabels: Record<string, string> = {
   PENDING: "Chờ lấy ly",
 };
 
+export function businessCodeLabel(value: string | null | undefined) {
+  return value?.trim() || "Chưa có mã";
+}
+
 export function statusLabel(status: string) {
   return statusLabels[status] ?? status;
 }

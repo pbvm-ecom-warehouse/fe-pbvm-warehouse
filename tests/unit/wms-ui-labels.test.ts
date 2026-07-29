@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  businessCodeLabel,
   printJobLineStatusLabel,
   printJobStatusLabel,
   statusLabel,
@@ -24,5 +25,12 @@ describe("WMS UI labels", () => {
     expect(statusTone("COMPLETED")).toBe("success");
     expect(statusTone("CANCELLED")).toBe("danger");
     expect(statusTone("PENDING")).toBe("info");
+  });
+
+  it("never falls back from a missing business code to an internal id", () => {
+    expect(businessCodeLabel("GI-20260730-0001")).toBe("GI-20260730-0001");
+    expect(businessCodeLabel("  ")).toBe("Chưa có mã");
+    expect(businessCodeLabel(null)).toBe("Chưa có mã");
+    expect(businessCodeLabel(undefined)).toBe("Chưa có mã");
   });
 });

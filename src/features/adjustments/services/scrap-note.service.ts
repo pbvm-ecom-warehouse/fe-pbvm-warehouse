@@ -22,6 +22,7 @@ export type ScrapNoteItem = {
 
 export type ScrapNote = {
   id: string;
+  scrapNoteNumber?: string | null;
   sourceStockCountId?: string | null;
   status: ScrapNoteStatus;
   note?: string;

@@ -17,6 +17,8 @@ export type GoodsIssueItem = {
 export type GoodsIssue = {
   id: string;
   orderId: string;
+  goodsIssueNumber?: string | null;
+  orderCode?: string | null;
   status: GoodsIssueStatus;
   items: GoodsIssueItem[];
   createdAt?: string;

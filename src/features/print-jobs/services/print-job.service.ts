@@ -32,6 +32,8 @@ export type PrintJobItem = {
 export type PrintJob = {
   id: string;
   orderId: string;
+  printJobNumber?: string | null;
+  orderCode?: string | null;
   status: PrintJobStatus;
   confirmedBy?: string | null;
   items: PrintJobItem[];

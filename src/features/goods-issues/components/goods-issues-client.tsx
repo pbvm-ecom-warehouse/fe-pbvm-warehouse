@@ -46,7 +46,11 @@ import { WarehouseOperationWorkspace } from "@/features/warehouse-navigation/com
 import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
-import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
+import {
+  businessCodeLabel,
+  statusLabel,
+  statusTone,
+} from "@/lib/wms-ui-labels";
 import { useSessionUser } from "@/hooks/use-session-user";
 import {
   confirmGoodsIssueLine,
@@ -244,8 +248,8 @@ export function GoodsIssuesClient() {
             <Table scrollable>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID phiếu nội bộ</TableHead>
-                  <TableHead>ID đơn hàng nội bộ</TableHead>
+                  <TableHead>Mã phiếu xuất</TableHead>
+                  <TableHead>Mã đơn hàng</TableHead>
                   <TableHead>Trạng thái</TableHead>
                   <TableHead>Số dòng</TableHead>
                   <TableHead className="text-right">Thao tác</TableHead>
@@ -265,9 +269,11 @@ export function GoodsIssuesClient() {
                       onClick={() => selectIssue(issue)}
                     >
                       <TableCell className="font-mono font-semibold">
-                        {issue.id}
+                        {businessCodeLabel(issue.goodsIssueNumber)}
                       </TableCell>
-                      <TableCell>{issue.orderId}</TableCell>
+                      <TableCell>
+                        {businessCodeLabel(issue.orderCode)}
+                      </TableCell>
                       <TableCell>
                         <StatusBadge tone={statusTone(issue.status)}>
                           {statusLabel(issue.status)}
@@ -297,7 +303,7 @@ export function GoodsIssuesClient() {
         </CardContent>
       </Card>
       <EntityDetailDialog
-        description={`ID phiếu nội bộ: ${selectedIssueId}`}
+        description={`Mã phiếu xuất: ${businessCodeLabel(detail?.goodsIssueNumber)}`}
         onOpenChange={(open) => {
           if (!open) closeIssueDetail();
         }}
@@ -315,7 +321,7 @@ export function GoodsIssuesClient() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <CardTitle className="text-base">
-                      ID đơn hàng nội bộ: {detail.orderId}
+                      Mã đơn hàng: {businessCodeLabel(detail.orderCode)}
                     </CardTitle>
                     <CardDescription className="mt-1">
                       {canPick

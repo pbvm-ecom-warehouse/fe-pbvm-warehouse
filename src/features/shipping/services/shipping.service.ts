@@ -41,6 +41,8 @@ export type Shipment = {
   id: string;
   orderId: string;
   goodsIssueId: string;
+  shipmentNumber?: string | null;
+  orderCode?: string | null;
   carrierId?: string;
   trackingNumber?: string;
   shipmentStatus: ShipmentStatus;

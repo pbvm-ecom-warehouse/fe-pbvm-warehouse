@@ -44,6 +44,7 @@ import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import {
+  businessCodeLabel,
   printJobLineStatusLabel,
   printJobStatusLabel,
   statusTone,
@@ -385,7 +386,7 @@ export function PrintJobsClient() {
       </div>
 
       <EntityDetailDialog
-        description={`ID đơn in nội bộ: ${selectedPrintJobId}`}
+        description={`Mã đơn in: ${businessCodeLabel(detail?.printJobNumber)}`}
         onOpenChange={(open) => {
           if (!open) closePrintJobDetail();
         }}
@@ -605,8 +606,8 @@ function PrintJobTable({
     <Table scrollable>
       <TableHeader>
         <TableRow>
-          <TableHead>ID đơn in nội bộ</TableHead>
-          <TableHead>ID đơn hàng nội bộ</TableHead>
+          <TableHead>Mã đơn in</TableHead>
+          <TableHead>Mã đơn hàng</TableHead>
           <TableHead>Trạng thái</TableHead>
           <TableHead>Số dòng</TableHead>
           <TableHead>Cập nhật</TableHead>
@@ -627,9 +628,9 @@ function PrintJobTable({
               onClick={() => onSelect(printJob)}
             >
               <TableCell className="font-mono font-semibold">
-                {printJob.id}
+                {businessCodeLabel(printJob.printJobNumber)}
               </TableCell>
-              <TableCell>{printJob.orderId}</TableCell>
+              <TableCell>{businessCodeLabel(printJob.orderCode)}</TableCell>
               <TableCell>
                 <StatusBadge tone={statusTone(printJob.status)}>
                   {printJobStatusLabel(printJob.status)}
@@ -671,7 +672,7 @@ function PrintJobDetail({
     <Card>
       <CardHeader className="border-b bg-muted/20">
         <CardTitle className="text-base">
-          ID đơn hàng nội bộ: {detail.orderId}
+          Mã đơn hàng: {businessCodeLabel(detail.orderCode)}
         </CardTitle>
         <CardDescription>{printJobStatusLabel(detail.status)}</CardDescription>
       </CardHeader>

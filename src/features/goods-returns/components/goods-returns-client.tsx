@@ -68,7 +68,11 @@ import { useSessionUser } from "@/hooks/use-session-user";
 import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
-import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
+import {
+  businessCodeLabel,
+  statusLabel,
+  statusTone,
+} from "@/lib/wms-ui-labels";
 
 import {
   cancelGoodsReturn,
@@ -462,7 +466,7 @@ export function GoodsReturnsClient() {
       </div>
 
       <EntityDetailDialog
-        description={`ID phiếu nội bộ: ${selectedReturnId}`}
+        description={`Mã phiếu hoàn: ${businessCodeLabel(detail?.goodsReturnNumber)}`}
         onOpenChange={(open) => {
           if (!open) closeReturnDetail();
         }}
@@ -483,7 +487,8 @@ export function GoodsReturnsClient() {
                   Xử lý phiếu
                 </CardTitle>
                 <CardDescription>
-                  ID nội bộ: {detail.id} · {statusLabel(detail.status)}
+                  Mã phiếu hoàn: {businessCodeLabel(detail.goodsReturnNumber)} ·{" "}
+                  {statusLabel(detail.status)}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -697,8 +702,8 @@ function GoodsReturnTable({
     <Table scrollable>
       <TableHeader>
         <TableRow>
-          <TableHead>ID phiếu nội bộ</TableHead>
-          <TableHead>ID đơn hàng nội bộ</TableHead>
+          <TableHead>Mã phiếu hoàn</TableHead>
+          <TableHead>Mã đơn hàng</TableHead>
           <TableHead>Trạng thái</TableHead>
           <TableHead>Số dòng</TableHead>
           <TableHead>Ngày tạo</TableHead>
@@ -719,9 +724,9 @@ function GoodsReturnTable({
               onClick={() => onSelect(goodsReturn)}
             >
               <TableCell className="font-mono font-semibold">
-                {goodsReturn.id}
+                {businessCodeLabel(goodsReturn.goodsReturnNumber)}
               </TableCell>
-              <TableCell>{goodsReturn.orderId ?? "Không gắn đơn"}</TableCell>
+              <TableCell>{businessCodeLabel(goodsReturn.orderCode)}</TableCell>
               <TableCell>
                 <StatusBadge tone={statusTone(goodsReturn.status)}>
                   {statusLabel(goodsReturn.status)}
@@ -755,9 +760,7 @@ function GoodsReturnDetail({ detail }: { detail: GoodsReturn }) {
     <Card>
       <CardHeader className="border-b bg-muted/20">
         <CardTitle className="text-base">
-          {detail.orderId
-            ? `ID đơn hàng nội bộ: ${detail.orderId}`
-            : "Phiếu hoàn không gắn đơn"}
+          Mã đơn hàng: {businessCodeLabel(detail.orderCode)}
         </CardTitle>
         <CardDescription>{statusLabel(detail.status)}</CardDescription>
       </CardHeader>

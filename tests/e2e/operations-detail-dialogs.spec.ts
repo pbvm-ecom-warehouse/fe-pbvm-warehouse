@@ -45,7 +45,9 @@ async function fulfillEntity(route: Route, entity: { id: string }) {
 
 async function mockOperationsApi(page: Page) {
   const goodsIssue = {
+    goodsIssueNumber: "GI-20260730-0001",
     id: "goods-issue-internal-1",
+    orderCode: "ORD-20260730-0001",
     orderId: "order-internal-1",
     status: "PENDING",
     items: [
@@ -64,6 +66,7 @@ async function mockOperationsApi(page: Page) {
     codAmount: 0,
     goodsIssueId: goodsIssue.id,
     id: "shipment-internal-1",
+    orderCode: goodsIssue.orderCode,
     orderId: goodsIssue.orderId,
     paymentMethod: "ONLINE",
     recipient: {
@@ -72,11 +75,13 @@ async function mockOperationsApi(page: Page) {
       phone: "0901000000",
     },
     shipmentStatus: "PENDING",
+    shipmentNumber: "SHP-20260730-0001",
     statusHistory: [],
   };
   const goodsReturn = {
     createdAt: "2026-07-30T00:00:00.000Z",
     createdBy: "receiver-1",
+    goodsReturnNumber: "RET-20260730-0001",
     id: "goods-return-internal-1",
     items: [
       {
@@ -90,6 +95,7 @@ async function mockOperationsApi(page: Page) {
         sku: "CUP-BLANK-500",
       },
     ],
+    orderCode: goodsIssue.orderCode,
     orderId: goodsIssue.orderId,
     status: "DRAFT",
     updatedAt: "2026-07-30T00:00:00.000Z",
@@ -112,8 +118,29 @@ async function mockOperationsApi(page: Page) {
       },
     ],
     status: "COMPLETED",
+    stockCountNumber: "SC-20260730-0001",
     updatedAt: "2026-07-30T00:00:00.000Z",
     zoneId: null,
+  };
+  const scrapNote = {
+    createdAt: "2026-07-30T00:00:00.000Z",
+    createdBy: "counter-1",
+    id: "scrap-note-internal-1",
+    items: [
+      {
+        images: [],
+        itemId: "stock-count-item-1",
+        lotId: null,
+        quantity: 2,
+        reason: "Hư hỏng",
+        shelfId: "SHELF-A-01",
+        sku: "CUP-BLANK-500",
+      },
+    ],
+    scrapNoteNumber: "SCR-20260730-0001",
+    sourceStockCountId: stockCount.id,
+    status: "DRAFT",
+    updatedAt: "2026-07-30T00:00:00.000Z",
   };
   const printJob = {
     createdAt: "2026-07-30T00:00:00.000Z",
@@ -129,7 +156,9 @@ async function mockOperationsApi(page: Page) {
         sku: "CUP-BLANK-500",
       },
     ],
+    orderCode: goodsIssue.orderCode,
     orderId: goodsIssue.orderId,
+    printJobNumber: "PRN-20260730-0001",
     status: "PENDING",
     updatedAt: "2026-07-30T00:00:00.000Z",
   };
@@ -146,12 +175,9 @@ async function mockOperationsApi(page: Page) {
   await page.route("**/api/wms/stock-counts**", (route) =>
     fulfillEntity(route, stockCount),
   );
-  await page.route("**/api/wms/scrap-notes**", async (route) => {
-    await route.fulfill({
-      body: envelope([], 0),
-      contentType: "application/json",
-    });
-  });
+  await page.route("**/api/wms/scrap-notes**", (route) =>
+    fulfillEntity(route, scrapNote),
+  );
   await page.route("**/api/wms/print-jobs**", (route) =>
     fulfillEntity(route, printJob),
   );
@@ -159,23 +185,40 @@ async function mockOperationsApi(page: Page) {
 
 const screens = [
   {
+    businessCodes: ["GI-20260730-0001", "ORD-20260730-0001"],
     dialogName: "Chi tiết phiếu xuất kho",
+    internalIds: ["goods-issue-internal-1", "order-internal-1"],
     path: "/goods-issues",
   },
   {
+    businessCodes: ["SHP-20260730-0001", "ORD-20260730-0001"],
     dialogName: "Chi tiết vận đơn",
+    internalIds: ["shipment-internal-1", "order-internal-1"],
     path: "/shipping",
   },
   {
+    businessCodes: ["RET-20260730-0001", "ORD-20260730-0001"],
     dialogName: "Chi tiết phiếu hoàn hàng",
+    internalIds: ["goods-return-internal-1", "order-internal-1"],
     path: "/goods-returns",
   },
   {
+    businessCodes: ["SC-20260730-0001"],
     dialogName: "Chi tiết phiếu kiểm kho",
+    internalIds: ["stock-count-internal-1"],
     path: "/adjustments",
   },
   {
+    businessCodes: ["SCR-20260730-0001", "SC-20260730-0001"],
+    dialogName: "Chi tiết phiếu hủy hàng",
+    internalIds: ["scrap-note-internal-1", "stock-count-internal-1"],
+    path: "/adjustments",
+    tabName: "Phiếu hủy",
+  },
+  {
+    businessCodes: ["PRN-20260730-0001", "ORD-20260730-0001"],
     dialogName: "Chi tiết đơn in ly",
+    internalIds: ["print-job-internal-1", "order-internal-1"],
     path: "/print-jobs",
   },
 ] as const;
@@ -194,6 +237,19 @@ for (const viewport of [
 
     for (const screen of screens) {
       await page.goto(screen.path);
+      if ("tabName" in screen) {
+        await page.getByRole("tab", { name: screen.tabName }).click();
+      }
+      for (const code of screen.businessCodes.slice(0, 1)) {
+        await expect(
+          page.getByText(code, { exact: false }).first(),
+        ).toBeVisible();
+      }
+      for (const internalId of screen.internalIds) {
+        await expect(page.getByText(internalId, { exact: false })).toHaveCount(
+          0,
+        );
+      }
       const trigger = page
         .getByRole("button", { name: "Xem chi tiết" })
         .first();
@@ -202,6 +258,16 @@ for (const viewport of [
 
       const dialog = page.getByRole("dialog", { name: screen.dialogName });
       await expect(dialog).toBeVisible();
+      for (const code of screen.businessCodes) {
+        await expect(
+          dialog.getByText(code, { exact: false }).first(),
+        ).toBeVisible();
+      }
+      for (const internalId of screen.internalIds) {
+        await expect(
+          dialog.getByText(internalId, { exact: false }),
+        ).toHaveCount(0);
+      }
       const dialogBox = await dialog.boundingBox();
       expect(dialogBox).not.toBeNull();
       expect(dialogBox!.height).toBeLessThanOrEqual(viewport.height);

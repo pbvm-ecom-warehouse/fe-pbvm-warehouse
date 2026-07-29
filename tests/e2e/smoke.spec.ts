@@ -854,7 +854,9 @@ test("printer can use print jobs but not purchases", async ({ page }) => {
         sku: "CUP-BLANK-500",
       },
     ],
+    orderCode: "ORD-20260704-0001",
     orderId: "order-1",
+    printJobNumber: "PRN-20260704-0001",
     status:
       lineStatus === "PENDING"
         ? "PENDING"
@@ -944,7 +946,9 @@ test("manager can view print jobs without processing controls", async ({
         sku: "CUP-BLANK-500",
       },
     ],
+    orderCode: "ORD-20260704-0001",
     orderId: "order-1",
+    printJobNumber: "PRN-20260704-0001",
     status: "PENDING",
     updatedAt: "2026-07-04T00:00:00.000Z",
   };
@@ -1082,6 +1086,7 @@ test("picker follows the suggested cell and confirms whole-package issue", async
     distanceM: 9,
   };
   const goodsIssue = {
+    goodsIssueNumber: "GI-20260730-0001",
     id: "gi-1",
     items: [
       {
@@ -1093,7 +1098,8 @@ test("picker follows the suggested cell and confirms whole-package issue", async
         unit: "cái",
       },
     ],
-    orderId: "ORD-1",
+    orderCode: "ORD-1",
+    orderId: "order-internal-1",
     status: "PENDING",
   };
   const cell = {
@@ -1273,7 +1279,8 @@ test("shipper assigns a carrier and advances a shipment", async ({ page }) => {
     createdAt: "2026-07-21T00:00:00.000Z",
     goodsIssueId: "issue-1",
     id: "shipment-1",
-    orderId: "ORD-001",
+    orderCode: "ORD-001",
+    orderId: "order-internal-1",
     paymentMethod: "COD",
     recipient: {
       address: { line: "12 Nguyễn Văn Linh", province: "Hồ Chí Minh" },
@@ -1281,6 +1288,7 @@ test("shipper assigns a carrier and advances a shipment", async ({ page }) => {
       phone: "0901000000",
     },
     shipmentStatus,
+    shipmentNumber: "SHP-20260721-0001",
     statusHistory: [],
     trackingNumber,
     updatedAt: "2026-07-21T00:00:00.000Z",
