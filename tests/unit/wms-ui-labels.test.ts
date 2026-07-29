@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   businessCodeLabel,
   printJobLineStatusLabel,
+  printJobStageLabel,
   printJobStatusLabel,
   statusLabel,
   statusTone,
@@ -18,13 +19,17 @@ describe("WMS UI labels", () => {
 
   it("uses print-specific labels", () => {
     expect(printJobStatusLabel("IN_PROGRESS")).toBe("Đang in");
+    expect(printJobStatusLabel("PUTAWAY_PENDING")).toBe("Chờ cất thành phẩm");
     expect(printJobLineStatusLabel("CONSUMED")).toBe("Đã lấy ly");
+    expect(printJobStageLabel("SAMPLE")).toBe("In mẫu");
+    expect(printJobStageLabel("PRODUCTION")).toBe("In chính thức");
   });
 
   it("maps status tones consistently", () => {
     expect(statusTone("COMPLETED")).toBe("success");
     expect(statusTone("CANCELLED")).toBe("danger");
     expect(statusTone("PENDING")).toBe("info");
+    expect(statusTone("PUTAWAY_PENDING")).toBe("info");
   });
 
   it("never falls back from a missing business code to an internal id", () => {

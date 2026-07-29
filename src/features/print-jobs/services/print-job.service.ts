@@ -5,9 +5,12 @@ import { type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
 export const PRINT_JOB_STATUSES = [
   "PENDING",
   "IN_PROGRESS",
+  "PUTAWAY_PENDING",
   "COMPLETED",
   "CANCELLED",
 ] as const;
+
+export const PRINT_JOB_STAGES = ["SAMPLE", "PRODUCTION"] as const;
 
 export const PRINT_JOB_LINE_STATUSES = [
   "PENDING",
@@ -17,15 +20,19 @@ export const PRINT_JOB_LINE_STATUSES = [
 
 export type PrintJobStatus = (typeof PRINT_JOB_STATUSES)[number];
 export type PrintJobLineStatus = (typeof PRINT_JOB_LINE_STATUSES)[number];
+export type PrintJobStage = (typeof PRINT_JOB_STAGES)[number];
 
 export type PrintJobItem = {
+  orderItemId: string;
   inputItemId: string;
   outputItemId: string;
+  outputBarcode?: string | null;
   sku: string;
   designFile?: string | null;
   quantity: number;
   reservedQty: number;
   remainingQty: number;
+  putawayRemainingQty: number;
   lineStatus: PrintJobLineStatus;
 };
 
@@ -34,9 +41,11 @@ export type PrintJob = {
   orderId: string;
   printJobNumber?: string | null;
   orderCode?: string | null;
+  stage: PrintJobStage;
   status: PrintJobStatus;
   confirmedBy?: string | null;
   items: PrintJobItem[];
+  orderDetail?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 };
@@ -54,8 +63,16 @@ export type ConsumePrintJobItemInput = {
 };
 
 export type CompletePrintJobItemInput = {
-  shelfCode: string;
+  shelfCode?: string;
   quantity: number;
+  proofImage?: string;
+};
+
+export type PutawayPrintJobItemInput = {
+  itemBarcode: string;
+  cellBarcode: string;
+  quantity: number;
+  suggestedCellId?: string;
 };
 
 export function normalizePrintJobListResponse(payload: ApiListLike<PrintJob>) {
@@ -114,6 +131,25 @@ export async function completePrintJobItem({
     `/print-jobs/${encodeURIComponent(printJobId)}/items/${encodeURIComponent(
       itemId,
     )}/complete`,
+    input,
+  );
+
+  return unwrapApiData(response.data);
+}
+
+export async function putawayPrintJobItem({
+  input,
+  itemId,
+  printJobId,
+}: {
+  input: PutawayPrintJobItemInput;
+  itemId: string;
+  printJobId: string;
+}) {
+  const response = await apiClient.post<ApiEnvelope<PrintJob> | PrintJob>(
+    `/print-jobs/${encodeURIComponent(printJobId)}/items/${encodeURIComponent(
+      itemId,
+    )}/putaway`,
     input,
   );
 

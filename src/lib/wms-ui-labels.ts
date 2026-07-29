@@ -25,6 +25,12 @@ const printJobStatusLabels: Record<string, string> = {
   COMPLETED: "Hoàn tất",
   IN_PROGRESS: "Đang in",
   PENDING: "Chờ in",
+  PUTAWAY_PENDING: "Chờ cất thành phẩm",
+};
+
+const printJobStageLabels: Record<string, string> = {
+  PRODUCTION: "In chính thức",
+  SAMPLE: "In mẫu",
 };
 
 const printJobLineStatusLabels: Record<string, string> = {
@@ -49,6 +55,10 @@ export function printJobLineStatusLabel(status: string) {
   return printJobLineStatusLabels[status] ?? statusLabel(status);
 }
 
+export function printJobStageLabel(stage: string | null | undefined) {
+  return stage ? (printJobStageLabels[stage] ?? stage) : "Chưa xác định";
+}
+
 export function statusTone(status: string) {
   if (
     [
@@ -71,6 +81,7 @@ export function statusTone(status: string) {
     [
       "DRAFT",
       "PENDING",
+      "PUTAWAY_PENDING",
       "IN_PROGRESS",
       "INSPECTED",
       "PARTIALLY_RECEIVED",

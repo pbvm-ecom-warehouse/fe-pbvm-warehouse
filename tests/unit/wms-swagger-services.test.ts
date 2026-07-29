@@ -46,6 +46,7 @@ import {
   consumePrintJobItem,
   listPrintJobs,
   normalizePrintJobListResponse,
+  putawayPrintJobItem,
 } from "@/features/print-jobs/services/print-job.service";
 import {
   approveStockCount,
@@ -178,7 +179,10 @@ const printJob = {
     {
       inputItemId: "blank-1",
       lineStatus: "PENDING" as const,
+      orderItemId: "order-item-1",
+      outputBarcode: "2000000000015",
       outputItemId: "printed-1",
+      putawayRemainingQty: 0,
       quantity: 10,
       remainingQty: 10,
       reservedQty: 10,
@@ -186,6 +190,7 @@ const printJob = {
     },
   ],
   orderId: "order-1",
+  stage: "PRODUCTION" as const,
   status: "PENDING" as const,
   updatedAt: "2026-07-04T00:00:00.000Z",
 };
@@ -665,7 +670,16 @@ describe("Swagger-backed WMS services", () => {
     await completePrintJobItem({
       input: {
         quantity: 10,
-        shelfCode: "A1-S03",
+      },
+      itemId: "blank-1",
+      printJobId: "pj-1",
+    });
+    await putawayPrintJobItem({
+      input: {
+        cellBarcode: "R01-T1-B1",
+        itemBarcode: "2000000000015",
+        quantity: 10,
+        suggestedCellId: "66a100000000000000000001",
       },
       itemId: "blank-1",
       printJobId: "pj-1",
@@ -690,7 +704,15 @@ describe("Swagger-backed WMS services", () => {
       "/print-jobs/pj-1/items/blank-1/complete",
       {
         quantity: 10,
-        shelfCode: "A1-S03",
+      },
+    );
+    expect(mockedPost).toHaveBeenCalledWith(
+      "/print-jobs/pj-1/items/blank-1/putaway",
+      {
+        cellBarcode: "R01-T1-B1",
+        itemBarcode: "2000000000015",
+        quantity: 10,
+        suggestedCellId: "66a100000000000000000001",
       },
     );
   });

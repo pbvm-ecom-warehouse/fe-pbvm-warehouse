@@ -840,6 +840,7 @@ test("manager sees staff but cannot mutate ADMIN accounts", async ({
 test("printer can use print jobs but not purchases", async ({ page }) => {
   await seedWmsSession(page, ["PRINTER"], "Printer User");
   let lineStatus: "PENDING" | "CONSUMED" | "COMPLETED" = "PENDING";
+  let putawayRemainingQty = 0;
   const printJob = () => ({
     createdAt: "2026-07-04T00:00:00.000Z",
     id: "pj-1",
@@ -847,22 +848,28 @@ test("printer can use print jobs but not purchases", async ({ page }) => {
       {
         inputItemId: "blank-1",
         lineStatus,
+        orderItemId: "order-item-1",
+        outputBarcode: "2000000000015",
         outputItemId: "printed-1",
+        putawayRemainingQty,
         quantity: 10,
         remainingQty: lineStatus === "COMPLETED" ? 0 : 10,
         reservedQty: 10,
-        sku: "CUP-BLANK-500",
+        sku: "CUP-PRINTED-500-DSG042",
       },
     ],
     orderCode: "ORD-20260704-0001",
     orderId: "order-1",
     printJobNumber: "PRN-20260704-0001",
+    stage: "PRODUCTION",
     status:
       lineStatus === "PENDING"
         ? "PENDING"
         : lineStatus === "CONSUMED"
           ? "IN_PROGRESS"
-          : "COMPLETED",
+          : putawayRemainingQty > 0
+            ? "PUTAWAY_PENDING"
+            : "COMPLETED",
     updatedAt: "2026-07-04T00:00:00.000Z",
   });
   const postBodies: unknown[] = [];
@@ -873,7 +880,14 @@ test("printer can use print jobs but not purchases", async ({ page }) => {
 
     if (method === "POST") {
       postBodies.push(route.request().postDataJSON());
-      lineStatus = url.includes("/complete") ? "COMPLETED" : "CONSUMED";
+      if (url.includes("/putaway")) {
+        putawayRemainingQty = 0;
+      } else if (url.includes("/complete")) {
+        lineStatus = "COMPLETED";
+        putawayRemainingQty = 10;
+      } else {
+        lineStatus = "CONSUMED";
+      }
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -892,6 +906,108 @@ test("printer can use print jobs but not purchases", async ({ page }) => {
       }),
     });
   });
+  const path = {
+    distanceM: 8,
+    points: [
+      { xM: 0, yM: 2 },
+      { xM: 8, yM: 5 },
+    ],
+    startGateCode: "GATE-01",
+    targetRackId: "rack-1",
+  };
+  await page.route("**/api/wms/putaway/suggestions**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: {
+          suggestions: [
+            {
+              bay: 1,
+              capacity: 80,
+              cellCode: "R01-T1-B1",
+              cellId: "cell-1",
+              fillPercent: 0,
+              level: 1,
+              path,
+              rackId: "rack-1",
+              reason: "BEST_FIT_VOLUME",
+              shelfCode: "R01-T1",
+            },
+          ],
+        },
+        meta: { requestId: "print-putaway-suggestions" },
+      }),
+    });
+  });
+  await page.route("**/api/wms/location/layout**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: {
+          aisles: [],
+          canvas: { gridM: 1, heightM: 12, widthM: 20 },
+          gates: [{ code: "GATE-01", id: "gate-1", xM: 0, yM: 2 }],
+          id: "single-warehouse-layout",
+          rackTemplate: {
+            bayCount: 1,
+            depthM: 1,
+            heightM: 3,
+            levelCount: 1,
+            widthM: 4,
+          },
+          racks: [
+            {
+              accessPointXM: 8,
+              accessPointYM: 5,
+              code: "R01",
+              id: "rack-1",
+              name: "Kệ R01",
+              rotation: 0,
+              xM: 7,
+              yM: 4,
+              zoneId: "zone-1",
+            },
+          ],
+          revision: 1,
+          shelves: [],
+          status: "PUBLISHED",
+          updatedAt: "2026-07-04T00:00:00.000Z",
+          zones: [],
+        },
+        meta: { requestId: "print-putaway-layout" },
+      }),
+    });
+  });
+  await page.route(
+    "**/api/wms/location/racks/rack-1/cells**",
+    async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: [
+            {
+              barcode: "R01-T1-B1",
+              bay: 1,
+              code: "R01-T1-B1",
+              contents: [],
+              fillPercent: 0,
+              id: "cell-1",
+              innerDepth: 100,
+              innerHeight: 60,
+              innerWidth: 80,
+              level: 1,
+              occupiedVolumeCm3: 0,
+              rackId: "rack-1",
+              shelfId: "shelf-1",
+              status: "ACTIVE",
+              usableVolumeCm3: 480000,
+            },
+          ],
+          meta: { requestId: "print-putaway-cells" },
+        }),
+      });
+    },
+  );
 
   await page.goto("/print-jobs");
   await expect(page.getByRole("heading", { name: /^In ly$/i })).toBeVisible();
@@ -901,7 +1017,7 @@ test("printer can use print jobs but not purchases", async ({ page }) => {
     }),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Xem chi tiết" }).click();
-  await page.getByRole("row", { name: /CUP-BLANK-500/i }).click();
+  await page.getByRole("row", { name: /CUP-PRINTED-500-DSG042/i }).click();
   await page.getByLabel("Mã vạch mặt hàng").fill("2000000000015");
   await page.getByLabel("Mã vị trí").fill("A1-S02");
   await page.getByRole("button", { name: /^Tiêu thụ ly chưa in$/i }).click();
@@ -914,18 +1030,103 @@ test("printer can use print jobs but not purchases", async ({ page }) => {
     shelfCode: "A1-S02",
   });
 
-  await page.getByLabel("Mã vị trí").fill("A1-S03");
-  await page.getByRole("button", { name: /^Xác nhận in xong$/i }).click();
+  await page
+    .getByRole("button", { name: /^Đưa thành phẩm vào khu chờ$/i })
+    .click();
   await expect(page.getByText(/Đã xác nhận in xong/i)).toBeVisible();
   expect(postBodies[1]).toMatchObject({
     quantity: 10,
-    shelfCode: "A1-S03",
+  });
+  expect(postBodies[1]).not.toHaveProperty("shelfCode");
+
+  await expect(
+    page.getByText("Hướng dẫn cất hàng", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /R01-T1-B1/i }).click();
+  await expect(
+    page.getByRole("button", { name: "Mở bản đồ kho" }),
+  ).toBeEnabled();
+  await page.getByRole("button", { name: "Mở bản đồ kho" }).click();
+  await page.getByRole("button", { name: "Xem mặt kệ R01" }).click();
+  await page
+    .getByRole("button", { name: /R01-T1-B1/i })
+    .last()
+    .click();
+  await page.getByRole("button", { name: "Chọn khoang và quét mã" }).click();
+  const scanner = page.getByRole("dialog", { name: "Quét xác nhận vị trí" });
+  await scanner.getByLabel("Mã vạch mặt hàng").fill("2000000000015");
+  await scanner.getByRole("button", { name: "Xác nhận cất hàng" }).click();
+  await expect(page.getByText("Đã cất thành phẩm vào khoang.")).toBeVisible();
+  expect(postBodies[2]).toMatchObject({
+    cellBarcode: "R01-T1-B1",
+    itemBarcode: "2000000000015",
+    quantity: 10,
+    suggestedCellId: "cell-1",
   });
 
   await page.goto("/purchase-orders");
   await expect(
     page.getByRole("heading", { name: /Không có quyền truy cập/i }),
   ).toBeVisible();
+});
+
+test("printer submits proof before completing a sample print", async ({
+  page,
+}) => {
+  await seedWmsSession(page, ["PRINTER"], "Printer User");
+  let completeBody: Record<string, unknown> | undefined;
+  const printJob = {
+    createdAt: "2026-07-04T00:00:00.000Z",
+    id: "pj-sample-1",
+    items: [
+      {
+        inputItemId: "blank-1",
+        lineStatus: "CONSUMED",
+        orderItemId: "order-item-1",
+        outputBarcode: "2000000000015",
+        outputItemId: "printed-1",
+        putawayRemainingQty: 0,
+        quantity: 1,
+        remainingQty: 0,
+        reservedQty: 1,
+        sku: "CUP-PRINTED-500-DSG042",
+      },
+    ],
+    orderCode: "ORD-20260704-0001",
+    orderId: "order-1",
+    printJobNumber: "PRN-20260704-0002",
+    stage: "SAMPLE",
+    status: "IN_PROGRESS",
+    updatedAt: "2026-07-04T00:00:00.000Z",
+  };
+
+  await page.route("**/api/wms/print-jobs**", async (route) => {
+    if (route.request().method() === "POST") {
+      completeBody = route.request().postDataJSON();
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: route.request().url().includes("/print-jobs/pj-sample-1")
+          ? printJob
+          : [printJob],
+        meta: { requestId: "print-job-sample" },
+      }),
+    });
+  });
+
+  await page.goto("/print-jobs");
+  await page.getByRole("button", { name: "Xem chi tiết" }).click();
+  await page.getByRole("row", { name: /CUP-PRINTED-500-DSG042/i }).click();
+  await page
+    .getByLabel("Đường dẫn ảnh minh chứng")
+    .fill("https://cdn.example.com/proof/sample-1.jpg");
+  await page.getByRole("button", { name: "Hoàn tất bản mẫu" }).click();
+
+  expect(completeBody).toEqual({
+    proofImage: "https://cdn.example.com/proof/sample-1.jpg",
+    quantity: 1,
+  });
 });
 
 test("manager can view print jobs without processing controls", async ({
@@ -939,16 +1140,20 @@ test("manager can view print jobs without processing controls", async ({
       {
         inputItemId: "blank-1",
         lineStatus: "PENDING",
+        orderItemId: "order-item-1",
+        outputBarcode: "2000000000015",
         outputItemId: "printed-1",
+        putawayRemainingQty: 0,
         quantity: 10,
         remainingQty: 10,
         reservedQty: 10,
-        sku: "CUP-BLANK-500",
+        sku: "CUP-PRINTED-500-DSG042",
       },
     ],
     orderCode: "ORD-20260704-0001",
     orderId: "order-1",
     printJobNumber: "PRN-20260704-0001",
+    stage: "PRODUCTION",
     status: "PENDING",
     updatedAt: "2026-07-04T00:00:00.000Z",
   };
@@ -969,7 +1174,7 @@ test("manager can view print jobs without processing controls", async ({
   await expect(page.getByRole("heading", { name: /^In ly$/i })).toBeVisible();
   await page.getByRole("button", { name: "Xem chi tiết" }).click();
   await expect(
-    page.getByRole("cell", { name: /^CUP-BLANK-500$/i }),
+    page.getByRole("cell", { name: /^CUP-PRINTED-500-DSG042$/i }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: /^Tiêu thụ ly chưa in$/i }),
