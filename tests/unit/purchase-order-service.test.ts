@@ -32,7 +32,7 @@ const purchaseOrder = {
   ],
   orderDate: "2026-07-03T00:00:00.000Z",
   poNumber: "PO-0001",
-  status: "DRAFT" as const,
+  status: "CONFIRMED" as const,
   supplierId: "sup-1",
   updatedAt: "2026-07-03T00:00:00.000Z",
 };
@@ -74,7 +74,7 @@ describe("purchase order API service", () => {
       listPurchaseOrders({
         limit: 20,
         page: 1,
-        status: "DRAFT",
+        status: "CONFIRMED",
         supplierId: "sup-1",
       }),
     ).resolves.toMatchObject({ data: [purchaseOrder], total: 1 });
@@ -83,7 +83,7 @@ describe("purchase order API service", () => {
       params: {
         limit: 20,
         page: 1,
-        status: "DRAFT",
+        status: "CONFIRMED",
         supplierId: "sup-1",
       },
     });
