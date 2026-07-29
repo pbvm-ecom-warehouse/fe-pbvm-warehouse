@@ -214,7 +214,7 @@
   - Removed `Mã phiếu` (putaway task ObjectId) column from `PutawayTaskTable`; the first column is now `Mã phiếu nhập` displaying the resolved GRN number (`GRN-20260723-0001`) instead of a raw MongoDB ObjectId.
   - Removed `Kho` column from both `PutawayTaskTable` and `PutawayTaskDetail` because WMS v1 operates a single warehouse.
   - The `Vị trí cất hàng` sidebar and `Xác nhận cất hàng` card are conditionally rendered: hidden when no item is selected, displayed when a detail item is clicked. The grid layout adapts from single-column to two-column dynamically via `cn()`.
-  - `PutawayTaskDetail` now shows a guidance line: *"Nhấp vào một dòng hàng để xem gợi ý vị trí cất"*. Selected item row has `border-l-4 border-l-primary` highlight.
+  - `PutawayTaskDetail` now shows a guidance line: _"Nhấp vào một dòng hàng để xem gợi ý vị trí cất"_. Selected item row has `border-l-4 border-l-primary` highlight.
   - SKU and Lot Number resolution from ObjectId:
     - Added `isMongoObjectId()` helper to detect 24-char hex strings.
     - Added `resolveItemSku(item, grn, warehouseItemMap)` with fallback chain: `item.sku` → GRN item SKU → warehouse item SKU/name → formatted suffix `SKU-<last6>`.
@@ -235,3 +235,12 @@
   - Fixed TypeError in `receivingPurchaseOrders` query where mapping crashed when `po.items` was undefined.
   - Git workflow: Committed changes on `fix/issue-28-packaging-sku-template`, pushed, and merged into `main` with `--no-ff` without `-f`.
   - Verification passed: unit tests (`10/10` tests passed) and updated E2E smoke tests.
+- 2026-07-30: Printer production-output putaway and print-job detail compact:
+  - `/print-jobs` keeps the internally scrollable job list and opens job/line information in the existing detail dialog instead of expanding content below the list.
+  - Print jobs expose their `SAMPLE` or `PRODUCTION` stage. Sample completion requires an evidence-image URL and sends `proofImage`; production completion only moves printed output to the staging area.
+  - Production output is identified by the backend-issued finished-good SKU and barcode. The UI labels it `SKU thành phẩm`, renders the CODE128 barcode, and never asks the operator to invent a new code.
+  - A production job in `PUTAWAY_PENDING` reuses the existing 2D warehouse suggestion workspace: choose the suggested rack/cell, scan both finished-good barcode and cell barcode, then call `POST /print-jobs/:id/items/:itemId/putaway`.
+  - The job remains pending while any finished quantity is not stored; successful putaway invalidates list/detail/suggestion queries and reloads current state.
+  - Printer mutations remain hidden from Manager/Admin view-only sessions.
+  - Scope-specific verification passed before merge: TypeScript, ESLint (only the existing unrelated `img` warnings), 188 unit tests, production build, Printer production staging/putaway E2E, sample-proof E2E, Manager view-only E2E, and responsive operation-detail dialogs at 390/768/1440 widths.
+  - The full E2E audit also found a pre-existing purchase-list crash when `purchaseOrder.items` is absent plus stale selectors in unrelated legacy scenarios; these are tracked and fixed separately rather than mixed into FE issue `#32`.

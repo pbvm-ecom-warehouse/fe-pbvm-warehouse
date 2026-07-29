@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Barcode as InternalBarcode } from "@/components/barcode";
 import {
   Card,
   CardContent,
@@ -40,12 +41,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getApiErrorMessage } from "@/lib/api-contract";
+import { getApiErrorCode, getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import {
   businessCodeLabel,
   printJobLineStatusLabel,
+  printJobStageLabel,
   printJobStatusLabel,
   statusTone,
 } from "@/lib/wms-ui-labels";
@@ -64,10 +66,13 @@ import {
   getPrintJob,
   listPrintJobs,
   PRINT_JOB_STATUSES,
+  putawayPrintJobItem,
   type PrintJob,
   type PrintJobItem,
   type PrintJobStatus,
 } from "../services/print-job.service";
+import { WarehouseOperationWorkspace } from "@/features/warehouse-navigation/components/warehouse-operation-workspace";
+import { listPutawaySuggestionResult } from "@/features/warehouse-navigation/services/putaway-navigation.service";
 
 const PAGE_SIZE = 20;
 
@@ -84,8 +89,8 @@ const defaultConsumeForm = {
 };
 
 const defaultCompleteForm = {
+  proofImage: "",
   quantity: "1",
-  shelfCode: "",
 };
 
 function formatError(error: unknown) {
@@ -173,8 +178,29 @@ export function PrintJobsClient() {
   });
   const detail = detailQuery.data ?? selectedPrintJob;
   const selectedItem = selectedItemId
-    ? detail?.items.find((item) => item.inputItemId === selectedItemId)
+    ? detail?.items.find((item) => item.outputItemId === selectedItemId)
     : undefined;
+  const putawayRemainingQty = selectedItem?.putawayRemainingQty ?? 0;
+
+  const putawaySuggestionsQuery = useQuery({
+    enabled:
+      canProcessPrintJobs &&
+      detail?.stage === "PRODUCTION" &&
+      detail.status === "PUTAWAY_PENDING" &&
+      putawayRemainingQty > 0,
+    queryFn: () =>
+      listPutawaySuggestionResult({
+        packageCount: Math.max(1, putawayRemainingQty),
+        sku: selectedItem!.sku,
+      }),
+    queryKey: [
+      "print-jobs",
+      "putaway-suggestions",
+      activePrintJobId,
+      selectedItem?.outputItemId ?? "none",
+      putawayRemainingQty,
+    ],
+  });
 
   const consumeMutation = useMutation({
     mutationFn: () =>
@@ -200,7 +226,9 @@ export function PrintJobsClient() {
       completePrintJobItem({
         input: {
           quantity: parsePositiveNumber(completeForm.quantity),
-          shelfCode: completeForm.shelfCode.trim(),
+          ...(detail?.stage === "SAMPLE" && completeForm.proofImage.trim()
+            ? { proofImage: completeForm.proofImage.trim() }
+            : {}),
         },
         itemId: selectedItem?.inputItemId ?? "",
         printJobId: activePrintJobId,
@@ -210,6 +238,51 @@ export function PrintJobsClient() {
       setCompleteForm(defaultCompleteForm);
       void queryClient.invalidateQueries({ queryKey: ["print-jobs"] });
       toast.success("Đã xác nhận in xong");
+    },
+  });
+
+  const putawayMutation = useMutation({
+    mutationFn: (input: {
+      itemBarcode: string;
+      cellBarcode: string;
+      quantity: number;
+      suggestedCellId?: string;
+    }) =>
+      putawayPrintJobItem({
+        input,
+        itemId: selectedItem?.inputItemId ?? "",
+        printJobId: activePrintJobId,
+      }),
+    onError: async (error) => {
+      const code = getApiErrorCode(error);
+      const messages: Partial<Record<string, string>> = {
+        PRINT_JOB_ITEM_MISMATCH:
+          "Barcode vừa quét không thuộc thành phẩm của dòng in này.",
+        PRINT_JOB_PUTAWAY_DIMENSIONS_REQUIRED:
+          "Thành phẩm chưa có đủ kích thước để kiểm tra khoang cất.",
+        PUTAWAY_CELL_CAPACITY_EXCEEDED:
+          "Khoang vừa hết chỗ. Hệ thống đang tải lại gợi ý.",
+      };
+      toast.error(
+        (code && messages[code]) ||
+          getApiErrorMessage(error) ||
+          "Không thể cất thành phẩm in.",
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["print-jobs"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["warehouse-operation", "rack-cells"],
+        }),
+      ]);
+    },
+    onSuccess: async () => {
+      toast.success("Đã cất thành phẩm vào khoang.");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["print-jobs"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["warehouse-operation", "rack-cells"],
+        }),
+      ]);
     },
   });
 
@@ -226,15 +299,15 @@ export function PrintJobsClient() {
   }
 
   function handleSelectItem(item: PrintJobItem) {
-    setSelectedItemId(item.inputItemId);
+    setSelectedItemId(item.outputItemId);
     setConsumeForm({
       itemBarcode: "",
       quantity: String(Math.max(1, item.remainingQty)),
       shelfCode: "",
     });
     setCompleteForm({
+      proofImage: "",
       quantity: String(Math.max(1, item.reservedQty || item.quantity)),
-      shelfCode: "",
     });
   }
 
@@ -259,8 +332,12 @@ export function PrintJobsClient() {
   function handleComplete(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!selectedItem || !completeForm.shelfCode) {
-      toast.error("Cần quét mã vị trí nhập ly đã in.");
+    if (!selectedItem) {
+      toast.error("Hãy chọn một dòng in cần hoàn tất.");
+      return;
+    }
+    if (detail?.stage === "SAMPLE" && !completeForm.proofImage.trim()) {
+      toast.error("Lệnh in mẫu cần đường dẫn ảnh minh chứng.");
       return;
     }
 
@@ -349,7 +426,7 @@ export function PrintJobsClient() {
             </form>
 
             {printJobsQuery.isLoading ? (
-              <TableSkeleton columns={5} />
+              <TableSkeleton columns={7} />
             ) : (
               <PrintJobTable
                 printJobs={printJobs}
@@ -408,7 +485,7 @@ export function PrintJobsClient() {
           >
             <PrintJobDetail
               detail={detail}
-              selectedItemId={selectedItem?.inputItemId ?? ""}
+              selectedItemId={selectedItem?.outputItemId ?? ""}
               onSelectItem={handleSelectItem}
             />
             {selectedItem ? (
@@ -423,6 +500,10 @@ export function PrintJobsClient() {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <InfoBox
+                      label="Giai đoạn"
+                      value={printJobStageLabel(detail.stage)}
+                    />
+                    <InfoBox
                       label="Trạng thái dòng"
                       value={printJobLineStatusLabel(selectedItem.lineStatus)}
                     />
@@ -430,6 +511,20 @@ export function PrintJobsClient() {
                       label="Số lượng còn xử lý"
                       value={selectedItem.remainingQty.toLocaleString("vi-VN")}
                     />
+                    {putawayRemainingQty > 0 ? (
+                      <InfoBox
+                        label="Còn ở khu chờ cất"
+                        value={putawayRemainingQty.toLocaleString("vi-VN")}
+                      />
+                    ) : null}
+                    {selectedItem.outputBarcode ? (
+                      <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
+                        <div className="mb-2 text-xs text-muted-foreground">
+                          Mã vạch thành phẩm
+                        </div>
+                        <InternalBarcode value={selectedItem.outputBarcode} />
+                      </div>
+                    ) : null}
                     {selectedItem.designFile ? (
                       <InfoBox
                         label="File thiết kế"
@@ -521,22 +616,27 @@ export function PrintJobsClient() {
                         Xác nhận in xong
                       </CardTitle>
                       <CardDescription>
-                        Quét mã vị trí nhập ly đã in và nhập số lượng hoàn tất.
+                        {detail.stage === "SAMPLE"
+                          ? "Nhập ảnh minh chứng để gửi bản mẫu về đơn hàng."
+                          : "Xác nhận số lượng đã in; thành phẩm sẽ vào khu chờ cất."}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <form className="space-y-3" onSubmit={handleComplete}>
-                        <TextField
-                          id="print-complete-shelf"
-                          label="Mã vị trí"
-                          value={completeForm.shelfCode}
-                          onChange={(shelfCode) =>
-                            setCompleteForm((current) => ({
-                              ...current,
-                              shelfCode,
-                            }))
-                          }
-                        />
+                        {detail.stage === "SAMPLE" ? (
+                          <TextField
+                            id="print-complete-proof"
+                            label="Đường dẫn ảnh minh chứng"
+                            type="url"
+                            value={completeForm.proofImage}
+                            onChange={(proofImage) =>
+                              setCompleteForm((current) => ({
+                                ...current,
+                                proofImage,
+                              }))
+                            }
+                          />
+                        ) : null}
                         <TextField
                           id="print-complete-qty"
                           label="Số lượng"
@@ -566,14 +666,17 @@ export function PrintJobsClient() {
                           ) : (
                             <Save data-icon="inline-start" />
                           )}
-                          Xác nhận in xong
+                          {detail.stage === "SAMPLE"
+                            ? "Hoàn tất bản mẫu"
+                            : "Đưa thành phẩm vào khu chờ"}
                         </Button>
                       </form>
                     </CardContent>
                   </Card>
                 ) : null}
 
-                {selectedItem.lineStatus === "COMPLETED" ? (
+                {selectedItem.lineStatus === "COMPLETED" &&
+                !(detail.stage === "PRODUCTION" && putawayRemainingQty > 0) ? (
                   <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-primary">
                     Dòng này đã hoàn tất.
                   </div>
@@ -585,6 +688,32 @@ export function PrintJobsClient() {
                   </div>
                 ) : null}
               </aside>
+            ) : null}
+            {selectedItem &&
+            canProcessPrintJobs &&
+            detail.stage === "PRODUCTION" &&
+            detail.status === "PUTAWAY_PENDING" &&
+            putawayRemainingQty > 0 ? (
+              <div className="xl:col-span-2">
+                <WarehouseOperationWorkspace
+                  key={selectedItem.outputItemId}
+                  operation="PUTAWAY"
+                  pending={putawayMutation.isPending}
+                  remainingPackageCount={putawayRemainingQty}
+                  sku={selectedItem.sku}
+                  suggestions={putawaySuggestionsQuery.data?.suggestions ?? []}
+                  suggestionsError={putawaySuggestionsQuery.error}
+                  suggestionsLoading={putawaySuggestionsQuery.isLoading}
+                  onConfirm={async (input) => {
+                    await putawayMutation.mutateAsync({
+                      itemBarcode: input.itemBarcode,
+                      cellBarcode: input.cellBarcode,
+                      quantity: input.quantity,
+                      suggestedCellId: input.suggestedCellId,
+                    });
+                  }}
+                />
+              </div>
             ) : null}
           </div>
         ) : null}
@@ -608,6 +737,7 @@ function PrintJobTable({
         <TableRow>
           <TableHead>Mã đơn in</TableHead>
           <TableHead>Mã đơn hàng</TableHead>
+          <TableHead>Giai đoạn</TableHead>
           <TableHead>Trạng thái</TableHead>
           <TableHead>Số dòng</TableHead>
           <TableHead>Cập nhật</TableHead>
@@ -616,7 +746,7 @@ function PrintJobTable({
       </TableHeader>
       <TableBody>
         {printJobs.length === 0 ? (
-          <EmptyRow colSpan={6} label="Chưa có đơn in ly cần xử lý." />
+          <EmptyRow colSpan={7} label="Chưa có đơn in ly cần xử lý." />
         ) : (
           printJobs.map((printJob) => (
             <TableRow
@@ -631,6 +761,7 @@ function PrintJobTable({
                 {businessCodeLabel(printJob.printJobNumber)}
               </TableCell>
               <TableCell>{businessCodeLabel(printJob.orderCode)}</TableCell>
+              <TableCell>{printJobStageLabel(printJob.stage)}</TableCell>
               <TableCell>
                 <StatusBadge tone={statusTone(printJob.status)}>
                   {printJobStatusLabel(printJob.status)}
@@ -674,13 +805,16 @@ function PrintJobDetail({
         <CardTitle className="text-base">
           Mã đơn hàng: {businessCodeLabel(detail.orderCode)}
         </CardTitle>
-        <CardDescription>{printJobStatusLabel(detail.status)}</CardDescription>
+        <CardDescription>
+          {printJobStageLabel(detail.stage)} ·{" "}
+          {printJobStatusLabel(detail.status)}
+        </CardDescription>
       </CardHeader>
       <CardContent className="pt-4">
         <Table scrollable>
           <TableHeader>
             <TableRow>
-              <TableHead>SKU ly nền</TableHead>
+              <TableHead>SKU thành phẩm</TableHead>
               <TableHead>Số lượng</TableHead>
               <TableHead>Đã giữ</TableHead>
               <TableHead>Còn lại</TableHead>
@@ -695,7 +829,7 @@ function PrintJobDetail({
                 <TableRow
                   className={cn(
                     "cursor-pointer",
-                    selectedItemId === item.inputItemId && "bg-primary/5",
+                    selectedItemId === item.outputItemId && "bg-primary/5",
                   )}
                   key={`${item.inputItemId}-${item.outputItemId}`}
                   onClick={() => onSelectItem(item)}
