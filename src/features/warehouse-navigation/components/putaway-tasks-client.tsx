@@ -131,6 +131,9 @@ export function PutawayTasksClient() {
       )
     : workItems;
   const selected = workItems.find((item) => item.key === selectedKey);
+  const selectedSku = selected?.sku;
+  const selectedLotNumber = selected?.lotNumber;
+  const selectedExpiryDate = selected?.expiryDate;
   const receiptsLoading = receiptQueries.some((query) => query.isLoading);
   const firstReceiptError = receiptQueries.find((query) => query.error)?.error;
   const selectedStatus = selected?.taskStatus ?? "PENDING";
@@ -162,39 +165,37 @@ export function PutawayTasksClient() {
       queryFn: () => listRackCells(rack.id),
     })),
   });
-  const completedMatches = useMemo(() => {
-    if (!selected || !isCompletedDetail) return [];
+  const completedMatches =
+    selectedSku && isCompletedDetail
+      ? completedRackCellQueries.flatMap((query) =>
+          (query.data ?? []).flatMap((cell) => {
+            const matchedContents = cell.contents.filter((content) => {
+              const sameSku = content.sku === selectedSku;
+              const sameLot = selectedLotNumber
+                ? content.lotNumber === selectedLotNumber
+                : true;
+              return sameSku && sameLot;
+            });
 
-    return completedRackCellQueries.flatMap((query) =>
-      (query.data ?? []).flatMap((cell) => {
-        const matchedContents = cell.contents.filter((content) => {
-          const sameSku = content.sku === selected.sku;
-          const sameLot = selected.lotNumber
-            ? content.lotNumber === selected.lotNumber
-            : true;
-          return sameSku && sameLot;
-        });
+            if (matchedContents.length === 0) {
+              return [];
+            }
 
-        if (matchedContents.length === 0) {
-          return [];
-        }
-
-        return [
-          {
-            cell,
-            matchedQuantity: matchedContents.reduce(
-              (total, content) => total + content.quantity,
-              0,
-            ),
-          },
-        ];
-      }),
-    );
-  }, [completedRackCellQueries, isCompletedDetail, selected]);
-  const completedRackIds = useMemo(
-    () => [...new Set(completedMatches.map((match) => match.cell.rackId))],
-    [completedMatches],
-  );
+            return [
+              {
+                cell,
+                matchedQuantity: matchedContents.reduce(
+                  (total, content) => total + content.quantity,
+                  0,
+                ),
+              },
+            ];
+          }),
+        )
+      : [];
+  const completedRackIds = [
+    ...new Set(completedMatches.map((match) => match.cell.rackId)),
+  ];
   const completedPathQueries = useQueries({
     queries: completedRackIds.map((rackId) => ({
       enabled: canView && isCompletedDetail,
@@ -202,43 +203,34 @@ export function PutawayTasksClient() {
       queryFn: () => getNavigationPath(rackId),
     })),
   });
-  const completedPathsByRackId = useMemo(
-    () =>
-      new Map(
-        completedRackIds.map((rackId, index) => [
-          rackId,
-          completedPathQueries[index]?.data,
-        ]),
-      ),
-    [completedPathQueries, completedRackIds],
+  const completedPathsByRackId = new Map(
+    completedRackIds.map((rackId, index) => [
+      rackId,
+      completedPathQueries[index]?.data,
+    ]),
   );
-  const completedSuggestions = useMemo(
-    () => {
-      const suggestions = completedMatches.flatMap((match) => {
-        const path = completedPathsByRackId.get(match.cell.rackId);
-        if (!path) return [];
+  const completedSuggestions = completedMatches
+    .flatMap((match) => {
+      const path = completedPathsByRackId.get(match.cell.rackId);
+      if (!path) return [];
 
-        return [
-          {
-            cellId: match.cell.id,
-            cellCode: match.cell.code,
-            rackId: match.cell.rackId,
-            level: match.cell.level,
-            bay: match.cell.bay,
-            path,
-            quantity: match.matchedQuantity,
-            fillPercent: match.cell.fillPercent,
-            reason: `Đã cất tại đây · ${match.matchedQuantity} thùng`,
-            lotNumber: selected?.lotNumber ?? null,
-            expiryDate: selected?.expiryDate ?? null,
-          },
-        ];
-      });
-
-      return suggestions.sort((left, right) => left.path.distanceM - right.path.distanceM);
-    },
-    [completedMatches, completedPathsByRackId, selected],
-  );
+      return [
+        {
+          cellId: match.cell.id,
+          cellCode: match.cell.code,
+          rackId: match.cell.rackId,
+          level: match.cell.level,
+          bay: match.cell.bay,
+          path,
+          quantity: match.matchedQuantity,
+          fillPercent: match.cell.fillPercent,
+          reason: `Đã cất tại đây · ${match.matchedQuantity} thùng`,
+          lotNumber: selectedLotNumber ?? null,
+          expiryDate: selectedExpiryDate ?? null,
+        },
+      ];
+    })
+    .sort((left, right) => left.path.distanceM - right.path.distanceM);
 
   const confirmMutation = useMutation({
     mutationFn: async (input: {

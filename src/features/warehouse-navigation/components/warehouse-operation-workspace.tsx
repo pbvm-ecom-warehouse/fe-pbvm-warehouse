@@ -23,6 +23,7 @@ import {
 import { fetchWarehouseLayout } from "@/features/warehouse-layout/services/warehouse-layout.service";
 import { getApiErrorMessage } from "@/lib/api-contract";
 import { cn } from "@/lib/utils";
+import { formatDateTime } from "@/utils/format-date";
 import type { NavigationPath } from "../services/putaway-navigation.service";
 import {
   getNavigationPath,
@@ -56,6 +57,11 @@ const reasonLabels: Record<string, string> = {
   SAME_SKU_CELL: "Đã có cùng SKU",
   BEST_FIT_VOLUME: "Vừa thể tích nhất",
 };
+
+function formatDateOnly(value?: string | null) {
+  if (!value) return "";
+  return formatDateTime(value).split(" ")[0];
+}
 
 export function WarehouseOperationWorkspace({
   operation,
@@ -228,7 +234,7 @@ export function WarehouseOperationWorkspace({
             {suggestions.length > 0 ? (
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                 {suggestions.map((suggestion) => (
-                  <button
+                  <div
                     key={`${suggestion.cellId}-${suggestion.lotNumber ?? "none"}`}
                     className={cn(
                       "rounded-xl border p-4 text-left transition hover:border-blue-400 hover:bg-blue-50/70",
@@ -236,47 +242,73 @@ export function WarehouseOperationWorkspace({
                         ? "border-primary bg-primary/5 shadow-[0_16px_36px_-30px_rgba(29,78,216,0.4)]"
                         : "bg-white",
                     )}
-                    onClick={() => chooseSuggestion(suggestion)}
-                    type="button"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-mono text-sm font-bold">
-                          {suggestion.cellCode}
+                    <button
+                      className="block w-full text-left"
+                      onClick={() => chooseSuggestion(suggestion)}
+                      type="button"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-mono text-sm font-bold">
+                            {suggestion.cellCode}
+                          </div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            Tầng {suggestion.level} · Khoang {suggestion.bay}
+                          </div>
                         </div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          Tầng {suggestion.level} · Khoang {suggestion.bay}
-                        </div>
+                        <Badge
+                          className="shrink-0 rounded-md px-2 py-0.5 text-[11px]"
+                          variant={
+                            selectedCellId === suggestion.cellId
+                              ? "default"
+                              : "secondary"
+                          }
+                        >
+                          {suggestion.path.distanceM.toLocaleString("vi-VN")} m
+                        </Badge>
                       </div>
-                      <Badge
-                        className="shrink-0 rounded-md px-2 py-0.5 text-[11px]"
-                        variant={
-                          selectedCellId === suggestion.cellId
-                            ? "default"
-                            : "secondary"
-                        }
-                      >
-                        {suggestion.path.distanceM.toLocaleString("vi-VN")} m
-                      </Badge>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-1.5 text-[11px]">
-                      {typeof suggestion.quantity === "number" ? (
-                        <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700">
-                          {suggestion.quantity} thùng
-                        </span>
-                      ) : null}
-                      {suggestion.lotNumber ? (
-                        <span className="rounded-full bg-muted px-2 py-1 text-muted-foreground">
-                          Lô {suggestion.lotNumber}
-                        </span>
-                      ) : null}
-                      {suggestion.expiryDate ? (
-                        <span className="rounded-full bg-muted px-2 py-1 text-muted-foreground">
-                          HSD {suggestion.expiryDate}
-                        </span>
-                      ) : null}
-                    </div>
-                  </button>
+                      <div className="mt-3 flex flex-wrap gap-1.5 text-[11px]">
+                        {typeof suggestion.quantity === "number" ? (
+                          <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700">
+                            {suggestion.quantity} thùng
+                          </span>
+                        ) : null}
+                        {suggestion.lotNumber ? (
+                          <span className="rounded-full bg-muted px-2 py-1 text-muted-foreground">
+                            Lô {suggestion.lotNumber}
+                          </span>
+                        ) : null}
+                        {suggestion.expiryDate ? (
+                          <span className="rounded-full bg-muted px-2 py-1 text-muted-foreground">
+                            HSD {formatDateOnly(suggestion.expiryDate)}
+                          </span>
+                        ) : null}
+                      </div>
+                    </button>
+                    <Button
+                      className="mt-3 w-full"
+                      disabled={
+                        !layoutQuery.data?.racks.some(
+                          (rack) => rack.id === suggestion.rackId,
+                        )
+                      }
+                      onClick={() => {
+                        setChosenRackId(suggestion.rackId);
+                        setChosenCellId(suggestion.cellId);
+                        setMapOpen(true);
+                      }}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      <Map data-icon="inline-start" />
+                      Xem bản đồ{" "}
+                      {layoutQuery.data?.racks.find(
+                        (rack) => rack.id === suggestion.rackId,
+                      )?.code ?? suggestion.rackId}
+                    </Button>
+                  </div>
                 ))}
               </div>
             ) : null}
@@ -284,115 +316,142 @@ export function WarehouseOperationWorkspace({
         </Card>
       ) : null}
       {!readOnly ? (
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b bg-muted/20">
-          <CardTitle className="flex items-center justify-between gap-3 text-base">
-            <span className="flex items-center gap-2">
-              <MapPinned className="size-4 text-primary" />
-              {operation === "PUTAWAY"
-                ? "Hướng dẫn cất hàng"
-                : "Hướng dẫn lấy hàng"}
-            </span>
-            <Badge className="font-mono" variant="secondary">
-              {sku} · còn {remainingPackageCount} thùng
-            </Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 pt-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <Route className="size-4 text-primary" />
-              Vị trí đề xuất
-            </div>
-            <Button
-              disabled={!layoutQuery.data}
-              onClick={() => setMapOpen(true)}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              <Map data-icon="inline-start" />
-              Mở bản đồ kho
-            </Button>
-          </div>
-          {suggestionsLoading ? (
-            <div className="text-sm text-muted-foreground">
-              <LoaderCircle className="mr-2 inline size-4 animate-spin" />
-              Đang tính vị trí và đường đi...
-            </div>
-          ) : null}
-          {suggestionsError ? (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-              {getApiErrorMessage(suggestionsError) ??
-                "Không lấy được gợi ý vị trí."}
-            </div>
-          ) : null}
-          {!suggestionsLoading &&
-          !suggestionsError &&
-          suggestions.length === 0 ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              <AlertTriangle className="mr-2 inline size-4" />
-              {readOnly
-                ? "Chưa tìm thấy vị trí thực tế trên sơ đồ cho dòng đã hoàn tất."
-                : "Chưa có khoang đủ điều kiện hoặc rack chưa nối với lối đi."}
-            </div>
-          ) : null}
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-            {suggestions.map((suggestion, index) => (
-              <button
-                key={`${suggestion.cellId}-${suggestion.lotNumber ?? "none"}`}
-                className={cn(
-                  "rounded-lg border p-3 text-left transition hover:border-blue-400 hover:bg-blue-50",
-                  selectedCellId === suggestion.cellId
-                    ? "border-primary bg-primary/5"
-                    : "bg-white",
-                )}
-                onClick={() => chooseSuggestion(suggestion)}
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b bg-muted/20">
+            <CardTitle className="flex items-center justify-between gap-3 text-base">
+              <span className="flex items-center gap-2">
+                <MapPinned className="size-4 text-primary" />
+                {operation === "PUTAWAY"
+                  ? "Hướng dẫn cất hàng"
+                  : "Hướng dẫn lấy hàng"}
+              </span>
+              <Badge className="font-mono" variant="secondary">
+                {sku} · còn {remainingPackageCount} thùng
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <Route className="size-4 text-primary" />
+                Vị trí đề xuất
+              </div>
+              <Button
+                disabled={!layoutQuery.data}
+                onClick={() => setMapOpen(true)}
+                size="sm"
                 type="button"
+                variant="outline"
               >
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-sm font-bold">
-                    {suggestion.cellCode}
-                  </span>
-                  {index === 0 ? (
-                    <Badge className="bg-blue-700">Ưu tiên</Badge>
-                  ) : null}
+                <Map data-icon="inline-start" />
+                Mở bản đồ kho
+              </Button>
+            </div>
+            {suggestionsLoading ? (
+              <div className="text-sm text-muted-foreground">
+                <LoaderCircle className="mr-2 inline size-4 animate-spin" />
+                Đang tính vị trí và đường đi...
+              </div>
+            ) : null}
+            {suggestionsError ? (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                {getApiErrorMessage(suggestionsError) ??
+                  "Không lấy được gợi ý vị trí."}
+              </div>
+            ) : null}
+            {!suggestionsLoading &&
+            !suggestionsError &&
+            suggestions.length === 0 ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                <AlertTriangle className="mr-2 inline size-4" />
+                {readOnly
+                  ? "Chưa tìm thấy vị trí thực tế trên sơ đồ cho dòng đã hoàn tất."
+                  : "Chưa có khoang đủ điều kiện hoặc rack chưa nối với lối đi."}
+              </div>
+            ) : null}
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {suggestions.map((suggestion, index) => (
+                <div
+                  key={`${suggestion.cellId}-${suggestion.lotNumber ?? "none"}`}
+                  className={cn(
+                    "rounded-lg border p-3 text-left transition hover:border-blue-400 hover:bg-blue-50",
+                    selectedCellId === suggestion.cellId
+                      ? "border-primary bg-primary/5"
+                      : "bg-white",
+                  )}
+                >
+                  <button
+                    className="block w-full text-left"
+                    onClick={() => chooseSuggestion(suggestion)}
+                    type="button"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-sm font-bold">
+                        {suggestion.cellCode}
+                      </span>
+                      {index === 0 ? (
+                        <Badge className="bg-blue-700">Ưu tiên</Badge>
+                      ) : null}
+                    </div>
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      Tầng {suggestion.level} · Khoang {suggestion.bay} ·{" "}
+                      {suggestion.path.distanceM} m
+                    </div>
+                    <div className="mt-1 text-xs font-medium">
+                      {suggestion.reason
+                        ? (reasonLabels[suggestion.reason] ?? suggestion.reason)
+                        : operation === "PICK"
+                          ? `Có ${suggestion.quantity ?? 0} thùng`
+                          : `Chứa thêm ${suggestion.capacity ?? 0} thùng`}
+                    </div>
+                    {suggestion.expiryDate ? (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        HSD {formatDateOnly(suggestion.expiryDate)}
+                      </div>
+                    ) : null}
+                    {suggestion.lotNumber ? (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Lô {suggestion.lotNumber}
+                      </div>
+                    ) : null}
+                  </button>
+                  <Button
+                    className="mt-3 w-full"
+                    disabled={
+                      !layoutQuery.data?.racks.some(
+                        (rack) => rack.id === suggestion.rackId,
+                      )
+                    }
+                    onClick={() => {
+                      setChosenRackId(suggestion.rackId);
+                      setChosenCellId(suggestion.cellId);
+                      setRackOpen(true);
+                    }}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    <Map data-icon="inline-start" />
+                    Xem mặt kệ{" "}
+                    {layoutQuery.data?.racks.find(
+                      (rack) => rack.id === suggestion.rackId,
+                    )?.code ?? suggestion.rackId}
+                  </Button>
                 </div>
-                <div className="mt-2 text-xs text-muted-foreground">
-                  Tầng {suggestion.level} · Khoang {suggestion.bay} ·{" "}
-                  {suggestion.path.distanceM} m
-                </div>
-                <div className="mt-1 text-xs font-medium">
-                  {suggestion.reason
-                    ? (reasonLabels[suggestion.reason] ?? suggestion.reason)
-                    : operation === "PICK"
-                      ? `Có ${suggestion.quantity ?? 0} thùng`
-                      : `Chứa thêm ${suggestion.capacity ?? 0} thùng`}
-                </div>
-                {suggestion.expiryDate ? (
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    HSD {suggestion.expiryDate}
-                  </div>
-                ) : null}
-                {suggestion.lotNumber ? (
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Lô {suggestion.lotNumber}
-                  </div>
-                ) : null}
-              </button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       ) : null}
-      {!readOnly ? (
       <Dialog open={mapOpen} onOpenChange={setMapOpen}>
         <DialogContent
           className="flex h-[92dvh] max-h-[92dvh] flex-col gap-0 overflow-hidden p-0"
           size="5xl"
         >
           <DialogHeader className="shrink-0 border-b px-5 py-4 pr-14">
-            <DialogTitle>Bản đồ đường đi trong kho</DialogTitle>
+            <DialogTitle>
+              {readOnly ? "Bản đồ vị trí đã cất" : "Bản đồ đường đi trong kho"}
+            </DialogTitle>
             <DialogDescription>
               Chọn rack để xem đường đi, sau đó bấm Xem mặt kệ.
             </DialogDescription>
@@ -446,7 +505,6 @@ export function WarehouseOperationWorkspace({
           </div>
         </DialogContent>
       </Dialog>
-      ) : null}
       <Dialog open={rackOpen} onOpenChange={setRackOpen}>
         <DialogContent
           className="max-h-[92dvh] gap-0 overflow-hidden p-0"

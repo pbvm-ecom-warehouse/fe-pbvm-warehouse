@@ -4,6 +4,7 @@ import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DoorOpen,
+  Eye,
   Hand,
   LoaderCircle,
   MousePointer2,
@@ -29,6 +30,11 @@ import {
 import { getApiErrorCode, getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { useSessionUser } from "@/hooks/use-session-user";
+import {
+  listRackCells,
+  type StorageCellView,
+} from "@/features/warehouse-navigation/services/warehouse-operations.service";
+import { RackCellViewer } from "@/features/warehouse-navigation/components/rack-cell-viewer";
 import type {
   WarehouseLayout,
   WarehouseLayoutGate,
@@ -76,11 +82,12 @@ type LayoutValidationIssue = {
 };
 
 const tools: Array<{
-  id: WarehouseEditorTool;
+  id: WarehouseEditorTool | "view";
   label: string;
   icon: typeof MousePointer2;
 }> = [
   { id: "select", label: "Chọn", icon: MousePointer2 },
+  { id: "view", label: "Xem", icon: Eye },
   { id: "pan", label: "Di chuyển", icon: Hand },
   { id: "zone", label: "Khu vực", icon: SquareDashed },
   { id: "rack", label: "Rack", icon: Rows3 },
@@ -181,6 +188,9 @@ function WarehouseEditor({
   const [issues, setIssues] = useState<LayoutValidationIssue[]>([]);
   const [clientErrors, setClientErrors] = useState<string[]>([]);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [viewRackId, setViewRackId] = useState("");
+  const [rackDialogOpen, setRackDialogOpen] = useState(false);
   const [viewportResetKey, setViewportResetKey] = useState(0);
 
   const invalidSelectionKeys = useMemo(() => {
@@ -214,6 +224,14 @@ function WarehouseEditor({
   const hasStagingShelf = editor.draftLayout.shelves.some(
     (shelf) => shelf.isStaging,
   );
+  const selectedViewRack = editor.draftLayout.racks.find(
+    (rack) => rack.id === viewRackId,
+  );
+  const viewCellsQuery = useQuery({
+    enabled: rackDialogOpen && Boolean(viewRackId),
+    queryKey: ["warehouse-layout", "view-rack-cells", viewRackId],
+    queryFn: () => listRackCells(viewRackId),
+  });
 
   const saveMutation = useMutation({
     mutationFn: saveWarehouseLayout,
@@ -842,6 +860,91 @@ function WarehouseEditor({
         </div>
       </header>
 
+      <Dialog
+        open={viewDialogOpen}
+        onOpenChange={(open) => {
+          setViewDialogOpen(open);
+          if (!open) {
+            setViewRackId("");
+            setRackDialogOpen(false);
+          }
+        }}
+      >
+        <DialogContent
+          className="flex h-[92dvh] max-h-[92dvh] flex-col gap-0 overflow-hidden p-0"
+          size="5xl"
+        >
+          <DialogHeader className="shrink-0 border-b px-5 py-4 pr-14">
+            <DialogTitle>Chọn rack để xem mặt kệ</DialogTitle>
+            <DialogDescription>
+              Bấm vào rack trên bản đồ để mở mặt kệ 2D/3D.
+            </DialogDescription>
+          </DialogHeader>
+          {editor.draftLayout.racks.length > 0 ? (
+            <div className="min-h-0 flex-1 p-4">
+              <WarehouseFloorPlan
+                className="h-full rounded-xl border-slate-300 bg-white shadow-sm"
+                editable={false}
+                layout={editor.draftLayout}
+                onSelect={(nextSelection) => {
+                  if (nextSelection?.kind !== "rack") return;
+                  setViewRackId(nextSelection.id);
+                  setRackDialogOpen(true);
+                }}
+                selection={
+                  viewRackId ? { kind: "rack", id: viewRackId } : null
+                }
+                tool="select"
+              />
+            </div>
+          ) : (
+            <div className="grid flex-1 place-items-center p-6 text-sm text-slate-500">
+              Chưa có rack để xem mặt kệ.
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={rackDialogOpen} onOpenChange={setRackDialogOpen}>
+        <DialogContent
+          className="max-h-[92dvh] gap-0 overflow-hidden p-0"
+          size="5xl"
+        >
+          <DialogHeader className="border-b px-5 py-4 pr-14">
+            <DialogTitle>
+              Mặt kệ {selectedViewRack?.code ?? "đã chọn"}
+            </DialogTitle>
+            <DialogDescription>
+              Xem vị trí thực tế của hàng trên rack.
+            </DialogDescription>
+            <Button
+              className="mt-1 w-fit"
+              onClick={() => setRackDialogOpen(false)}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              Quay lại bản đồ
+            </Button>
+          </DialogHeader>
+          <div className="min-h-0 overflow-y-auto p-4">
+            {viewCellsQuery.isLoading ? (
+              <div className="grid h-[55dvh] place-items-center">
+                <LoaderCircle className="size-5 animate-spin text-primary" />
+              </div>
+            ) : (
+              <RackCellViewer
+                rackCode={selectedViewRack?.code}
+                cells={(viewCellsQuery.data ?? []) as StorageCellView[]}
+                onActivateCell={() => {}}
+                onSelectCell={() => {}}
+                operation="PUTAWAY"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {conflictRevision !== null ? (
         <div className="flex items-center justify-between gap-4 border-b border-amber-200 bg-amber-50 px-5 py-2.5 text-sm text-amber-950">
           <span>
@@ -890,9 +993,20 @@ function WarehouseEditor({
                     ? "flex h-14 flex-col items-center justify-center gap-1 rounded-lg bg-blue-50 text-blue-700 ring-1 ring-blue-200"
                     : "flex h-14 flex-col items-center justify-center gap-1 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-950"
                 }
-                disabled={!canEdit && item.id !== "select" && item.id !== "pan"}
+                disabled={
+                  !canEdit &&
+                  item.id !== "select" &&
+                  item.id !== "pan" &&
+                  item.id !== "view"
+                }
                 key={item.id}
-                onClick={() => setTool(item.id)}
+                onClick={() => {
+                  if (item.id === "view") {
+                    setViewDialogOpen(true);
+                    return;
+                  }
+                  setTool(item.id);
+                }}
                 type="button"
               >
                 <Icon className="size-4" />

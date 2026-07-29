@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import {
   Box,
+  Barcode as BarcodeIcon,
   CircleCheck,
   Grid3X3,
   LoaderCircle,
@@ -11,10 +12,22 @@ import {
   PackageOpen,
   TriangleAlert,
 } from "lucide-react";
+import { Barcode } from "@/components/barcode";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import type { StorageCellView } from "../services/warehouse-operations.service";
+import { formatDateTime } from "@/utils/format-date";
+import type {
+  StorageCellContent,
+  StorageCellView,
+} from "../services/warehouse-operations.service";
 import { getRackMeasurements } from "../utils/rack-3d-layout";
 import { evaluateCellCapacity } from "../utils/cell-capacity";
 import type { PutawayPackageSpec } from "../utils/putaway-work-items";
@@ -44,6 +57,11 @@ function supportsWebGl() {
   } catch {
     return false;
   }
+}
+
+function formatDateOnly(value?: string | null) {
+  if (!value) return "Chưa khai báo";
+  return formatDateTime(value).split(" ")[0];
 }
 
 function CellGrid({
@@ -147,6 +165,7 @@ export function RackCellViewer({
 }) {
   const [webGlAvailable, setWebGlAvailable] = useState<boolean>();
   const [mode, setMode] = useState<"3D" | "GRID">("GRID");
+  const [detailItem, setDetailItem] = useState<StorageCellContent>();
   const suggestedSet = useMemo(
     () => new Set(suggestedCellIds),
     [suggestedCellIds],
@@ -276,6 +295,13 @@ export function RackCellViewer({
                   style={{ width: `${Math.min(100, selected.fillPercent)}%` }}
                 />
               </div>
+              <div className="rounded-lg border bg-slate-50 p-2">
+                <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-700">
+                  <BarcodeIcon className="size-3.5 text-blue-700" />
+                  Mã vạch khoang
+                </div>
+                <Barcode className="p-2" value={selected.barcode} />
+              </div>
               <div
                 className={cn(
                   "flex items-start gap-2 rounded-lg border p-2 text-xs",
@@ -311,9 +337,11 @@ export function RackCellViewer({
               ) : (
                 <div className="space-y-2">
                   {selected.contents.map((item) => (
-                    <div
+                    <button
                       key={item.id}
-                      className="rounded-lg border bg-slate-50 p-2 text-xs"
+                      className="w-full rounded-lg border bg-slate-50 p-2 text-left text-xs transition hover:border-blue-300 hover:bg-blue-50"
+                      onClick={() => setDetailItem(item)}
+                      type="button"
                     >
                       <div className="font-mono font-semibold">{item.sku}</div>
                       <div className="mt-1 text-muted-foreground">
@@ -327,7 +355,7 @@ export function RackCellViewer({
                           Lô {item.lotNumber}
                         </div>
                       ) : null}
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -349,6 +377,112 @@ export function RackCellViewer({
           )}
         </aside>
       </div>
+      <Dialog
+        open={Boolean(detailItem)}
+        onOpenChange={(open) => {
+          if (!open) setDetailItem(undefined);
+        }}
+      >
+        <DialogContent size="md">
+          <DialogHeader>
+            <DialogTitle>
+              Chi tiết lô {detailItem?.lotNumber ?? "chưa khai báo"}
+            </DialogTitle>
+            <DialogDescription>
+              Thông tin số lô và mặt hàng đang nằm trong khoang đã chọn.
+            </DialogDescription>
+          </DialogHeader>
+          {detailItem ? (
+            <div className="space-y-3">
+              <div className="grid gap-3 rounded-lg border bg-slate-50 p-3 sm:grid-cols-[96px_minmax(0,1fr)]">
+                <ProductImage item={detailItem} />
+                <div className="min-w-0">
+                  <div className="font-mono text-sm font-bold">
+                    {detailItem.sku}
+                  </div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    {detailItem.itemName}
+                  </div>
+                </div>
+              </div>
+              <div className="grid gap-2 text-sm sm:grid-cols-2">
+                <DetailField
+                  label="Số lượng"
+                  value={`${detailItem.quantity} ${detailItem.unit}`}
+                />
+                <DetailField
+                  label="Số lô"
+                  value={detailItem.lotNumber ?? "Chưa khai báo"}
+                />
+                <DetailField
+                  label="Hạn dùng"
+                  value={formatDateOnly(detailItem.expiryDate)}
+                />
+                <DetailField
+                  label="Quy cách"
+                  value={
+                    detailItem.packageFactor
+                      ? `${detailItem.packageFactor} đơn vị/${detailItem.unit}`
+                      : "Chưa khai báo"
+                  }
+                />
+                <DetailField
+                  label="Kích thước thùng"
+                  value={
+                    detailItem.packageDepthCm &&
+                    detailItem.packageWidthCm &&
+                    detailItem.packageHeightCm
+                      ? `${detailItem.packageDepthCm} × ${detailItem.packageWidthCm} × ${detailItem.packageHeightCm} cm`
+                      : "Chưa khai báo"
+                  }
+                />
+                <DetailField
+                  label="Thể tích"
+                  value={
+                    detailItem.packageVolumeCm3Snapshot
+                      ? `${detailItem.packageVolumeCm3Snapshot.toLocaleString("vi-VN")} cm3`
+                      : "Chưa khai báo"
+                  }
+                />
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function ProductImage({ item }: { item: StorageCellContent }) {
+  const image = item.images?.find(Boolean);
+  if (!image) {
+    return (
+      <div
+        aria-label={`Ảnh mặt hàng ${item.sku}`}
+        className="grid aspect-square place-items-center rounded-md border border-dashed bg-white text-[11px] font-medium text-muted-foreground"
+        role="img"
+      >
+        Chưa có ảnh
+      </div>
+    );
+  }
+  return (
+    <div
+      aria-label={`Ảnh mặt hàng ${item.sku}`}
+      className="aspect-square rounded-md border bg-cover bg-center bg-no-repeat"
+      role="img"
+      style={{ backgroundImage: `url("${image}")` }}
+    />
+  );
+}
+
+function DetailField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border p-2">
+      <div className="text-[11px] font-medium text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-1 font-medium">{value}</div>
     </div>
   );
 }

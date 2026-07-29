@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -7,6 +13,8 @@ import type { WarehouseLayout } from "@/types/api";
 const {
   baseLayout,
   fetchWarehouseLayout,
+  listRackCells,
+  routeLayout,
   resetWarehouseLayout,
   saveWarehouseLayout,
 } = vi.hoisted(() => {
@@ -29,10 +37,44 @@ const {
     aisles: [],
     gates: [],
   };
+  const routeLayout: WarehouseLayout = {
+    ...layout,
+    racks: [
+      {
+        id: "rack-1",
+        zoneId: "zone-1",
+        code: "RACK-01",
+        name: "Rack 01",
+        xM: 4,
+        yM: 4,
+        widthM: 6,
+        depthM: 1.5,
+        rotation: 0,
+        levelCount: 2,
+        bayCount: 3,
+        shelfCodes: ["RACK-01-T1", "RACK-01-T2"],
+        accessPoint: { xM: 4, yM: 5.5 },
+      },
+    ],
+    aisles: [
+      {
+        id: "aisle-1",
+        code: "AISLE-01",
+        type: "MAIN",
+        xM: 0,
+        yM: 5,
+        widthM: 20,
+        heightM: 2,
+      },
+    ],
+    gates: [{ id: "gate-1", code: "GATE-01", label: "Cổng 1", xM: 1, yM: 6 }],
+  };
 
   return {
     baseLayout: layout,
     fetchWarehouseLayout: vi.fn().mockResolvedValue(layout),
+    listRackCells: vi.fn().mockResolvedValue([]),
+    routeLayout,
     resetWarehouseLayout: vi.fn().mockResolvedValue(layout),
     saveWarehouseLayout: vi.fn(),
   };
@@ -44,6 +86,13 @@ vi.mock(
     fetchWarehouseLayout,
     resetWarehouseLayout,
     saveWarehouseLayout,
+  }),
+);
+
+vi.mock(
+  "@/features/warehouse-navigation/services/warehouse-operations.service",
+  () => ({
+    listRackCells,
   }),
 );
 
@@ -63,7 +112,9 @@ vi.mock("@/features/warehouse-layout/components/warehouse-floor-plan", () => ({
       kind: "zone" | "rack" | "aisle" | "gate",
       point: { xM: number; yM: number },
     ) => void;
-    onSelect?: (selection: { kind: "zone"; id: string } | null) => void;
+    onSelect?: (
+      selection: { kind: "zone" | "rack"; id: string } | null,
+    ) => void;
     tool: string;
   }) => (
     <div>
@@ -94,6 +145,16 @@ vi.mock("@/features/warehouse-layout/components/warehouse-floor-plan", () => ({
           {zone.code}
         </button>
       ))}
+      {layout.racks.map((rack) => (
+        <button
+          aria-label={rack.name}
+          key={rack.id}
+          onClick={() => onSelect?.({ kind: "rack", id: rack.id })}
+          type="button"
+        >
+          {rack.code}
+        </button>
+      ))}
     </div>
   ),
 }));
@@ -115,6 +176,7 @@ describe("WarehouseMapClient", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     fetchWarehouseLayout.mockResolvedValue(structuredClone(baseLayout));
+    listRackCells.mockResolvedValue([]);
     resetWarehouseLayout.mockResolvedValue(structuredClone(baseLayout));
     saveWarehouseLayout.mockImplementation(async (request) => ({
       revision: 4,
@@ -140,6 +202,7 @@ describe("WarehouseMapClient", () => {
     expect(await screen.findByText("Bản đồ kho 2D")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Lưu thay đổi" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Khu vực" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Xem" })).toBeInTheDocument();
     expect(
       screen.queryByText("Kích thước rack chuẩn (áp dụng toàn kho)"),
     ).not.toBeInTheDocument();
@@ -150,6 +213,47 @@ describe("WarehouseMapClient", () => {
     expect(screen.getByLabelText("Kích thước mỗi khoang")).toHaveTextContent(
       "200 × 150 × 100 cm",
     );
+  });
+
+  it("mở mặt kệ khi click rack trong tool Xem", async () => {
+    fetchWarehouseLayout.mockResolvedValueOnce(structuredClone(routeLayout));
+    listRackCells.mockResolvedValueOnce([
+      {
+        id: "cell-1",
+        rackId: "rack-1",
+        shelfId: "shelf-1",
+        level: 1,
+        bay: 1,
+        code: "RACK-01-T1-B1",
+        barcode: "RACK-01-T1-B1",
+        status: "ACTIVE",
+        innerDepth: 100,
+        innerWidth: 80,
+        innerHeight: 60,
+        usableVolumeCm3: 480000,
+        occupiedVolumeCm3: 0,
+        fillPercent: 0,
+        contents: [],
+      },
+    ]);
+    renderWithClient();
+    await screen.findByText("Bản đồ kho 2D");
+
+    fireEvent.click(screen.getByRole("button", { name: "Xem" }));
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Chọn rack để xem mặt kệ",
+    });
+    expect(dialog).toBeVisible();
+    expect(within(dialog).getByLabelText("Sơ đồ kho")).toBeVisible();
+
+    fireEvent.click(within(dialog).getByLabelText("Rack 01"));
+
+    expect(
+      await screen.findByRole("dialog", { name: "Mặt kệ RACK-01" }),
+    ).toBeVisible();
+    expect(await screen.findByText("Mặt kệ RACK-01")).toBeVisible();
+    expect(listRackCells).toHaveBeenCalledWith("rack-1");
   });
 
   it("giữ thao tác ở draft và chỉ gọi PATCH batch khi bấm lưu", async () => {
