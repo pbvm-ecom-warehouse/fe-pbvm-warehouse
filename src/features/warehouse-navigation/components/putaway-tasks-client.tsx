@@ -165,7 +165,7 @@ export function PutawayTasksClient() {
       queryFn: () => listRackCells(rack.id),
     })),
   });
-  const completedMatches = useMemo(() => {
+  const completedMatches = (() => {
     if (!selected || !isCompletedDetail) return [];
 
     return completedRackCellQueries.flatMap((query) =>
@@ -193,11 +193,10 @@ export function PutawayTasksClient() {
         ];
       }),
     );
-  }, [completedRackCellQueries, isCompletedDetail, selected]);
-  const completedRackIds = useMemo(
-    () => [...new Set(completedMatches.map((match) => match.cell.rackId))],
-    [completedMatches],
-  );
+  })();
+  const completedRackIds = [
+    ...new Set(completedMatches.map((match) => match.cell.rackId)),
+  ];
   const completedPathQueries = useQueries({
     queries: completedRackIds.map((rackId) => ({
       enabled: canView && isCompletedDetail,
@@ -205,17 +204,13 @@ export function PutawayTasksClient() {
       queryFn: () => getNavigationPath(rackId),
     })),
   });
-  const completedPathsByRackId = useMemo(
-    () =>
-      new Map(
-        completedRackIds.map((rackId, index) => [
-          rackId,
-          completedPathQueries[index]?.data,
-        ]),
-      ),
-    [completedPathQueries, completedRackIds],
+  const completedPathsByRackId = new Map(
+    completedRackIds.map((rackId, index) => [
+      rackId,
+      completedPathQueries[index]?.data,
+    ]),
   );
-  const completedSuggestions = useMemo(() => {
+  const completedSuggestions = (() => {
     const suggestions = completedMatches.flatMap((match) => {
       const path = completedPathsByRackId.get(match.cell.rackId);
       if (!path) return [];
@@ -240,7 +235,7 @@ export function PutawayTasksClient() {
     return suggestions.sort(
       (left, right) => left.path.distanceM - right.path.distanceM,
     );
-  }, [completedMatches, completedPathsByRackId, selected]);
+  })();
 
   const confirmMutation = useMutation({
     mutationFn: async (input: {
