@@ -4,7 +4,10 @@ import {
   EVIDENCE_IMAGE_MAX_BYTES,
   validateEvidenceImageFiles,
 } from "@/components/evidence-images/evidence-image-utils";
-import { createScrapNote } from "@/features/adjustments/services/scrap-note.service";
+import {
+  createScrapNote,
+  createStockCountScrap,
+} from "@/features/adjustments/services/scrap-note.service";
 import { countStockCountItem } from "@/features/adjustments/services/stock-count.service";
 import { inspectGoodsReturn } from "@/features/goods-returns/services/goods-return.service";
 import { uploadGoodsReceiptNoteImage } from "@/features/purchases/services/goods-receipt-note.service";
@@ -143,6 +146,32 @@ describe("evidence image contracts", () => {
     expect(body.get("lotId")).toBe("lot-1");
     expect(body.get("reason")).toBe("Thiếu hàng");
     expect(body.get("actualQty")).toBe("8");
+    expect(body.getAll("images")).toEqual([first, second]);
+  });
+
+  it("sends stock-count scrap evidence as repeated images fields", async () => {
+    const first = image("scrap-count-a.jpg");
+    const second = image("scrap-count-b.webp", "image/webp");
+
+    await createStockCountScrap({
+      input: {
+        images: [first, second],
+        itemBarcode: "8938500000123",
+        lotId: "lot-1",
+        quantity: 2,
+        reason: "Hai thùng bị vỡ",
+        shelfId: "shelf-1",
+      },
+      itemId: "item-1",
+      stockCountId: "count-1",
+    });
+
+    const body = formDataFromLastPost();
+    expect(body.get("itemBarcode")).toBe("8938500000123");
+    expect(body.get("shelfId")).toBe("shelf-1");
+    expect(body.get("lotId")).toBe("lot-1");
+    expect(body.get("quantity")).toBe("2");
+    expect(body.get("reason")).toBe("Hai thùng bị vỡ");
     expect(body.getAll("images")).toEqual([first, second]);
   });
   it("uploads a GRN image with the file field", async () => {

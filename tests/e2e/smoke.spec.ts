@@ -364,6 +364,104 @@ test("receiver gets inbound navigation and forbidden settings", async ({
   ).toBeVisible();
 });
 
+test("counter proposes scrap only from a counted stock-count line", async ({
+  page,
+}) => {
+  await seedWmsSession(page, ["COUNTER"], "Counter User");
+  const stockCount = {
+    id: "sc-1",
+    stockCountNumber: "SC-20260730-0001",
+    zoneId: null,
+    status: "COMPLETED",
+    createdBy: "manager-1",
+    items: [
+      {
+        itemId: "item-1",
+        sku: "CUP-RND-PP-700-WHT",
+        shelfId: "shelf-1",
+        lotId: null,
+        systemQty: 10,
+        actualQty: 10,
+        delta: 0,
+        reason: null,
+        images: [],
+      },
+    ],
+    createdAt: "2026-07-30T00:00:00.000Z",
+    updatedAt: "2026-07-30T00:00:00.000Z",
+  };
+  let scrapRequestBody = "";
+
+  await page.route("**/api/wms/stock-counts**", async (route) => {
+    const request = route.request();
+    if (request.method() === "POST" && request.url().endsWith("/scrap")) {
+      scrapRequestBody = request.postData() ?? "";
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            id: "scrap-1",
+            sourceStockCountId: "sc-1",
+            status: "DRAFT",
+            items: [],
+          },
+          meta: { requestId: "scrap-create" },
+        }),
+      });
+      return;
+    }
+
+    const isDetail = /\/stock-counts\/sc-1(?:\?|$)/.test(request.url());
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(
+        isDetail
+          ? { data: stockCount, meta: { requestId: "count-detail" } }
+          : {
+              data: [stockCount],
+              meta: {
+                pagination: { page: 1, pageSize: 20, total: 1 },
+                requestId: "count-list",
+              },
+            },
+      ),
+    });
+  });
+  await page.route("**/api/wms/scrap-notes**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: [],
+        meta: { pagination: { page: 1, pageSize: 20, total: 0 } },
+      }),
+    });
+  });
+
+  await page.goto("/adjustments");
+  await page.getByRole("button", { name: "Xem chi tiết" }).click();
+  await page.getByRole("button", { name: "Đề xuất hủy" }).click();
+
+  const dialog = page.getByRole("dialog", {
+    name: "Đề xuất hủy từ dòng kiểm kê",
+  });
+  await expect(dialog.getByText("CUP-RND-PP-700-WHT")).toBeVisible();
+  await expect(dialog.getByText("10")).toBeVisible();
+  await dialog.getByLabel("Barcode SKU").fill("8938500000123");
+  await dialog.getByLabel("Số lượng hủy").fill("2");
+  await dialog.getByLabel("Lý do hủy").fill("Hai thùng bị vỡ");
+  await dialog.getByRole("button", { name: "Gửi đề xuất hủy" }).click();
+
+  await expect(dialog).toBeHidden();
+  expect(scrapRequestBody).toContain("8938500000123");
+  expect(scrapRequestBody).toContain("Hai thùng bị vỡ");
+  expect(scrapRequestBody).toContain("shelf-1");
+
+  await page.getByRole("tab", { name: "Phiếu hủy" }).click();
+  await expect(page.getByRole("button", { name: "Tạo phiếu hủy" })).toHaveCount(
+    0,
+  );
+});
+
 test("manager opens purchases when purchase order items are missing", async ({
   page,
 }) => {
