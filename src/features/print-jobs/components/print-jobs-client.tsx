@@ -56,6 +56,7 @@ import {
   StatusBadge,
   TableSkeleton,
 } from "@/features/admin-shell/components/operations-ui";
+import { EntityDetailDialog } from "@/features/admin-shell/components/entity-detail-dialog";
 import {
   completePrintJobItem,
   consumePrintJobItem,
@@ -160,7 +161,7 @@ export function PrintJobsClient() {
   const selectedPrintJob = printJobs.find(
     (job) => job.id === selectedPrintJobId,
   );
-  const activePrintJobId = selectedPrintJob?.id ?? "";
+  const activePrintJobId = selectedPrintJobId;
   const total = printJobsQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -169,7 +170,7 @@ export function PrintJobsClient() {
     queryFn: () => getPrintJob(activePrintJobId),
     queryKey: printJobKeys.detail(activePrintJobId),
   });
-  const detail = detailQuery.data;
+  const detail = detailQuery.data ?? selectedPrintJob;
   const selectedItem = selectedItemId
     ? detail?.items.find((item) => item.inputItemId === selectedItemId)
     : undefined;
@@ -236,6 +237,13 @@ export function PrintJobsClient() {
     });
   }
 
+  function closePrintJobDetail() {
+    setSelectedPrintJobId("");
+    setSelectedItemId("");
+    setConsumeForm(defaultConsumeForm);
+    setCompleteForm(defaultCompleteForm);
+  }
+
   function handleConsume(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -291,270 +299,295 @@ export function PrintJobsClient() {
         <ErrorBanner error={printJobsQuery.error} />
       ) : null}
 
-      <div
-        className={cn(
-          "grid gap-4 transition-all",
-          selectedItem ? "xl:grid-cols-[minmax(0,1fr)_420px]" : "grid-cols-1",
-        )}
-      >
-        <div className="min-w-0 space-y-4">
-          <Card>
-            <CardHeader className="border-b bg-muted/20">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Printer className="size-4 text-primary" />
-                Đơn in ly
-              </CardTitle>
-              <CardDescription>
-                {total} bản ghi · trang {page}/{totalPages}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 pt-4">
-              <form
-                className="grid gap-3 md:grid-cols-[220px_auto]"
-                onSubmit={handleFilter}
-              >
-                <div className="space-y-2">
-                  <Label>Trạng thái</Label>
-                  <Select
-                    value={statusFilter}
-                    onValueChange={(value) => {
-                      setPage(1);
-                      setStatusFilter(value as PrintJobStatus | "ALL");
-                    }}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">Tất cả</SelectItem>
-                      {PRINT_JOB_STATUSES.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {printJobStatusLabel(status)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button
-                  className="self-end"
-                  disabled={!canViewPrintJobs}
-                  type="submit"
+      <div className="min-w-0">
+        <Card>
+          <CardHeader className="border-b bg-muted/20">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Printer className="size-4 text-primary" />
+              Đơn in ly
+            </CardTitle>
+            <CardDescription>
+              {total} bản ghi · trang {page}/{totalPages}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-4">
+            <form
+              className="grid gap-3 md:grid-cols-[220px_auto]"
+              onSubmit={handleFilter}
+            >
+              <div className="space-y-2">
+                <Label>Trạng thái</Label>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(value) => {
+                    setPage(1);
+                    setStatusFilter(value as PrintJobStatus | "ALL");
+                  }}
                 >
-                  <Search data-icon="inline-start" />
-                  Lọc
-                </Button>
-              </form>
-
-              {printJobsQuery.isLoading ? (
-                <TableSkeleton columns={5} />
-              ) : (
-                <PrintJobTable
-                  printJobs={printJobs}
-                  selectedId={activePrintJobId}
-                  onSelect={handleSelectPrintJob}
-                />
-              )}
-
-              <div className="flex items-center justify-between gap-3">
-                <Button
-                  disabled={page <= 1}
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
-                  type="button"
-                  variant="outline"
-                >
-                  Trang trước
-                </Button>
-                <span className="text-sm text-muted-foreground">
-                  {page}/{totalPages}
-                </span>
-                <Button
-                  disabled={page >= totalPages}
-                  onClick={() =>
-                    setPage((current) => Math.min(totalPages, current + 1))
-                  }
-                  type="button"
-                  variant="outline"
-                >
-                  Trang sau
-                </Button>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tất cả</SelectItem>
+                    {PRINT_JOB_STATUSES.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {printJobStatusLabel(status)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </CardContent>
-          </Card>
+              <Button
+                className="self-end"
+                disabled={!canViewPrintJobs}
+                type="submit"
+              >
+                <Search data-icon="inline-start" />
+                Lọc
+              </Button>
+            </form>
 
-          {detail ? (
+            {printJobsQuery.isLoading ? (
+              <TableSkeleton columns={5} />
+            ) : (
+              <PrintJobTable
+                printJobs={printJobs}
+                selectedId={activePrintJobId}
+                onSelect={handleSelectPrintJob}
+              />
+            )}
+
+            <div className="flex items-center justify-between gap-3">
+              <Button
+                disabled={page <= 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                type="button"
+                variant="outline"
+              >
+                Trang trước
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                {page}/{totalPages}
+              </span>
+              <Button
+                disabled={page >= totalPages}
+                onClick={() =>
+                  setPage((current) => Math.min(totalPages, current + 1))
+                }
+                type="button"
+                variant="outline"
+              >
+                Trang sau
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <EntityDetailDialog
+        description={`ID đơn in nội bộ: ${selectedPrintJobId}`}
+        onOpenChange={(open) => {
+          if (!open) closePrintJobDetail();
+        }}
+        open={Boolean(selectedPrintJobId)}
+        title="Chi tiết đơn in ly"
+      >
+        {detailQuery.isLoading && !detail ? (
+          <TableSkeleton columns={5} />
+        ) : null}
+        {detailQuery.error ? <ErrorBanner error={detailQuery.error} /> : null}
+        {detail ? (
+          <div
+            className={cn(
+              "grid gap-4",
+              selectedItem
+                ? "xl:grid-cols-[minmax(0,1fr)_420px]"
+                : "grid-cols-1",
+            )}
+          >
             <PrintJobDetail
               detail={detail}
               selectedItemId={selectedItem?.inputItemId ?? ""}
               onSelectItem={handleSelectItem}
             />
-          ) : null}
-        </div>
+            {selectedItem ? (
+              <aside className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <ClipboardList className="size-4 text-primary" />
+                      Dòng in
+                    </CardTitle>
+                    <CardDescription>{selectedItem.sku}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <InfoBox
+                      label="Trạng thái dòng"
+                      value={printJobLineStatusLabel(selectedItem.lineStatus)}
+                    />
+                    <InfoBox
+                      label="Số lượng còn xử lý"
+                      value={selectedItem.remainingQty.toLocaleString("vi-VN")}
+                    />
+                    {selectedItem.designFile ? (
+                      <InfoBox
+                        label="File thiết kế"
+                        value={selectedItem.designFile}
+                      />
+                    ) : null}
+                  </CardContent>
+                </Card>
 
-        {selectedItem ? (
-          <aside className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <ClipboardList className="size-4 text-primary" />
-                  Dòng in
-                </CardTitle>
-                <CardDescription>{selectedItem.sku}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <InfoBox
-                  label="Trạng thái dòng"
-                  value={printJobLineStatusLabel(selectedItem.lineStatus)}
-                />
-                <InfoBox
-                  label="Số lượng còn xử lý"
-                  value={selectedItem.remainingQty.toLocaleString("vi-VN")}
-                />
-                {selectedItem.designFile ? (
-                  <InfoBox
-                    label="File thiết kế"
-                    value={selectedItem.designFile}
-                  />
+                {canProcessPrintJobs &&
+                selectedItem.lineStatus === "PENDING" ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <Barcode className="size-4 text-primary" />
+                        Tiêu thụ ly chưa in
+                      </CardTitle>
+                      <CardDescription>
+                        Quét mã vạch CUP_BLANK, quét mã vị trí và nhập số lượng
+                        tiêu thụ.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <form className="space-y-3" onSubmit={handleConsume}>
+                        <TextField
+                          id="print-consume-barcode"
+                          label="Mã vạch mặt hàng"
+                          value={consumeForm.itemBarcode}
+                          onChange={(itemBarcode) =>
+                            setConsumeForm((current) => ({
+                              ...current,
+                              itemBarcode,
+                            }))
+                          }
+                        />
+                        <TextField
+                          id="print-consume-shelf"
+                          label="Mã vị trí"
+                          value={consumeForm.shelfCode}
+                          onChange={(shelfCode) =>
+                            setConsumeForm((current) => ({
+                              ...current,
+                              shelfCode,
+                            }))
+                          }
+                        />
+                        <TextField
+                          id="print-consume-qty"
+                          label="Số lượng"
+                          type="number"
+                          value={consumeForm.quantity}
+                          onChange={(quantity) =>
+                            setConsumeForm((current) => ({
+                              ...current,
+                              quantity,
+                            }))
+                          }
+                        />
+                        <Button
+                          className="w-full"
+                          disabled={
+                            !activePrintJobId ||
+                            !selectedItem ||
+                            consumeMutation.isPending
+                          }
+                          type="submit"
+                        >
+                          {consumeMutation.isPending ? (
+                            <LoaderCircle
+                              className="animate-spin"
+                              data-icon="inline-start"
+                            />
+                          ) : (
+                            <Save data-icon="inline-start" />
+                          )}
+                          Tiêu thụ ly chưa in
+                        </Button>
+                      </form>
+                    </CardContent>
+                  </Card>
                 ) : null}
-              </CardContent>
-            </Card>
 
-            {canProcessPrintJobs && selectedItem.lineStatus === "PENDING" ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Barcode className="size-4 text-primary" />
-                    Tiêu thụ ly chưa in
-                  </CardTitle>
-                  <CardDescription>
-                    Quét mã vạch CUP_BLANK, quét mã vị trí và nhập số lượng tiêu
-                    thụ.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form className="space-y-3" onSubmit={handleConsume}>
-                    <TextField
-                      id="print-consume-barcode"
-                      label="Mã vạch mặt hàng"
-                      value={consumeForm.itemBarcode}
-                      onChange={(itemBarcode) =>
-                        setConsumeForm((current) => ({
-                          ...current,
-                          itemBarcode,
-                        }))
-                      }
-                    />
-                    <TextField
-                      id="print-consume-shelf"
-                      label="Mã vị trí"
-                      value={consumeForm.shelfCode}
-                      onChange={(shelfCode) =>
-                        setConsumeForm((current) => ({ ...current, shelfCode }))
-                      }
-                    />
-                    <TextField
-                      id="print-consume-qty"
-                      label="Số lượng"
-                      type="number"
-                      value={consumeForm.quantity}
-                      onChange={(quantity) =>
-                        setConsumeForm((current) => ({ ...current, quantity }))
-                      }
-                    />
-                    <Button
-                      className="w-full"
-                      disabled={
-                        !activePrintJobId ||
-                        !selectedItem ||
-                        consumeMutation.isPending
-                      }
-                      type="submit"
-                    >
-                      {consumeMutation.isPending ? (
-                        <LoaderCircle
-                          className="animate-spin"
-                          data-icon="inline-start"
+                {canProcessPrintJobs &&
+                selectedItem.lineStatus === "CONSUMED" ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <CheckCircle2 className="size-4 text-primary" />
+                        Xác nhận in xong
+                      </CardTitle>
+                      <CardDescription>
+                        Quét mã vị trí nhập ly đã in và nhập số lượng hoàn tất.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <form className="space-y-3" onSubmit={handleComplete}>
+                        <TextField
+                          id="print-complete-shelf"
+                          label="Mã vị trí"
+                          value={completeForm.shelfCode}
+                          onChange={(shelfCode) =>
+                            setCompleteForm((current) => ({
+                              ...current,
+                              shelfCode,
+                            }))
+                          }
                         />
-                      ) : (
-                        <Save data-icon="inline-start" />
-                      )}
-                      Tiêu thụ ly chưa in
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-            ) : null}
-
-            {canProcessPrintJobs && selectedItem.lineStatus === "CONSUMED" ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <CheckCircle2 className="size-4 text-primary" />
-                    Xác nhận in xong
-                  </CardTitle>
-                  <CardDescription>
-                    Quét mã vị trí nhập ly đã in và nhập số lượng hoàn tất.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form className="space-y-3" onSubmit={handleComplete}>
-                    <TextField
-                      id="print-complete-shelf"
-                      label="Mã vị trí"
-                      value={completeForm.shelfCode}
-                      onChange={(shelfCode) =>
-                        setCompleteForm((current) => ({
-                          ...current,
-                          shelfCode,
-                        }))
-                      }
-                    />
-                    <TextField
-                      id="print-complete-qty"
-                      label="Số lượng"
-                      type="number"
-                      value={completeForm.quantity}
-                      onChange={(quantity) =>
-                        setCompleteForm((current) => ({ ...current, quantity }))
-                      }
-                    />
-                    <Button
-                      className="w-full"
-                      disabled={
-                        !activePrintJobId ||
-                        !selectedItem ||
-                        completeMutation.isPending
-                      }
-                      type="submit"
-                    >
-                      {completeMutation.isPending ? (
-                        <LoaderCircle
-                          className="animate-spin"
-                          data-icon="inline-start"
+                        <TextField
+                          id="print-complete-qty"
+                          label="Số lượng"
+                          type="number"
+                          value={completeForm.quantity}
+                          onChange={(quantity) =>
+                            setCompleteForm((current) => ({
+                              ...current,
+                              quantity,
+                            }))
+                          }
                         />
-                      ) : (
-                        <Save data-icon="inline-start" />
-                      )}
-                      Xác nhận in xong
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-            ) : null}
+                        <Button
+                          className="w-full"
+                          disabled={
+                            !activePrintJobId ||
+                            !selectedItem ||
+                            completeMutation.isPending
+                          }
+                          type="submit"
+                        >
+                          {completeMutation.isPending ? (
+                            <LoaderCircle
+                              className="animate-spin"
+                              data-icon="inline-start"
+                            />
+                          ) : (
+                            <Save data-icon="inline-start" />
+                          )}
+                          Xác nhận in xong
+                        </Button>
+                      </form>
+                    </CardContent>
+                  </Card>
+                ) : null}
 
-            {selectedItem.lineStatus === "COMPLETED" ? (
-              <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-primary">
-                Dòng này đã hoàn tất.
-              </div>
-            ) : null}
+                {selectedItem.lineStatus === "COMPLETED" ? (
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-primary">
+                    Dòng này đã hoàn tất.
+                  </div>
+                ) : null}
 
-            {!canProcessPrintJobs ? (
-              <div className="rounded-lg border border-border/70 bg-muted/20 p-3 text-sm text-muted-foreground">
-                Vai trò hiện tại chỉ xem tiến độ in ly.
-              </div>
+                {!canProcessPrintJobs ? (
+                  <div className="rounded-lg border border-border/70 bg-muted/20 p-3 text-sm text-muted-foreground">
+                    Vai trò hiện tại chỉ xem tiến độ in ly.
+                  </div>
+                ) : null}
+              </aside>
             ) : null}
-          </aside>
+          </div>
         ) : null}
-      </div>
+      </EntityDetailDialog>
     </div>
   );
 }
@@ -572,8 +605,8 @@ function PrintJobTable({
     <Table scrollable>
       <TableHeader>
         <TableRow>
-          <TableHead>Mã đơn in</TableHead>
-          <TableHead>Mã đơn</TableHead>
+          <TableHead>ID đơn in nội bộ</TableHead>
+          <TableHead>ID đơn hàng nội bộ</TableHead>
           <TableHead>Trạng thái</TableHead>
           <TableHead>Số dòng</TableHead>
           <TableHead>Cập nhật</TableHead>
@@ -637,7 +670,9 @@ function PrintJobDetail({
   return (
     <Card>
       <CardHeader className="border-b bg-muted/20">
-        <CardTitle className="text-base">{detail.orderId}</CardTitle>
+        <CardTitle className="text-base">
+          ID đơn hàng nội bộ: {detail.orderId}
+        </CardTitle>
         <CardDescription>{printJobStatusLabel(detail.status)}</CardDescription>
       </CardHeader>
       <CardContent className="pt-4">

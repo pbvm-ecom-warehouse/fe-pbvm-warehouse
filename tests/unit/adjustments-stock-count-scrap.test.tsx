@@ -178,6 +178,20 @@ describe("stock-count scrap proposal UI", () => {
     expect(within(reopened).getByLabelText("Số lượng hủy")).toHaveValue(1);
 
     fireEvent.click(within(reopened).getByRole("button", { name: "Hủy" }));
+    fireEvent.click(
+      within(
+        screen.getByRole("dialog", {
+          name: "Chi tiết phiếu kiểm kho",
+        }),
+      ).getByRole("button", { name: "Đóng" }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", {
+          name: "Chi tiết phiếu kiểm kho",
+        }),
+      ).not.toBeInTheDocument(),
+    );
     const scrapTab = screen.getByRole("tab", { name: "Phiếu hủy" });
     fireEvent.mouseDown(scrapTab, { button: 0, ctrlKey: false });
     fireEvent.click(scrapTab);

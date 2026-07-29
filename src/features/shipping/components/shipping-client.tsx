@@ -48,13 +48,13 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  EmptyState,
   EntityDrawer,
   PageHeader,
   PermissionNotice,
   StatusBadge,
   TableSkeleton,
 } from "@/features/admin-shell/components/operations-ui";
+import { EntityDetailDialog } from "@/features/admin-shell/components/entity-detail-dialog";
 import { useSessionUser } from "@/hooks/use-session-user";
 import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
@@ -388,6 +388,13 @@ export function ShippingClient() {
     carrierMutation.mutate();
   }
 
+  function closeShipmentDetail() {
+    setSelectedShipmentId("");
+    setAssignOpen(false);
+    setStatusOpen(false);
+    setReturnOpen(false);
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -430,32 +437,12 @@ export function ShippingClient() {
         </TabsList>
 
         <TabsContent className="mt-4" value="shipments">
-          <div
-            className={cn(
-              "grid gap-4 transition-all",
-              selectedShipment
-                ? "xl:grid-cols-[minmax(0,1fr)_400px]"
-                : "grid-cols-1",
-            )}
-          >
-            <ShipmentTable
-              isLoading={shipmentsQuery.isLoading}
-              onSelect={(shipment) => setSelectedShipmentId(shipment.id)}
-              selectedId={selectedShipment?.id ?? ""}
-              shipments={shipments}
-            />
-            {selectedShipment ? (
-              <ShipmentPanel
-                canAdvance={nextStatuses.length > 0}
-                canOperate={canOperateShipments}
-                canCreateReturn={canCreateGoodsReturn}
-                onAssign={openAssignDialog}
-                onCreateReturn={openReturnDialog}
-                onUpdateStatus={openStatusDialog}
-                shipment={selectedShipment}
-              />
-            ) : null}
-          </div>
+          <ShipmentTable
+            isLoading={shipmentsQuery.isLoading}
+            onSelect={(shipment) => setSelectedShipmentId(shipment.id)}
+            selectedId={selectedShipment?.id ?? ""}
+            shipments={shipments}
+          />
         </TabsContent>
 
         <TabsContent className="mt-4" value="carriers">
@@ -469,6 +456,27 @@ export function ShippingClient() {
           />
         </TabsContent>
       </Tabs>
+
+      <EntityDetailDialog
+        description={`ID vận đơn nội bộ: ${selectedShipmentId}`}
+        onOpenChange={(open) => {
+          if (!open) closeShipmentDetail();
+        }}
+        open={Boolean(selectedShipmentId)}
+        title="Chi tiết vận đơn"
+      >
+        {selectedShipment ? (
+          <ShipmentPanel
+            canAdvance={nextStatuses.length > 0}
+            canOperate={canOperateShipments}
+            canCreateReturn={canCreateGoodsReturn}
+            onAssign={openAssignDialog}
+            onCreateReturn={openReturnDialog}
+            onUpdateStatus={openStatusDialog}
+            shipment={selectedShipment}
+          />
+        ) : null}
+      </EntityDetailDialog>
 
       <EntityDrawer
         open={Boolean(detailCarrier)}
@@ -879,7 +887,7 @@ function ShipmentTable({
           <Table scrollable>
             <TableHeader>
               <TableRow>
-                <TableHead>Mã đơn hàng</TableHead>
+                <TableHead>ID đơn hàng nội bộ</TableHead>
                 <TableHead>Người nhận</TableHead>
                 <TableHead>Trạng thái</TableHead>
                 <TableHead>Mã vận đơn</TableHead>
@@ -959,13 +967,7 @@ function ShipmentPanel({
   onUpdateStatus: () => void;
   shipment: Shipment | undefined;
 }) {
-  if (!shipment)
-    return (
-      <EmptyState
-        description="Chọn một vận đơn từ danh sách để xem thông tin bàn giao."
-        title="Chưa chọn vận đơn"
-      />
-    );
+  if (!shipment) return null;
 
   return (
     <Card className="overflow-hidden">
@@ -976,7 +978,7 @@ function ShipmentPanel({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 pt-4">
-        <InfoRow label="Mã đơn hàng" value={shipment.orderId} />
+        <InfoRow label="ID đơn hàng nội bộ" value={shipment.orderId} />
         <InfoRow
           label="Người nhận"
           value={`${shipment.recipient.name} · ${shipment.recipient.phone}`}

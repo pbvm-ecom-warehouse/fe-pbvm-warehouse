@@ -59,6 +59,7 @@ import {
   TablePanel,
   TableSkeleton,
 } from "@/features/admin-shell/components/operations-ui";
+import { EntityDetailDialog } from "@/features/admin-shell/components/entity-detail-dialog";
 import {
   listWarehouseItems,
   type WarehouseItem,
@@ -188,7 +189,7 @@ export function GoodsReturnsClient() {
     [returnsQuery.data],
   );
   const selectedReturn = returns.find((item) => item.id === selectedReturnId);
-  const activeReturnId = selectedReturn?.id ?? "";
+  const activeReturnId = selectedReturnId;
   const total = returnsQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -306,6 +307,12 @@ export function GoodsReturnsClient() {
     setInspectImages({});
   }
 
+  function closeReturnDetail() {
+    setSelectedReturnId("");
+    setInspectLines({});
+    setInspectImages({});
+  }
+
   function updateInspectLine(itemId: string, patch: Partial<InspectLineForm>) {
     const defaults: InspectLineForm = {
       condition: "GOOD",
@@ -367,12 +374,7 @@ export function GoodsReturnsClient() {
 
       {returnsQuery.error ? <ErrorBanner error={returnsQuery.error} /> : null}
 
-      <div
-        className={cn(
-          "grid gap-4 transition-all",
-          selectedReturn ? "xl:grid-cols-[minmax(0,1fr)_420px]" : "grid-cols-1",
-        )}
-      >
+      <div className="grid gap-4">
         <div className="min-w-0 space-y-4">
           <TablePanel
             count={`${total} bản ghi`}
@@ -456,17 +458,24 @@ export function GoodsReturnsClient() {
               </Button>
             </div>
           </TablePanel>
-
-          {detail ? (
-            <GoodsReturnDetail
-              detail={detail}
-              onSelect={() => setInspectLines(toInspectForm(detail.items))}
-            />
-          ) : null}
         </div>
+      </div>
 
-        {selectedReturn && detail ? (
-          <aside className="space-y-4">
+      <EntityDetailDialog
+        description={`ID phiếu nội bộ: ${selectedReturnId}`}
+        onOpenChange={(open) => {
+          if (!open) closeReturnDetail();
+        }}
+        open={Boolean(selectedReturnId)}
+        title="Chi tiết phiếu hoàn hàng"
+      >
+        {detailQuery.isLoading && !detail ? (
+          <TableSkeleton columns={6} />
+        ) : null}
+        {detailQuery.error ? <ErrorBanner error={detailQuery.error} /> : null}
+        {detail ? (
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+            <GoodsReturnDetail detail={detail} />
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -474,7 +483,7 @@ export function GoodsReturnsClient() {
                   Xử lý phiếu
                 </CardTitle>
                 <CardDescription>
-                  {detail.id} · {statusLabel(detail.status)}
+                  ID nội bộ: {detail.id} · {statusLabel(detail.status)}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -505,7 +514,6 @@ export function GoodsReturnsClient() {
                       />
                     ))}
                   </div>
-
                   <Button
                     className="w-full"
                     disabled={
@@ -527,7 +535,6 @@ export function GoodsReturnsClient() {
                     Ghi nhận phân loại
                   </Button>
                 </form>
-
                 <div className="grid gap-2 sm:grid-cols-2">
                   <Button
                     disabled={
@@ -571,9 +578,9 @@ export function GoodsReturnsClient() {
                 </div>
               </CardContent>
             </Card>
-          </aside>
+          </div>
         ) : null}
-      </div>
+      </EntityDetailDialog>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent size="lg">
@@ -690,8 +697,8 @@ function GoodsReturnTable({
     <Table scrollable>
       <TableHeader>
         <TableRow>
-          <TableHead>Mã phiếu</TableHead>
-          <TableHead>Mã đơn hàng</TableHead>
+          <TableHead>ID phiếu nội bộ</TableHead>
+          <TableHead>ID đơn hàng nội bộ</TableHead>
           <TableHead>Trạng thái</TableHead>
           <TableHead>Số dòng</TableHead>
           <TableHead>Ngày tạo</TableHead>
@@ -743,18 +750,14 @@ function GoodsReturnTable({
   );
 }
 
-function GoodsReturnDetail({
-  detail,
-  onSelect,
-}: {
-  detail: GoodsReturn;
-  onSelect: () => void;
-}) {
+function GoodsReturnDetail({ detail }: { detail: GoodsReturn }) {
   return (
-    <Card onClick={onSelect}>
+    <Card>
       <CardHeader className="border-b bg-muted/20">
         <CardTitle className="text-base">
-          {detail.orderId ?? "Phiếu hoàn không gắn đơn"}
+          {detail.orderId
+            ? `ID đơn hàng nội bộ: ${detail.orderId}`
+            : "Phiếu hoàn không gắn đơn"}
         </CardTitle>
         <CardDescription>{statusLabel(detail.status)}</CardDescription>
       </CardHeader>
