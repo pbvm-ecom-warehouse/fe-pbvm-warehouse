@@ -58,6 +58,9 @@ describe("WMS RBAC helpers", () => {
     expect(hasRouteAccess("/putaway-tasks", ["PICKER"])).toBe(false);
     expect(receiverRoutes).not.toContain("/suppliers");
     expect(receiverRoutes).toContain("/goods-returns");
+    expect(receiverRoutes).not.toContain("/adjustments");
+    expect(hasRouteAccess("/adjustments", ["RECEIVER"])).toBe(false);
+    expect(hasModuleActionAccess("adjustments", ["RECEIVER"])).toBe(false);
     expect(receiverRoutes).not.toContain("/transfers");
     expect(receiverRoutes).not.toContain("/staff");
     expect(printerRoutes).not.toContain("/staff");
