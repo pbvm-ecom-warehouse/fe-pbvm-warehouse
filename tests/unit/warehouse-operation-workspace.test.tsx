@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WarehouseOperationWorkspace } from "@/features/warehouse-navigation/components/warehouse-operation-workspace";
@@ -23,8 +29,17 @@ vi.mock(
   }),
 );
 vi.mock("@/features/warehouse-navigation/components/rack-cell-viewer", () => ({
-  RackCellViewer: ({ rackCode }: { rackCode?: string }) => (
-    <div>Mặt kệ kiểm thử {rackCode}</div>
+  RackCellViewer: ({
+    cells,
+    rackCode,
+  }: {
+    cells?: Array<{ contents: Array<{ images?: string[] | null }> }>;
+    rackCode?: string;
+  }) => (
+    <div>
+      <div>Mặt kệ kiểm thử {rackCode}</div>
+      <div>Ảnh content {cells?.[0]?.contents[0]?.images?.[0] ?? "none"}</div>
+    </div>
   ),
 }));
 
@@ -127,4 +142,107 @@ describe("WarehouseOperationWorkspace", () => {
       screen.queryByLabelText("Sơ đồ đường đi trong kho"),
     ).not.toBeInTheDocument();
   });
+
+  it("mở mặt kệ trực tiếp từ nút xem trên lựa chọn vị trí", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <WarehouseOperationWorkspace
+          operation="PUTAWAY"
+          sku="SKU-01"
+          remainingPackageCount={10}
+          suggestions={[
+            {
+              cellId: "cell-1",
+              cellCode: "RACK-01-T1-B1",
+              rackId: "rack-1",
+              level: 1,
+              bay: 1,
+              path: {
+                distanceM: 8,
+                points: [
+                  { xM: 1, yM: 1 },
+                  { xM: 4, yM: 5.5 },
+                ],
+                startGateCode: "GATE-01",
+                targetRackId: "rack-1",
+              },
+              capacity: 12,
+            },
+          ]}
+          onConfirm={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Xem mặt kệ RACK-01" }),
+      ).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Xem mặt kệ RACK-01" }));
+
+    expect(
+      await screen.findByRole("dialog", { name: "Mặt kệ RACK-01" }),
+    ).toBeVisible();
+    expect(await screen.findByText("Mặt kệ kiểm thử RACK-01")).toBeVisible();
+  });
+
+  it("mở bản đồ từ nút xem trên thẻ vị trí đã cất", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <WarehouseOperationWorkspace
+          operation="PUTAWAY"
+          sku="SKU-01"
+          remainingPackageCount={0}
+          readOnly
+          suggestions={[
+            {
+              cellId: "cell-1",
+              cellCode: "RACK-01-T1-B1",
+              rackId: "rack-1",
+              level: 1,
+              bay: 1,
+              path: {
+                distanceM: 8,
+                points: [
+                  { xM: 1, yM: 1 },
+                  { xM: 4, yM: 5.5 },
+                ],
+                startGateCode: "GATE-01",
+                targetRackId: "rack-1",
+              },
+              quantity: 10,
+              lotNumber: "LOT-260729-001",
+              expiryDate: "2027-07-29T00:00:00.000Z",
+            },
+          ]}
+          onConfirm={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Xem bản đồ RACK-01" }),
+      ).toBeEnabled(),
+    );
+    expect(screen.getByText("HSD 29/07/2027")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Xem bản đồ RACK-01" }));
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Bản đồ vị trí đã cất",
+    });
+    expect(dialog).toBeVisible();
+    expect(
+      within(dialog).getByLabelText("Sơ đồ đường đi trong kho"),
+    ).toBeVisible();
+  });
+
 });

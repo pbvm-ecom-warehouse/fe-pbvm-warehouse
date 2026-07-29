@@ -6,6 +6,7 @@ export type StorageCellContent = {
   id: string;
   sku: string;
   itemName: string;
+  images?: string[] | null;
   unit: string;
   quantity: number;
   packageFactor?: number | null;

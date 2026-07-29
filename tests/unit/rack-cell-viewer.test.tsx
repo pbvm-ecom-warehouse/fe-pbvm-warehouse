@@ -1,9 +1,15 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { RackCellViewer } from "@/features/warehouse-navigation/components/rack-cell-viewer";
 import type { StorageCellView } from "@/features/warehouse-navigation/services/warehouse-operations.service";
+
+vi.mock("jsbarcode", () => ({
+  default: vi.fn((element: SVGSVGElement, value: string) => {
+    element.setAttribute("data-barcode-value", value);
+  }),
+}));
 
 function cell(overrides: Partial<StorageCellView> = {}): StorageCellView {
   return {
@@ -86,5 +92,72 @@ describe("rack cell viewer", () => {
     expect(
       screen.getByRole("button", { name: "Khoang chỉ xem" }),
     ).toBeDisabled();
+  });
+
+  it("shows the selected shelf barcode for scanner confirmation", () => {
+    render(<ControlledViewer value={cell({ barcode: "RACK-03-T1-B1" })} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /A-01-01/i }));
+
+    expect(screen.getByText("Mã vạch khoang")).toBeVisible();
+    expect(
+      screen.getByRole("img", { name: "Mã vạch nội bộ RACK-03-T1-B1" }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens lot and item details from a stored batch card", () => {
+    render(
+      <ControlledViewer
+        value={cell({
+          fillPercent: 28,
+          occupiedVolumeCm3: 120000,
+          contents: [
+            {
+              id: "stock-1",
+              sku: "CUP-RND-PP-700-WHT",
+              itemName: "Ly nhựa PP 700ml trắng sữa",
+              images: ["https://cdn.example/cup.png"],
+              unit: "thùng",
+              quantity: 10,
+              packageFactor: 50,
+              packageDepthCm: 30,
+              packageWidthCm: 20,
+              packageHeightCm: 10,
+              packageVolumeCm3Snapshot: 6000,
+              lotNumber: "LOT-260715-002",
+              expiryDate: "2027-07-15T00:00:00.000Z",
+            },
+          ],
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /A-01-01/i }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /CUP-RND-PP-700-WHT Ly nhựa PP 700ml trắng sữa/i,
+      }),
+    );
+
+    const dialog = screen.getByRole("dialog", {
+      name: "Chi tiết lô LOT-260715-002",
+    });
+    expect(dialog).toBeVisible();
+    expect(within(dialog).getByText("CUP-RND-PP-700-WHT")).toBeVisible();
+    expect(
+      within(dialog).getByText("Ly nhựa PP 700ml trắng sữa"),
+    ).toBeVisible();
+    expect(
+      within(dialog).getByRole("img", {
+        name: "Ảnh mặt hàng CUP-RND-PP-700-WHT",
+      }),
+    ).toBeVisible();
+    expect(within(dialog).getByText("10 thùng")).toBeVisible();
+    expect(within(dialog).getByText("50 đơn vị/thùng")).toBeVisible();
+    expect(within(dialog).getByText("30 × 20 × 10 cm")).toBeVisible();
+    expect(within(dialog).getByText("15/07/2027")).toBeVisible();
+    expect(
+      within(dialog).queryByText("2027-07-15T00:00:00.000Z"),
+    ).not.toBeInTheDocument();
   });
 });

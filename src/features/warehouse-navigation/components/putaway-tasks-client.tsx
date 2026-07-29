@@ -143,6 +143,9 @@ export function PutawayTasksClient() {
       )
     : workItems;
   const selected = workItems.find((item) => item.key === selectedKey);
+  const selectedSku = selected?.sku;
+  const selectedLotNumber = selected?.lotNumber;
+  const selectedExpiryDate = selected?.expiryDate;
   const receiptsLoading = receiptQueries.some((query) => query.isLoading);
   const firstReceiptError = receiptQueries.find((query) => query.error)?.error;
   const selectedStatus = selected?.taskStatus ?? "PENDING";
