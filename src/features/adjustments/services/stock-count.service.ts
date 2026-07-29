@@ -26,6 +26,7 @@ export type StockCountItem = {
 
 export type StockCount = {
   id: string;
+  stockCountNumber?: string | null;
   zoneId?: string | null;
   status: StockCountStatus;
   note?: string;

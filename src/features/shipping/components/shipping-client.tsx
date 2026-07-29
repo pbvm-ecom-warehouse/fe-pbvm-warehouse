@@ -59,6 +59,7 @@ import { useSessionUser } from "@/hooks/use-session-user";
 import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
+import { businessCodeLabel } from "@/lib/wms-ui-labels";
 import { createGoodsReturn } from "@/features/goods-returns/services/goods-return.service";
 import { listWarehouseItems } from "@/features/products/services/warehouse-items.service";
 
@@ -330,9 +331,9 @@ export function ShippingClient() {
     setReturnForm({
       itemId: "",
       note: selectedShipment?.failReason
-        ? `Hoàn từ vận đơn ${selectedShipment.id}: ${selectedShipment.failReason}`
+        ? `Hoàn từ vận đơn ${businessCodeLabel(selectedShipment.shipmentNumber)}: ${selectedShipment.failReason}`
         : selectedShipment
-          ? `Hoàn từ vận đơn ${selectedShipment.id}`
+          ? `Hoàn từ vận đơn ${businessCodeLabel(selectedShipment.shipmentNumber)}`
           : "",
       quantity: "1",
     });
@@ -458,7 +459,7 @@ export function ShippingClient() {
       </Tabs>
 
       <EntityDetailDialog
-        description={`ID vận đơn nội bộ: ${selectedShipmentId}`}
+        description={`Mã vận đơn kho: ${businessCodeLabel(selectedShipment?.shipmentNumber)}`}
         onOpenChange={(open) => {
           if (!open) closeShipmentDetail();
         }}
@@ -682,7 +683,7 @@ export function ShippingClient() {
             <DialogTitle>Tạo phiếu hoàn hàng</DialogTitle>
             <DialogDescription>
               {selectedShipment
-                ? `Đơn ${selectedShipment.orderId} · chọn mặt hàng cần nhập hoàn.`
+                ? `Đơn ${businessCodeLabel(selectedShipment.orderCode)} · chọn mặt hàng cần nhập hoàn.`
                 : "Chọn mặt hàng cần nhập hoàn."}
             </DialogDescription>
           </DialogHeader>
@@ -882,21 +883,22 @@ function ShipmentTable({
       </CardHeader>
       <CardContent className="pt-4">
         {isLoading ? (
-          <TableSkeleton columns={5} />
+          <TableSkeleton columns={6} />
         ) : (
           <Table scrollable>
             <TableHeader>
               <TableRow>
-                <TableHead>ID đơn hàng nội bộ</TableHead>
+                <TableHead>Mã vận đơn kho</TableHead>
+                <TableHead>Mã đơn hàng</TableHead>
                 <TableHead>Người nhận</TableHead>
                 <TableHead>Trạng thái</TableHead>
-                <TableHead>Mã vận đơn</TableHead>
+                <TableHead>Mã vận chuyển</TableHead>
                 <TableHead className="text-right">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {shipments.length === 0 ? (
-                <EmptyRow colSpan={5} label="Chưa có vận đơn phù hợp." />
+                <EmptyRow colSpan={6} label="Chưa có vận đơn phù hợp." />
               ) : (
                 shipments.map((shipment) => (
                   <TableRow
@@ -908,7 +910,10 @@ function ShipmentTable({
                     onClick={() => onSelect(shipment)}
                   >
                     <TableCell className="font-mono font-semibold">
-                      {shipment.orderId}
+                      {businessCodeLabel(shipment.shipmentNumber)}
+                    </TableCell>
+                    <TableCell>
+                      {businessCodeLabel(shipment.orderCode)}
                     </TableCell>
                     <TableCell>
                       <div className="font-medium">
@@ -978,13 +983,21 @@ function ShipmentPanel({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 pt-4">
-        <InfoRow label="ID đơn hàng nội bộ" value={shipment.orderId} />
+        <InfoRow
+          label="Mã vận đơn kho"
+          mono
+          value={businessCodeLabel(shipment.shipmentNumber)}
+        />
+        <InfoRow
+          label="Mã đơn hàng"
+          value={businessCodeLabel(shipment.orderCode)}
+        />
         <InfoRow
           label="Người nhận"
           value={`${shipment.recipient.name} · ${shipment.recipient.phone}`}
         />
         <InfoRow
-          label="Mã vận đơn"
+          label="Mã vận chuyển"
           mono
           value={shipment.trackingNumber ?? "Chưa gán"}
         />

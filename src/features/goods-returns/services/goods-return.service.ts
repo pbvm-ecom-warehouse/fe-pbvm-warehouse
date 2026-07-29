@@ -30,6 +30,8 @@ export type GoodsReturnItem = {
 export type GoodsReturn = {
   id: string;
   orderId?: string;
+  goodsReturnNumber?: string | null;
+  orderCode?: string | null;
   status: GoodsReturnStatus;
   note?: string;
   createdBy: string | null;
