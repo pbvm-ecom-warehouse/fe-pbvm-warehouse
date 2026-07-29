@@ -105,6 +105,37 @@ describe("rack cell viewer", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows inventory and capacity for the first occupied cell by default", () => {
+    render(
+      <RackCellViewer
+        rackCode="A-01"
+        cells={[
+          cell({
+            contents: [
+              {
+                id: "stock-1",
+                sku: "SKU-01",
+                itemName: "Mặt hàng kiểm thử",
+                unit: "thùng",
+                quantity: 12,
+                lotNumber: "LOT-01",
+              },
+            ],
+            fillPercent: 40,
+          }),
+        ]}
+        onActivateCell={vi.fn()}
+        onSelectCell={vi.fn()}
+        operation="PUTAWAY"
+      />,
+    );
+
+    expect(screen.getByText("Mã vạch khoang")).toBeVisible();
+    expect(screen.getByText("SKU-01")).toBeVisible();
+    expect(screen.getByText("12 thùng")).toBeVisible();
+    expect(screen.queryByText(/Chọn một khoang/)).not.toBeInTheDocument();
+  });
+
   it("opens lot and item details from a stored batch card", () => {
     render(
       <ControlledViewer

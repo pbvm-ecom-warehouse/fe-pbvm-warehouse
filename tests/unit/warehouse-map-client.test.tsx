@@ -10,6 +10,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { WarehouseLayout } from "@/types/api";
 
+vi.mock("jsbarcode", () => ({
+  default: vi.fn((element: SVGSVGElement, value: string) => {
+    element.setAttribute("data-barcode-value", value);
+  }),
+}));
+
 const {
   baseLayout,
   fetchWarehouseLayout,

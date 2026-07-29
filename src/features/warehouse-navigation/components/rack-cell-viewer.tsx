@@ -170,10 +170,19 @@ export function RackCellViewer({
     () => new Set(suggestedCellIds),
     [suggestedCellIds],
   );
-  const selected = useMemo(
-    () => cells.find((cell) => cell.id === selectedCellId),
-    [cells, selectedCellId],
+  const fallbackSelected = useMemo(
+    () =>
+      cells.find((cell) => cell.contents.length > 0) ??
+      cells.find((cell) => suggestedSet.has(cell.id)) ??
+      cells[0],
+    [cells, suggestedSet],
   );
+  const selected = useMemo(
+    () =>
+      cells.find((cell) => cell.id === selectedCellId) ?? fallbackSelected,
+    [cells, fallbackSelected, selectedCellId],
+  );
+  const effectiveSelectedCellId = selected?.id;
   const rackMeasurements = useMemo(() => getRackMeasurements(cells), [cells]);
 
   function getState(cell: StorageCellView): ViewerCellState {
@@ -263,13 +272,13 @@ export function RackCellViewer({
           {mode === "3D" && webGlAvailable ? (
             <RackScene
               cells={cells}
-              selectedCellId={selectedCellId}
+              selectedCellId={effectiveSelectedCellId}
               onSelectCell={onSelectCell}
             />
           ) : (
             <CellGrid
               cells={cells}
-              selectedCellId={selectedCellId}
+              selectedCellId={effectiveSelectedCellId}
               onSelectCell={onSelectCell}
               getState={getState}
             />
