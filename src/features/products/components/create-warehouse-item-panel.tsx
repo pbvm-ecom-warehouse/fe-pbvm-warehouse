@@ -858,7 +858,12 @@ function AttributeOptionCombobox({
         </PopoverTrigger>
         <PopoverContent
           align="start"
-          className="w-[var(--radix-popover-trigger-width)] p-1"
+          className="p-1"
+          style={
+            {
+              width: "var(--radix-popover-trigger-width)",
+            } as React.CSSProperties
+          }
         >
           <Command>
             <CommandInput autoFocus placeholder="Tìm tên hoặc mã SKU" />

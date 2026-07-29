@@ -13,6 +13,7 @@ export type SessionUser = {
   avatarUrl?: string;
   name: string;
   email?: string;
+  mustChangePassword?: boolean;
   roles: WmsRole[];
   tenantId: string;
   type: "user";
@@ -30,6 +31,8 @@ type WmsJwtPayload = JWTPayload & {
   avatarUrl?: unknown;
   email?: unknown;
   id?: unknown;
+  mustChangePassword?: unknown;
+  must_change_password?: unknown;
   name?: unknown;
   role?: unknown;
   roles?: unknown;
@@ -44,6 +47,10 @@ function stringClaim(value: unknown) {
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
     : undefined;
+}
+
+function booleanClaim(value: unknown) {
+  return typeof value === "boolean" ? value : undefined;
 }
 
 export const DEFAULT_SESSION_USER: SessionUser = {
@@ -83,6 +90,9 @@ export function sessionUserFromClaims(
       stringClaim(payload.email) ??
       "Nhân viên WMS",
     email: stringClaim(payload.email),
+    mustChangePassword:
+      booleanClaim(payload.mustChangePassword) ??
+      booleanClaim(payload.must_change_password),
     roles,
     tenantId:
       stringClaim(payload.tenantId) ??
@@ -113,6 +123,7 @@ export function sessionUserFromWmsUserResponse(
       fallback?.name ||
       "Nhân viên WMS",
     email: user.email?.trim() || fallback?.email,
+    mustChangePassword: user.mustChangePassword,
     roles,
     tenantId: fallback?.tenantId ?? fallbackTenantId,
 

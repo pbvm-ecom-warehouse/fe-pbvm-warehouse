@@ -45,6 +45,19 @@ describe("wms login schema", () => {
     ).toBe(true);
   });
 
+  it("trims leading and trailing spaces from username and password", () => {
+    const parsed = loginSchema.safeParse({
+      username: "  receiver.one  ",
+      password: "  P@ssw0rd!  ",
+    });
+
+    expect(parsed.success).toBe(true);
+    expect(parsed.data).toEqual({
+      username: "receiver.one",
+      password: "P@ssw0rd!",
+    });
+  });
+
   it("rejects the old email plus tenant payload shape", () => {
     expect(
       loginSchema.safeParse({

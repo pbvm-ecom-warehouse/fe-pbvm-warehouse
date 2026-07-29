@@ -134,7 +134,12 @@ export function WarehouseItemCombobox({
         align="start"
         collisionPadding={12}
         side="bottom"
-        className="w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)] p-0"
+        className="max-w-[calc(100vw-2rem)] p-0"
+        style={
+          {
+            width: "var(--radix-popover-trigger-width)",
+          } as React.CSSProperties
+        }
       >
         <Command shouldFilter={false}>
           <CommandInput
