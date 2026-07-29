@@ -907,10 +907,10 @@ function WarehouseEditor({
 
       <Dialog open={rackDialogOpen} onOpenChange={setRackDialogOpen}>
         <DialogContent
-          className="max-h-[92dvh] gap-0 overflow-hidden p-0"
+          className="flex h-[92dvh] max-h-[92dvh] flex-col gap-0 overflow-hidden p-0"
           size="5xl"
         >
-          <DialogHeader className="border-b px-5 py-4 pr-14">
+          <DialogHeader className="shrink-0 border-b px-5 py-4 pr-14">
             <DialogTitle>
               Mặt kệ {selectedViewRack?.code ?? "đã chọn"}
             </DialogTitle>
@@ -927,9 +927,9 @@ function WarehouseEditor({
               Quay lại bản đồ
             </Button>
           </DialogHeader>
-          <div className="min-h-0 overflow-y-auto p-4">
+          <div className="flex min-h-0 flex-1 p-4">
             {viewCellsQuery.isLoading ? (
-              <div className="grid h-[55dvh] place-items-center">
+              <div className="grid flex-1 place-items-center">
                 <LoaderCircle className="size-5 animate-spin text-primary" />
               </div>
             ) : (
