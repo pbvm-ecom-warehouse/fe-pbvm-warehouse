@@ -2,12 +2,9 @@ import { apiClient } from "@/lib/api-client";
 import { type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
 
 export const PURCHASE_ORDER_STATUSES = [
-  "DRAFT",
   "CONFIRMED",
-  "SENT",
   "PARTIALLY_RECEIVED",
   "COMPLETED",
-  "CANCELLED",
 ] as const;
 
 export type PurchaseOrderStatus = (typeof PURCHASE_ORDER_STATUSES)[number];

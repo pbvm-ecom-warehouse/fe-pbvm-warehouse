@@ -181,7 +181,7 @@ const purchaseOrder = {
     name: "Công ty Minh Long",
     status: "ACTIVE",
   },
-  status: "DRAFT" as const,
+  status: "CONFIRMED" as const,
   supplierId: "sup-1",
   updatedAt: "2026-07-23T00:00:00.000Z",
 };
