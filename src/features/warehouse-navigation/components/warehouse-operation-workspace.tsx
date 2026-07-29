@@ -548,6 +548,7 @@ export function WarehouseOperationWorkspace({
                 onActivateCell={readOnly ? () => {} : activateCell}
                 operation={operation}
                 packageSpec={packageSpec}
+                showCellAction={!readOnly}
                 suggestedCellIds={suggestions.map(
                   (suggestion) => suggestion.cellId,
                 )}

@@ -153,6 +153,7 @@ export function RackCellViewer({
   operation = "PUTAWAY",
   packageSpec,
   suggestedCellIds = [],
+  showCellAction = true,
 }: {
   rackCode?: string;
   cells: StorageCellView[];
@@ -162,6 +163,7 @@ export function RackCellViewer({
   operation?: "PUTAWAY" | "PICK";
   packageSpec?: PutawayPackageSpec;
   suggestedCellIds?: string[];
+  showCellAction?: boolean;
 }) {
   const [webGlAvailable, setWebGlAvailable] = useState<boolean>();
   const [mode, setMode] = useState<"3D" | "GRID">("GRID");
@@ -368,16 +370,18 @@ export function RackCellViewer({
                   ))}
                 </div>
               )}
-              <Button
-                className="w-full"
-                disabled={!selectedState.selectable}
-                onClick={() => onActivateCell(selected)}
-                type="button"
-              >
-                {selectedState.selectable
-                  ? "Chọn khoang và quét mã"
-                  : "Khoang chỉ xem"}
-              </Button>
+              {showCellAction ? (
+                <Button
+                  className="w-full"
+                  disabled={!selectedState.selectable}
+                  onClick={() => onActivateCell(selected)}
+                  type="button"
+                >
+                  {selectedState.selectable
+                    ? "Chọn khoang và quét mã"
+                    : "Khoang chỉ xem"}
+                </Button>
+              ) : null}
             </div>
           ) : (
             <div className="grid min-h-56 place-items-center text-center text-sm text-muted-foreground">
