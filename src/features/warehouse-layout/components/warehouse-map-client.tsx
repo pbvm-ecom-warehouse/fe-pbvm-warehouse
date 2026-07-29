@@ -939,6 +939,7 @@ function WarehouseEditor({
                 onActivateCell={() => {}}
                 onSelectCell={() => {}}
                 operation="PUTAWAY"
+                showCellAction={false}
               />
             )}
           </div>

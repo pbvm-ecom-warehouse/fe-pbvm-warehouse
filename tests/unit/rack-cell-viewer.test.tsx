@@ -136,6 +136,26 @@ describe("rack cell viewer", () => {
     expect(screen.queryByText(/Chọn một khoang/)).not.toBeInTheDocument();
   });
 
+  it("hides the cell action button in view-only mode", () => {
+    render(
+      <RackCellViewer
+        rackCode="A-01"
+        cells={[cell()]}
+        onActivateCell={vi.fn()}
+        onSelectCell={vi.fn()}
+        packageSpec={packageSpec}
+        showCellAction={false}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Chọn khoang và quét mã" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Khoang chỉ xem" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("opens lot and item details from a stored batch card", () => {
     render(
       <ControlledViewer
