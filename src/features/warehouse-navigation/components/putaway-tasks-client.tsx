@@ -36,6 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   PageHeader,
   PermissionNotice,
@@ -61,6 +62,7 @@ import {
   listRackCells,
 } from "../services/warehouse-operations.service";
 import { buildPutawayWorkItems } from "../utils/putaway-work-items";
+import { InventoryReconciliationPanel } from "./inventory-reconciliation-panel";
 import { WarehouseOperationWorkspace } from "./warehouse-operation-workspace";
 
 const keys = {
@@ -96,6 +98,7 @@ export function PutawayTasksClient() {
   const [status, setStatus] = useState<PutawayTaskStatus | "ALL">("ALL");
   const [search, setSearch] = useState("");
   const [selectedKey, setSelectedKey] = useState("");
+  const [activeTab, setActiveTab] = useState("putaway-tasks");
 
   const tasksQuery = useQuery({
     enabled: canView,
@@ -162,7 +165,7 @@ export function PutawayTasksClient() {
       queryFn: () => listRackCells(rack.id),
     })),
   });
-  const completedMatches = useMemo(() => {
+  const completedMatches = (() => {
     if (!selected || !isCompletedDetail) return [];
 
     return completedRackCellQueries.flatMap((query) =>
@@ -190,11 +193,10 @@ export function PutawayTasksClient() {
         ];
       }),
     );
-  }, [completedRackCellQueries, isCompletedDetail, selected]);
-  const completedRackIds = useMemo(
-    () => [...new Set(completedMatches.map((match) => match.cell.rackId))],
-    [completedMatches],
-  );
+  })();
+  const completedRackIds = [
+    ...new Set(completedMatches.map((match) => match.cell.rackId)),
+  ];
   const completedPathQueries = useQueries({
     queries: completedRackIds.map((rackId) => ({
       enabled: canView && isCompletedDetail,
@@ -202,43 +204,38 @@ export function PutawayTasksClient() {
       queryFn: () => getNavigationPath(rackId),
     })),
   });
-  const completedPathsByRackId = useMemo(
-    () =>
-      new Map(
-        completedRackIds.map((rackId, index) => [
-          rackId,
-          completedPathQueries[index]?.data,
-        ]),
-      ),
-    [completedPathQueries, completedRackIds],
+  const completedPathsByRackId = new Map(
+    completedRackIds.map((rackId, index) => [
+      rackId,
+      completedPathQueries[index]?.data,
+    ]),
   );
-  const completedSuggestions = useMemo(
-    () => {
-      const suggestions = completedMatches.flatMap((match) => {
-        const path = completedPathsByRackId.get(match.cell.rackId);
-        if (!path) return [];
+  const completedSuggestions = (() => {
+    const suggestions = completedMatches.flatMap((match) => {
+      const path = completedPathsByRackId.get(match.cell.rackId);
+      if (!path) return [];
 
-        return [
-          {
-            cellId: match.cell.id,
-            cellCode: match.cell.code,
-            rackId: match.cell.rackId,
-            level: match.cell.level,
-            bay: match.cell.bay,
-            path,
-            quantity: match.matchedQuantity,
-            fillPercent: match.cell.fillPercent,
-            reason: `Đã cất tại đây · ${match.matchedQuantity} thùng`,
-            lotNumber: selected?.lotNumber ?? null,
-            expiryDate: selected?.expiryDate ?? null,
-          },
-        ];
-      });
+      return [
+        {
+          cellId: match.cell.id,
+          cellCode: match.cell.code,
+          rackId: match.cell.rackId,
+          level: match.cell.level,
+          bay: match.cell.bay,
+          path,
+          quantity: match.matchedQuantity,
+          fillPercent: match.cell.fillPercent,
+          reason: `Đã cất tại đây · ${match.matchedQuantity} thùng`,
+          lotNumber: selected?.lotNumber ?? null,
+          expiryDate: selected?.expiryDate ?? null,
+        },
+      ];
+    });
 
-      return suggestions.sort((left, right) => left.path.distanceM - right.path.distanceM);
-    },
-    [completedMatches, completedPathsByRackId, selected],
-  );
+    return suggestions.sort(
+      (left, right) => left.path.distanceM - right.path.distanceM,
+    );
+  })();
 
   const confirmMutation = useMutation({
     mutationFn: async (input: {
@@ -308,267 +305,292 @@ export function PutawayTasksClient() {
     );
   }
 
-  const viewingDetail = Boolean(selected);
+  const viewingDetail = activeTab === "putaway-tasks" && Boolean(selected);
 
   return (
     <div className="space-y-5">
       <PageHeader
         title="Cất hàng"
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {viewingDetail ? (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSelectedKey("");
-                }}
-              >
-                <ArrowLeft data-icon="inline-start" />
-                Quay lại danh sách
+          activeTab === "putaway-tasks" ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {viewingDetail ? (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedKey("");
+                  }}
+                >
+                  <ArrowLeft data-icon="inline-start" />
+                  Quay lại danh sách
+                </Button>
+              ) : null}
+              <Button variant="outline" onClick={() => void refresh()}>
+                <RefreshCw data-icon="inline-start" />
+                Làm mới
               </Button>
-            ) : null}
-            <Button variant="outline" onClick={() => void refresh()}>
-              <RefreshCw data-icon="inline-start" />
-              Làm mới
-            </Button>
-          </div>
+            </div>
+          ) : null
         }
       />
-      {!canConfirm ? (
-        <PermissionNotice>
-          Manager được theo dõi tiến độ; chỉ Admin và Receiver được quét xác
-          nhận.
-        </PermissionNotice>
-      ) : null}
-      {tasksQuery.error || firstReceiptError ? (
-        <ErrorBanner error={tasksQuery.error ?? firstReceiptError} />
-      ) : null}
 
-      {viewingDetail && selected ? (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader className="border-b bg-muted/20">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="space-y-1.5">
-                  <CardTitle className="text-base">
-                    {selected.itemName}
-                  </CardTitle>
-                  <div className="font-mono text-sm text-muted-foreground">
-                    {selected.sku}
+      <Tabs
+        className="space-y-4"
+        value={activeTab}
+        onValueChange={setActiveTab}
+      >
+        <TabsList>
+          <TabsTrigger value="putaway-tasks">Lệnh cất hàng</TabsTrigger>
+          <TabsTrigger value="inventory-reconciliation">
+            Phân khoang tồn cũ
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent className="space-y-4" value="putaway-tasks">
+          {!canConfirm ? (
+            <PermissionNotice>
+              Manager được theo dõi tiến độ; chỉ Admin và Receiver được quét xác
+              nhận.
+            </PermissionNotice>
+          ) : null}
+          {tasksQuery.error || firstReceiptError ? (
+            <ErrorBanner error={tasksQuery.error ?? firstReceiptError} />
+          ) : null}
+
+          {viewingDetail && selected ? (
+            <div className="space-y-4">
+              <Card>
+                <CardHeader className="border-b bg-muted/20">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1.5">
+                      <CardTitle className="text-base">
+                        {selected.itemName}
+                      </CardTitle>
+                      <div className="font-mono text-sm text-muted-foreground">
+                        {selected.sku}
+                      </div>
+                    </div>
+                    <StatusBadge tone={statusTone(selectedStatus)}>
+                      {selectedStatus === "PENDING"
+                        ? "Đang cất"
+                        : statusLabel(selectedStatus)}
+                    </StatusBadge>
+                  </div>
+                </CardHeader>
+                <CardContent className="grid gap-3 pt-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <div className="text-xs text-muted-foreground">
+                      Phiếu nhập
+                    </div>
+                    <div className="mt-1 font-mono text-sm font-medium">
+                      {selected.grnNumber}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <div className="text-xs text-muted-foreground">Số lô</div>
+                    <div className="mt-1 font-mono text-sm font-medium">
+                      {selected.lotNumber ?? "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <div className="text-xs text-muted-foreground">
+                      Kích thước thùng
+                    </div>
+                    <div className="mt-1 text-sm font-medium">
+                      {selected.packageSpec
+                        ? `${selected.packageSpec.depthCm} × ${selected.packageSpec.widthCm} × ${selected.packageSpec.heightCm} cm`
+                        : "Chưa khai báo"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <div className="text-xs text-muted-foreground">
+                      Ngày sản xuất
+                    </div>
+                    <div className="mt-1 flex items-center gap-1.5 text-sm font-medium">
+                      <CalendarDays className="size-3.5 text-primary" />
+                      {formatDate(selected.manufacturedDate)}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {selectedStatus === "PENDING" && canConfirm ? (
+                <WarehouseOperationWorkspace
+                  key={selected.key}
+                  operation="PUTAWAY"
+                  sku={selected.sku}
+                  remainingPackageCount={selected.remainingQty}
+                  packageSpec={selected.packageSpec}
+                  suggestions={suggestionQuery.data?.suggestions ?? []}
+                  suggestionsLoading={suggestionQuery.isLoading}
+                  suggestionsError={suggestionQuery.error}
+                  pending={confirmMutation.isPending}
+                  onConfirm={async (input) => {
+                    await confirmMutation.mutateAsync(input);
+                  }}
+                />
+              ) : (
+                <WarehouseOperationWorkspace
+                  key={`${selected.key}:readonly`}
+                  operation="PUTAWAY"
+                  sku={selected.sku}
+                  remainingPackageCount={selected.remainingQty}
+                  packageSpec={selected.packageSpec}
+                  suggestions={completedSuggestions}
+                  suggestionsLoading={
+                    layoutQuery.isLoading ||
+                    completedRackCellQueries.some((query) => query.isLoading) ||
+                    completedPathQueries.some((query) => query.isLoading)
+                  }
+                  suggestionsError={
+                    layoutQuery.error ??
+                    completedRackCellQueries.find((query) => query.error)
+                      ?.error ??
+                    completedPathQueries.find((query) => query.error)?.error
+                  }
+                  readOnly
+                  readOnlyMessage={
+                    selectedStatus === "COMPLETED"
+                      ? completedSuggestions.length > 0
+                        ? "Dòng hàng này đã được cất hoàn tất. Bản đồ bên dưới hiển thị vị trí đang chứa hàng."
+                        : "Dòng hàng này đã được cất hoàn tất nhưng chưa tìm thấy vị trí tồn thực tế khớp trên sơ đồ."
+                      : "Chế độ theo dõi không cho phép quét xác nhận."
+                  }
+                  onConfirm={async () => {}}
+                />
+              )}
+            </div>
+          ) : (
+            <Card>
+              <CardHeader className="border-b bg-muted/20">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-1.5">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Boxes className="size-4 text-primary" />
+                      Danh sách mặt hàng
+                    </CardTitle>
+                    <div className="text-sm text-muted-foreground">
+                      Chọn một dòng để mở bản đồ cất hàng trong cùng tab.
+                    </div>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {visibleItems.length} mặt hàng
                   </div>
                 </div>
-                <StatusBadge tone={statusTone(selectedStatus)}>
-                  {selectedStatus === "PENDING"
-                    ? "Đang cất"
-                    : statusLabel(selectedStatus)}
-                </StatusBadge>
-              </div>
-            </CardHeader>
-            <CardContent className="grid gap-3 pt-4 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-lg border bg-muted/20 p-3">
-                <div className="text-xs text-muted-foreground">Phiếu nhập</div>
-                <div className="mt-1 font-mono text-sm font-medium">
-                  {selected.grnNumber}
+              </CardHeader>
+              <CardContent className="space-y-4 pt-4">
+                <div className="grid gap-2 md:grid-cols-[minmax(0,320px)_180px]">
+                  <label className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
+                    <Input
+                      aria-label="Tìm mặt hàng cất"
+                      className="pl-9"
+                      placeholder="Tìm SKU, lô, phiếu nhập..."
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                    />
+                  </label>
+                  <Select
+                    value={status}
+                    onValueChange={(value) => {
+                      setStatus(value as PutawayTaskStatus | "ALL");
+                      setSelectedKey("");
+                    }}
+                  >
+                    <SelectTrigger aria-label="Trạng thái cất hàng">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">Tất cả</SelectItem>
+                      <SelectItem value="PENDING">Đang cất</SelectItem>
+                      <SelectItem value="COMPLETED">Đã hoàn tất</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              </div>
-              <div className="rounded-lg border bg-muted/20 p-3">
-                <div className="text-xs text-muted-foreground">Số lô</div>
-                <div className="mt-1 font-mono text-sm font-medium">
-                  {selected.lotNumber ?? "—"}
-                </div>
-              </div>
-              <div className="rounded-lg border bg-muted/20 p-3">
-                <div className="text-xs text-muted-foreground">
-                  Kích thước thùng
-                </div>
-                <div className="mt-1 text-sm font-medium">
-                  {selected.packageSpec
-                    ? `${selected.packageSpec.depthCm} × ${selected.packageSpec.widthCm} × ${selected.packageSpec.heightCm} cm`
-                    : "Chưa khai báo"}
-                </div>
-              </div>
-              <div className="rounded-lg border bg-muted/20 p-3">
-                <div className="text-xs text-muted-foreground">
-                  Ngày sản xuất
-                </div>
-                <div className="mt-1 flex items-center gap-1.5 text-sm font-medium">
-                  <CalendarDays className="size-3.5 text-primary" />
-                  {formatDate(selected.manufacturedDate)}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
-          {selectedStatus === "PENDING" && canConfirm ? (
-            <WarehouseOperationWorkspace
-              key={selected.key}
-              operation="PUTAWAY"
-              sku={selected.sku}
-              remainingPackageCount={selected.remainingQty}
-              packageSpec={selected.packageSpec}
-              suggestions={suggestionQuery.data?.suggestions ?? []}
-              suggestionsLoading={suggestionQuery.isLoading}
-              suggestionsError={suggestionQuery.error}
-              pending={confirmMutation.isPending}
-              onConfirm={async (input) => {
-                await confirmMutation.mutateAsync(input);
-              }}
-            />
-          ) : (
-            <WarehouseOperationWorkspace
-              key={`${selected.key}:readonly`}
-              operation="PUTAWAY"
-              sku={selected.sku}
-              remainingPackageCount={selected.remainingQty}
-              packageSpec={selected.packageSpec}
-              suggestions={completedSuggestions}
-              suggestionsLoading={
-                layoutQuery.isLoading ||
-                completedRackCellQueries.some((query) => query.isLoading) ||
-                completedPathQueries.some((query) => query.isLoading)
-              }
-              suggestionsError={
-                layoutQuery.error ??
-                completedRackCellQueries.find((query) => query.error)?.error ??
-                completedPathQueries.find((query) => query.error)?.error
-              }
-              readOnly
-              readOnlyMessage={
-                selectedStatus === "COMPLETED"
-                  ? completedSuggestions.length > 0
-                    ? "Dòng hàng này đã được cất hoàn tất. Bản đồ bên dưới hiển thị vị trí đang chứa hàng."
-                    : "Dòng hàng này đã được cất hoàn tất nhưng chưa tìm thấy vị trí tồn thực tế khớp trên sơ đồ."
-                  : "Chế độ theo dõi không cho phép quét xác nhận."
-              }
-              onConfirm={async () => {}}
-            />
-          )}
-        </div>
-      ) : (
-        <Card>
-          <CardHeader className="border-b bg-muted/20">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-1.5">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Boxes className="size-4 text-primary" />
-                  Danh sách mặt hàng
-                </CardTitle>
-                <div className="text-sm text-muted-foreground">
-                  Chọn một dòng để mở bản đồ cất hàng trong cùng tab.
-                </div>
-              </div>
-              <div className="text-sm text-muted-foreground">
-                {visibleItems.length} mặt hàng
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-4">
-            <div className="grid gap-2 md:grid-cols-[minmax(0,320px)_180px]">
-              <label className="relative">
-                <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
-                <Input
-                  aria-label="Tìm mặt hàng cất"
-                  className="pl-9"
-                  placeholder="Tìm SKU, lô, phiếu nhập..."
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </label>
-              <Select
-                value={status}
-                onValueChange={(value) => {
-                  setStatus(value as PutawayTaskStatus | "ALL");
-                  setSelectedKey("");
-                }}
-              >
-                <SelectTrigger aria-label="Trạng thái cất hàng">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">Tất cả</SelectItem>
-                  <SelectItem value="PENDING">Đang cất</SelectItem>
-                  <SelectItem value="COMPLETED">Đã hoàn tất</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {tasksQuery.isLoading || receiptsLoading ? (
-              <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-muted-foreground">
-                <LoaderCircle className="size-4 animate-spin" />
-                Đang ghép lệnh với phiếu nhập...
-              </div>
-            ) : (
-              <Table scrollable>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>SKU</TableHead>
-                    <TableHead>Mặt hàng</TableHead>
-                    <TableHead>Số lô</TableHead>
-                    <TableHead>Số phiếu nhập</TableHead>
-                    <TableHead>Trạng thái</TableHead>
-                    <TableHead>SL còn lại</TableHead>
-                    <TableHead>Ngày sản xuất</TableHead>
-                    <TableHead className="w-40 text-right">Thao tác</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {visibleItems.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        className="h-24 text-center text-muted-foreground"
-                        colSpan={8}
-                      >
-                        Không có mặt hàng phù hợp.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    visibleItems.map((item) => (
-                      <TableRow key={item.key}>
-                        <TableCell className="font-mono font-medium">
-                          {item.sku}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {item.itemName}
-                        </TableCell>
-                        <TableCell className="font-mono">
-                          {item.lotNumber ?? "—"}
-                        </TableCell>
-                        <TableCell className="font-mono">
-                          {item.grnNumber}
-                        </TableCell>
-                        <TableCell>
-                          <StatusBadge tone={statusTone(item.taskStatus)}>
-                            {item.taskStatus === "PENDING"
-                              ? "Đang cất"
-                              : statusLabel(item.taskStatus)}
-                          </StatusBadge>
-                        </TableCell>
-                        <TableCell>{item.remainingQty} thùng</TableCell>
-                        <TableCell>
-                          {formatDate(item.manufacturedDate)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex justify-end">
-                            <Button
-                              size="sm"
-                              type="button"
-                              variant="outline"
-                              onClick={() => setSelectedKey(item.key)}
-                            >
-                              <Eye data-icon="inline-start" />
-                              Mở bản đồ
-                            </Button>
-                          </div>
-                        </TableCell>
+                {tasksQuery.isLoading || receiptsLoading ? (
+                  <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <LoaderCircle className="size-4 animate-spin" />
+                    Đang ghép lệnh với phiếu nhập...
+                  </div>
+                ) : (
+                  <Table scrollable>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>SKU</TableHead>
+                        <TableHead>Mặt hàng</TableHead>
+                        <TableHead>Số lô</TableHead>
+                        <TableHead>Số phiếu nhập</TableHead>
+                        <TableHead>Trạng thái</TableHead>
+                        <TableHead>SL còn lại</TableHead>
+                        <TableHead>Ngày sản xuất</TableHead>
+                        <TableHead className="w-40 text-right">
+                          Thao tác
+                        </TableHead>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      )}
+                    </TableHeader>
+                    <TableBody>
+                      {visibleItems.length === 0 ? (
+                        <TableRow>
+                          <TableCell
+                            className="h-24 text-center text-muted-foreground"
+                            colSpan={8}
+                          >
+                            Không có mặt hàng phù hợp.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        visibleItems.map((item) => (
+                          <TableRow key={item.key}>
+                            <TableCell className="font-mono font-medium">
+                              {item.sku}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {item.itemName}
+                            </TableCell>
+                            <TableCell className="font-mono">
+                              {item.lotNumber ?? "—"}
+                            </TableCell>
+                            <TableCell className="font-mono">
+                              {item.grnNumber}
+                            </TableCell>
+                            <TableCell>
+                              <StatusBadge tone={statusTone(item.taskStatus)}>
+                                {item.taskStatus === "PENDING"
+                                  ? "Đang cất"
+                                  : statusLabel(item.taskStatus)}
+                              </StatusBadge>
+                            </TableCell>
+                            <TableCell>{item.remainingQty} thùng</TableCell>
+                            <TableCell>
+                              {formatDate(item.manufacturedDate)}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex justify-end">
+                                <Button
+                                  size="sm"
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => setSelectedKey(item.key)}
+                                >
+                                  <Eye data-icon="inline-start" />
+                                  Mở bản đồ
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+        <TabsContent value="inventory-reconciliation">
+          <InventoryReconciliationPanel />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

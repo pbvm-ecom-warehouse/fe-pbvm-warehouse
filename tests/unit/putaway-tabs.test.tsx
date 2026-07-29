@@ -1,0 +1,100 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { PutawayTasksClient } from "@/features/warehouse-navigation/components/putaway-tasks-client";
+import type { SessionUser } from "@/lib/auth";
+
+const serviceMocks = vi.hoisted(() => ({
+  getGoodsReceiptNote: vi.fn(),
+  getInventoryCellProgress: vi.fn(),
+  listPutawayTasks: vi.fn(),
+  listUnassignedInventory: vi.fn(),
+}));
+
+vi.mock("@/hooks/use-session-user", () => ({
+  useSessionUser: vi.fn(
+    (): SessionUser => ({
+      id: "receiver-1",
+      name: "Receiver One",
+      roles: ["RECEIVER"],
+      tenantId: "demo-tenant",
+      type: "user",
+    }),
+  ),
+}));
+
+vi.mock("@/features/purchases/services/goods-receipt-note.service", () => ({
+  getGoodsReceiptNote: serviceMocks.getGoodsReceiptNote,
+}));
+
+vi.mock(
+  "@/features/warehouse-navigation/services/putaway-task.service",
+  () => ({
+    confirmPutawayLine: vi.fn(),
+    listPutawayTasks: serviceMocks.listPutawayTasks,
+  }),
+);
+
+vi.mock(
+  "@/features/warehouse-navigation/services/inventory-reconciliation.service",
+  () => ({
+    assignInventoryCell: vi.fn(),
+    getInventoryCellProgress: serviceMocks.getInventoryCellProgress,
+    listUnassignedInventory: serviceMocks.listUnassignedInventory,
+  }),
+);
+
+function renderPutawayTasks() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <PutawayTasksClient />
+    </QueryClientProvider>,
+  );
+}
+
+describe("put-away workspace tabs", () => {
+  beforeEach(() => {
+    serviceMocks.getGoodsReceiptNote.mockReset();
+    serviceMocks.getInventoryCellProgress.mockReset();
+    serviceMocks.listPutawayTasks.mockReset();
+    serviceMocks.listUnassignedInventory.mockReset();
+
+    serviceMocks.listPutawayTasks.mockResolvedValue({
+      data: [],
+      limit: 100,
+      page: 1,
+      total: 0,
+    });
+    serviceMocks.listUnassignedInventory.mockResolvedValue([]);
+    serviceMocks.getInventoryCellProgress.mockResolvedValue({
+      assignedBaseQty: 12,
+      assignedPercent: 75,
+      requiresCellScan: true,
+      unassignedBaseQty: 4,
+      unassignedRows: 1,
+    });
+  });
+
+  it("keeps legacy inventory reconciliation under Cất hàng", async () => {
+    renderPutawayTasks();
+
+    expect(
+      screen.getByRole("tab", { name: "Lệnh cất hàng" }),
+    ).toBeInTheDocument();
+    const reconciliationTab = screen.getByRole("tab", {
+      name: "Phân khoang tồn cũ",
+    });
+
+    fireEvent.mouseDown(reconciliationTab, { button: 0, ctrlKey: false });
+    fireEvent.click(reconciliationTab);
+
+    expect(
+      await screen.findByText("Tiến độ phân khoang tồn cũ"),
+    ).toBeInTheDocument();
+  });
+});

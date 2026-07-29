@@ -106,6 +106,17 @@ describe("dashboard navigation chrome", () => {
       navigationLinks.indexOf(receiptLink) + 1,
     );
   });
+
+  it("hides Kiểm kê from the RECEIVER sidebar", () => {
+    mockedUseSessionUser.mockReturnValue(sessionUser(["RECEIVER"]));
+
+    render(<SidebarContent />);
+
+    expect(
+      screen.queryByRole("link", { name: /Kiểm kê/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps Kho active on the canonical editor route", () => {
     mockedUseSessionUser.mockReturnValue(sessionUser(["MANAGER"]));
     mockedUsePathname.mockReturnValue("/locations");

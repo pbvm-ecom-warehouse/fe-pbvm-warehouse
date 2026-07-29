@@ -71,7 +71,6 @@ import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import { statusLabel, statusTone } from "@/lib/wms-ui-labels";
 import { useSessionUser } from "@/hooks/use-session-user";
-import { InventoryReconciliationPanel } from "@/features/warehouse-navigation/components/inventory-reconciliation-panel";
 
 import {
   approveScrapNote,
@@ -194,16 +193,10 @@ export function AdjustmentsClient() {
     "MANAGER",
     "COUNTER",
   ]);
-  const canUseReconciliation = hasAnyRole(user?.roles, [
-    "ADMIN",
-    "MANAGER",
-    "RECEIVER",
-  ]);
   const canUseScrapNotes = hasAnyRole(user?.roles, [
     "ADMIN",
     "MANAGER",
     "COUNTER",
-    "RECEIVER",
   ]);
 
   if (!user) {
@@ -244,11 +237,6 @@ export function AdjustmentsClient() {
         <TabsList>
           <TabsTrigger value="stock-counts">Phiếu kiểm</TabsTrigger>
           <TabsTrigger value="scrap-notes">Phiếu hủy</TabsTrigger>
-          {canUseReconciliation ? (
-            <TabsTrigger value="inventory-reconciliation">
-              Phân khoang tồn cũ
-            </TabsTrigger>
-          ) : null}
         </TabsList>
         <TabsContent value="stock-counts">
           <StockCountsSection canUseApi={canUseStockCounts} />
@@ -256,11 +244,6 @@ export function AdjustmentsClient() {
         <TabsContent value="scrap-notes">
           <ScrapNotesSection canUseApi={canUseScrapNotes} />
         </TabsContent>
-        {canUseReconciliation ? (
-          <TabsContent value="inventory-reconciliation">
-            <InventoryReconciliationPanel />
-          </TabsContent>
-        ) : null}
       </Tabs>
     </div>
   );
@@ -272,11 +255,7 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
   const canCreate = hasAnyRole(user?.roles, ["ADMIN", "MANAGER"]);
   const canCount = hasAnyRole(user?.roles, ["ADMIN", "COUNTER"]);
   const canApprove = hasAnyRole(user?.roles, ["ADMIN", "MANAGER"]);
-  const canCreateScrap = hasAnyRole(user?.roles, [
-    "ADMIN",
-    "COUNTER",
-    "RECEIVER",
-  ]);
+  const canCreateScrap = hasAnyRole(user?.roles, ["ADMIN", "COUNTER"]);
   const [statusFilter, setStatusFilter] = useState<StockCountStatus | "ALL">(
     "ALL",
   );
@@ -978,7 +957,7 @@ function StockCountDetail({
 function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
   const user = useSessionUser();
   const queryClient = useQueryClient();
-  const canCreate = hasAnyRole(user?.roles, ["ADMIN", "COUNTER", "RECEIVER"]);
+  const canCreate = hasAnyRole(user?.roles, ["ADMIN", "COUNTER"]);
   const canApprove = hasAnyRole(user?.roles, ["ADMIN", "MANAGER"]);
   const [statusFilter, setStatusFilter] = useState<ScrapNoteStatus | "ALL">(
     "ALL",
