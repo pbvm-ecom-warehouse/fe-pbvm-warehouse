@@ -62,6 +62,25 @@ describe("purchase order API service", () => {
     });
   });
 
+  it("normalizes missing PO items to an empty list", () => {
+    const { items: _items, ...purchaseOrderWithoutItems } = purchaseOrder;
+    void _items;
+
+    expect(
+      normalizePurchaseOrderListResponse({
+        data: {
+          data: [purchaseOrderWithoutItems as unknown as typeof purchaseOrder],
+          limit: 20,
+          page: 1,
+          total: 1,
+        },
+        meta: { requestId: "req-missing-items" },
+      }),
+    ).toMatchObject({
+      data: [{ id: "po-1", items: [] }],
+    });
+  });
+
   it("lists purchase orders with Swagger query params", async () => {
     mockedGet.mockResolvedValueOnce({
       data: {
@@ -96,6 +115,29 @@ describe("purchase order API service", () => {
 
     await expect(getPurchaseOrder("po-1")).resolves.toEqual(purchaseOrder);
     expect(mockedGet).toHaveBeenCalledWith("/purchase-orders/po-1");
+  });
+
+  it("normalizes missing items in purchase order detail", async () => {
+    const { items: _items, ...purchaseOrderWithoutItems } = purchaseOrder;
+    void _items;
+    mockedGet.mockResolvedValueOnce({
+      data: {
+        data: purchaseOrderWithoutItems,
+        meta: { requestId: "req-missing-items" },
+      },
+    });
+
+    await expect(getPurchaseOrder("po-1")).resolves.toMatchObject({
+      id: "po-1",
+      items: [],
+    });
+  });
+
+  it("does not mask unrelated purchase-order API errors", async () => {
+    const apiError = new Error("purchase-order API unavailable");
+    mockedGet.mockRejectedValueOnce(apiError);
+
+    await expect(listPurchaseOrders()).rejects.toBe(apiError);
   });
 
   it("creates purchase orders with the documented body shape (no sku — BE denormalizes from itemId)", async () => {

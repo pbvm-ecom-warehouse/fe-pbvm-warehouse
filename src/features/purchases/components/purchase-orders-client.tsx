@@ -819,7 +819,7 @@ export function PurchaseOrdersClient({
   return (
     <div className="space-y-5">
       <PageHeader
-        title={mode === "purchase-orders" ? "Đặt Nhập hàng" : "Nhận hàng"}
+        title={mode === "purchase-orders" ? "Đặt hàng" : "Nhận hàng"}
         actions={
           <Button
             disabled={!canReadPurchaseOrders && !canReadGoodsReceiptNotes}
@@ -1522,9 +1522,11 @@ function PurchaseOrderTable({
               </TableCell>
               <TableCell className="max-w-64">
                 <span className="line-clamp-2 text-sm text-muted-foreground">
-                  {purchaseOrder.items
-                    .map((item) => item.itemName || item.sku)
-                    .join(", ")}
+                  {purchaseOrder.items.length > 0
+                    ? purchaseOrder.items
+                        .map((item) => item.itemName || item.sku)
+                        .join(", ")
+                    : "Chưa có mặt hàng"}
                 </span>
               </TableCell>
               <TableCell>
@@ -1804,29 +1806,33 @@ function PurchaseOrderDetail({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map((item, index) => (
-                <TableRow key={`${item.itemId}-${item.sku}`}>
-                  <TableCell className="text-muted-foreground">
-                    {index + 1}
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {item.itemName ?? item.sku}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {item.sku}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {item.expectedQty}
-                  </TableCell>
-                  <TableCell>{item.unit}</TableCell>
-                  <TableCell className="text-right">
-                    {formatCurrency(item.unitPrice)}
-                  </TableCell>
-                  <TableCell className="text-right font-medium">
-                    {formatCurrency(item.lineTotal)}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {items.length === 0 ? (
+                <EmptyRow colSpan={7} label="Đơn mua chưa có mặt hàng." />
+              ) : (
+                items.map((item, index) => (
+                  <TableRow key={`${item.itemId}-${item.sku}`}>
+                    <TableCell className="text-muted-foreground">
+                      {index + 1}
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {item.itemName ?? item.sku}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {item.sku}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {item.expectedQty}
+                    </TableCell>
+                    <TableCell>{item.unit}</TableCell>
+                    <TableCell className="text-right">
+                      {formatCurrency(item.unitPrice)}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {formatCurrency(item.lineTotal)}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
