@@ -22,11 +22,11 @@ function unsignedJwt(payload: Record<string, unknown>) {
 describe("WMS RBAC helpers", () => {
   it("normalizes current and legacy roles", () => {
     expect(normalizeRoles(["receiver", "PICKER", "unknown"])).toEqual([
+      "SHIPPER",
       "RECEIVER",
-      "PICKER",
     ]);
     expect(normalizeRoles("warehouse_manager")).toEqual(["MANAGER"]);
-    expect(normalizeRoles("operator")).toEqual(["RECEIVER", "PICKER"]);
+    expect(normalizeRoles("operator")).toEqual(["SHIPPER", "RECEIVER"]);
     expect(normalizeRoles("shipper")).toEqual(["SHIPPER"]);
   });
 
@@ -35,10 +35,12 @@ describe("WMS RBAC helpers", () => {
   });
 
   it("unions permissions for multi-role users", () => {
-    expect(hasRouteAccess("/goods-returns", ["RECEIVER", "PICKER"])).toBe(true);
-    expect(hasRouteAccess("/goods-issues", ["RECEIVER", "PICKER"])).toBe(true);
-    expect(hasRouteAccess("/transfers", ["RECEIVER", "PICKER"])).toBe(false);
-    expect(hasRouteAccess("/print-jobs", ["RECEIVER", "PICKER"])).toBe(false);
+    expect(hasRouteAccess("/goods-returns", ["RECEIVER", "SHIPPER"])).toBe(
+      true,
+    );
+    expect(hasRouteAccess("/goods-issues", ["RECEIVER", "SHIPPER"])).toBe(true);
+    expect(hasRouteAccess("/transfers", ["RECEIVER", "SHIPPER"])).toBe(false);
+    expect(hasRouteAccess("/print-jobs", ["RECEIVER", "SHIPPER"])).toBe(false);
   });
 
   it("filters sidebar routes by role", () => {
@@ -55,7 +57,7 @@ describe("WMS RBAC helpers", () => {
     expect(receiverRoutes).toContain("/goods-receipt-notes");
     expect(receiverRoutes).toContain("/putaway-tasks");
     expect(hasRouteAccess("/putaway-tasks", ["MANAGER"])).toBe(true);
-    expect(hasRouteAccess("/putaway-tasks", ["PICKER"])).toBe(false);
+    expect(hasRouteAccess("/putaway-tasks", ["SHIPPER"])).toBe(false);
     expect(receiverRoutes).not.toContain("/suppliers");
     expect(receiverRoutes).toContain("/goods-returns");
     expect(receiverRoutes).not.toContain("/adjustments");
@@ -68,6 +70,7 @@ describe("WMS RBAC helpers", () => {
     expect(printerRoutes).not.toContain("/products");
     expect(printerRoutes).toContain("/print-jobs");
     expect(shipperRoutes).toContain("/shipping");
+    expect(shipperRoutes).toContain("/goods-issues");
     expect(shipperRoutes).not.toContain("/print-jobs");
   });
 
@@ -76,7 +79,6 @@ describe("WMS RBAC helpers", () => {
     expect(hasRouteAccess("/shipping", ["MANAGER"])).toBe(true);
     expect(hasRouteAccess("/shipping", ["ADMIN"])).toBe(true);
     expect(hasRouteAccess("/shipping", ["RECEIVER"])).toBe(false);
-    expect(hasRouteAccess("/shipping", ["PICKER"])).toBe(false);
     expect(hasRouteAccess("/shipping", ["PRINTER"])).toBe(false);
   });
 
@@ -116,7 +118,7 @@ describe("WMS RBAC helpers", () => {
   });
 
   it("uses the documented priority for default focus", () => {
-    expect(getDefaultRoleFocus(["PICKER", "RECEIVER"])).toBe("RECEIVER");
+    expect(getDefaultRoleFocus(["SHIPPER", "RECEIVER"])).toBe("SHIPPER");
     expect(getDefaultRoleFocus(["COUNTER"])).toBe("COUNTER");
   });
 });
@@ -135,8 +137,9 @@ describe("WMS session normalization", () => {
       avatarUrl: undefined,
       email: undefined,
       id: "user-1",
+      mustChangePassword: undefined,
       name: "Receiver One",
-      roles: ["RECEIVER", "PICKER"],
+      roles: ["SHIPPER", "RECEIVER"],
       tenantId: "tenant-1",
       type: "user",
     });
