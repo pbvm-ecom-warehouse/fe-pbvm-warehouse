@@ -161,8 +161,9 @@ test("receiver follows the 2D route and can put away into a compatible empty ove
       contentType: "application/json",
       body: JSON.stringify({
         data: {
-          id: "layout-1",
+          id: "single-warehouse-layout",
           revision: 1,
+          updatedAt: "2026-07-28T00:00:00.000Z",
           canvas: { widthM: 20, heightM: 12, gridM: 1 },
           rackTemplate: {
             widthM: 4,
@@ -175,6 +176,7 @@ test("receiver follows the 2D route and can put away into a compatible empty ove
           racks: [
             {
               id: "rack-1",
+              zoneId: "zone-1",
               code: "R01",
               name: "Kệ R01",
               xM: 7,
@@ -223,12 +225,25 @@ test("receiver follows the 2D route and can put away into a compatible empty ove
   await expect(page.getByRole("heading", { name: "Cất hàng" })).toBeVisible();
   await expect(page.getByText("SKU-CAFE").first()).toBeVisible();
   await page.getByRole("button", { name: "Mở bản đồ" }).click();
-  await expect(page.getByRole("button", { name: "2D" })).toBeVisible();
-  await expect(page.getByText("R01-T1-B1").first()).toBeVisible();
+  await expect(page.getByText("Hướng dẫn cất hàng")).toBeVisible();
+  await page.getByRole("button", { name: /R01-T1-B1/i }).click();
+  const openMapButton = page.getByRole("button", { name: "Mở bản đồ kho" });
+  await expect(openMapButton).toBeEnabled();
+  await openMapButton.click();
 
-  await page.getByRole("button", { name: /R01-T1-B2/i }).click();
-  await expect(page.getByText("Trống · có thể cất").last()).toBeVisible();
-  await page.getByRole("button", { name: "Chọn khoang và quét mã" }).click();
+  const mapDialog = page.getByRole("dialog", {
+    name: "Bản đồ đường đi trong kho",
+  });
+  await mapDialog.getByRole("button", { name: "Xem mặt kệ R01" }).click();
+
+  const rackDialog = page.getByRole("dialog", { name: "Mặt kệ R01" });
+  await expect(rackDialog.getByRole("button", { name: "2D" })).toBeVisible();
+  await expect(rackDialog.getByText("R01-T1-B1").first()).toBeVisible();
+  await rackDialog.getByRole("button", { name: /R01-T1-B2/i }).click();
+  await expect(rackDialog.getByText("Trống · có thể cất").last()).toBeVisible();
+  await rackDialog
+    .getByRole("button", { name: "Chọn khoang và quét mã" })
+    .click();
   const scanner = page.getByRole("dialog", { name: "Quét xác nhận vị trí" });
   await scanner.getByLabel("Mã vạch mặt hàng").fill("8930001");
   await expect(scanner.getByLabel("Mã khoang")).toHaveValue("R01-T1-B2");
@@ -248,7 +263,7 @@ test("receiver creates a receipt line with LOT-YYMMDD-SEQ", async ({
   page,
 }) => {
   await seedReceiver(page);
-  let createBody: Record<string, unknown> | undefined;
+  let createBody = "";
   const receivingOrder = {
     id: "po-1",
     poNumber: "PO-001",
@@ -271,7 +286,7 @@ test("receiver creates a receipt line with LOT-YYMMDD-SEQ", async ({
 
   await page.route("**/api/wms/goods-receipt-notes**", async (route) => {
     if (route.request().method() === "POST") {
-      createBody = route.request().postDataJSON();
+      createBody = route.request().postData() ?? "";
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -342,17 +357,18 @@ test("receiver creates a receipt line with LOT-YYMMDD-SEQ", async ({
   await expect(dialog.getByLabel("Mã lô phiếu nhập dòng 1")).toHaveAttribute(
     "readonly",
   );
+  await dialog.getByLabel("Ảnh minh chứng cho PO-001").setInputFiles({
+    buffer: Buffer.from("receipt-evidence"),
+    mimeType: "image/webp",
+    name: "receipt.webp",
+  });
   await dialog.getByRole("button", { name: "Tạo phiếu nhập" }).click();
 
   await expect(page.getByText("Đã tạo phiếu nhập")).toBeVisible();
-  expect(createBody).toMatchObject({
-    purchaseOrderId: "po-1",
-    items: [
-      {
-        itemId: "item-1",
-        actualQty: 10,
-        lotNumber: "LOT-260728-007",
-      },
-    ],
-  });
+  expect(createBody).toContain('name="purchaseOrderId"');
+  expect(createBody).toContain("po-1");
+  expect(createBody).toContain('"itemId":"item-1"');
+  expect(createBody).toContain('"actualQty":10');
+  expect(createBody).toContain('"lotNumber":"LOT-260728-007"');
+  expect(createBody).toContain('filename="receipt.webp"');
 });
