@@ -72,15 +72,19 @@ export type CreatePurchaseOrderInput = {
   items: CreatePurchaseOrderItemInput[];
 };
 
+type PurchaseOrderPayload = Omit<PurchaseOrder, "items"> & {
+  items?: PurchaseOrderItem[] | null;
+};
+
 type PurchaseOrderListPayload = {
-  data: PurchaseOrder[];
+  data: PurchaseOrderPayload[];
   total: number;
   page: number;
   limit: number;
 };
 
 type PurchaseOrderListEnvelope = ApiEnvelope<
-  PurchaseOrderListPayload | PurchaseOrder[]
+  PurchaseOrderListPayload | PurchaseOrderPayload[]
 >;
 
 function toOptionalString(value: string | undefined) {
@@ -88,17 +92,26 @@ function toOptionalString(value: string | undefined) {
   return trimmed ? trimmed : undefined;
 }
 
+function normalizePurchaseOrder(
+  purchaseOrder: PurchaseOrderPayload,
+): PurchaseOrder {
+  return {
+    ...purchaseOrder,
+    items: purchaseOrder.items ?? [],
+  };
+}
+
 function toPurchaseOrderListResult(
   payload:
     | PurchaseOrderListEnvelope
     | PurchaseOrderListPayload
-    | PurchaseOrder[],
+    | PurchaseOrderPayload[],
 ): PurchaseOrderListResult {
   const data = unwrapApiData(payload);
 
   if (Array.isArray(data)) {
     return {
-      data,
+      data: data.map(normalizePurchaseOrder),
       limit: data.length,
       page: 1,
       total: data.length,
@@ -106,7 +119,7 @@ function toPurchaseOrderListResult(
   }
 
   return {
-    data: data.data,
+    data: data.data.map(normalizePurchaseOrder),
     limit: data.limit,
     page: data.page,
     total: data.total,
@@ -117,14 +130,16 @@ export function normalizePurchaseOrderListResponse(
   payload:
     | PurchaseOrderListEnvelope
     | PurchaseOrderListPayload
-    | PurchaseOrder[],
+    | PurchaseOrderPayload[],
 ) {
   return toPurchaseOrderListResult(payload);
 }
 
 export async function listPurchaseOrders(input: QueryPurchaseOrdersInput = {}) {
   const response = await apiClient.get<
-    PurchaseOrderListEnvelope | PurchaseOrderListPayload | PurchaseOrder[]
+    | PurchaseOrderListEnvelope
+    | PurchaseOrderListPayload
+    | PurchaseOrderPayload[]
   >("/purchase-orders", {
     params: {
       limit: input.limit,
@@ -139,10 +154,10 @@ export async function listPurchaseOrders(input: QueryPurchaseOrdersInput = {}) {
 
 export async function getPurchaseOrder(purchaseOrderId: string) {
   const response = await apiClient.get<
-    ApiEnvelope<PurchaseOrder> | PurchaseOrder
+    ApiEnvelope<PurchaseOrderPayload> | PurchaseOrderPayload
   >(`/purchase-orders/${encodeURIComponent(purchaseOrderId)}`);
 
-  return unwrapApiData(response.data);
+  return normalizePurchaseOrder(unwrapApiData(response.data));
 }
 
 export async function createPurchaseOrder(input: CreatePurchaseOrderInput) {
@@ -160,10 +175,10 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput) {
     })),
   };
   const response = await apiClient.post<
-    ApiEnvelope<PurchaseOrder> | PurchaseOrder
+    ApiEnvelope<PurchaseOrderPayload> | PurchaseOrderPayload
   >("/purchase-orders", payload);
 
-  return unwrapApiData(response.data);
+  return normalizePurchaseOrder(unwrapApiData(response.data));
 }
 
 export type ReceivingPurchaseOrderItem = {

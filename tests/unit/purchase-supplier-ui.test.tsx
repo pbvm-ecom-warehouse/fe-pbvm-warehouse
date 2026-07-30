@@ -550,6 +550,34 @@ describe("purchase and supplier UX", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows valid list and detail empty states when a PO has no items", async () => {
+    const purchaseOrderWithoutItems = { ...purchaseOrder, items: [] };
+    mockedListPurchaseOrders.mockResolvedValue({
+      data: [purchaseOrderWithoutItems],
+      limit: 20,
+      page: 1,
+      total: 1,
+    });
+    mockedGetPurchaseOrder.mockResolvedValue(purchaseOrderWithoutItems);
+
+    renderWithQueryClient(<PurchaseOrdersClient />);
+
+    expect(await screen.findByText("Chưa có mặt hàng")).toBeVisible();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Xem chi tiết đơn mua PO-001",
+      }),
+    );
+
+    const detailDialog = await screen.findByRole("dialog", {
+      name: "Chi tiết đơn mua",
+    });
+    expect(
+      within(detailDialog).getByText("Đơn mua chưa có mặt hàng."),
+    ).toBeVisible();
+  });
+
   it("lets admins create and confirm GRNs from the GRN tab", async () => {
     sessionRoleState.roles = ["ADMIN"];
     mockedListGrns.mockResolvedValue({

@@ -482,7 +482,7 @@ test("manager opens purchases when purchase order items are missing", async ({
     updatedAt: "2026-07-13T00:00:00.000Z",
   };
 
-  await page.route("**/api/wms/supplier?**", async (route) => {
+  await page.route(/\/api\/wms\/supplier(?:\?|$)/, async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -496,31 +496,32 @@ test("manager opens purchases when purchase order items are missing", async ({
           },
         ],
         limit: 100,
+        meta: { requestId: "suppliers" },
         page: 1,
         total: 1,
       }),
     });
   });
-  await page.route(
-    "**/api/wms/supplier/items/by-supplier/supplier-1",
-    async (route) => {
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({
-          data: [
-            {
-              id: "supplier-item-1",
-              isActive: true,
-              itemId: "item-1",
-              minOrderQty: 12,
-              purchasePrice: 1500,
-              supplierId: "supplier-1",
-            },
-          ],
-        }),
-      });
-    },
-  );
+  await page.route(/\/api\/wms\/supplier\/items(?:\?|$)/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: [
+          {
+            id: "supplier-item-1",
+            isActive: true,
+            itemId: "item-1",
+            minOrderQty: 12,
+            purchasePrice: 1500,
+            supplierId: "supplier-1",
+          },
+        ],
+        limit: 100,
+        page: 1,
+        total: 1,
+      }),
+    });
+  });
   await page.route("**/api/wms/stock/items**", async (route) => {
     const item = {
       altBarcodes: [],
@@ -541,7 +542,7 @@ test("manager opens purchases when purchase order items are missing", async ({
       contentType: "application/json",
       body: JSON.stringify(
         route.request().url().endsWith("/item-1")
-          ? { data: item }
+          ? { data: item, meta: { requestId: "warehouse-item" } }
           : { data: [item], limit: 200, page: 1, total: 1 },
       ),
     });
@@ -598,11 +599,12 @@ test("manager opens purchases when purchase order items are missing", async ({
   await page.goto("/purchase-orders");
 
   await expect(
-    page.getByRole("heading", { name: /^Mua hàng$/i }),
+    page.getByRole("heading", { name: /^Đặt hàng$/i }),
   ).toBeVisible();
   await expect(
     page.getByRole("cell", { name: "PO-20260713-0002", exact: true }),
   ).toBeVisible();
+  await expect(page.getByText("Chưa có mặt hàng")).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Chi tiết đơn mua" }),
   ).toHaveCount(0);
@@ -613,6 +615,9 @@ test("manager opens purchases when purchase order items are missing", async ({
   await expect(detailDialog).toBeVisible();
   await expect(
     detailDialog.getByText("PO-20260713-0002", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    detailDialog.getByText("Đơn mua chưa có mặt hàng."),
   ).toBeVisible();
   await detailDialog.getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: /^Tạo đơn mua$/i }).click();
@@ -642,7 +647,7 @@ test("manager opens purchases when purchase order items are missing", async ({
     .click();
   await dialog.getByRole("combobox", { name: /Mặt hàng dòng 1/i }).click();
   await page.getByText(/Ly nhựa 500ml/i).click();
-  await dialog.getByLabel(/Số lượng dòng 1/i).fill("12");
+  await dialog.getByLabel("Số thùng đặt dòng 1").fill("12");
   await dialog.getByLabel(/Đơn giá dòng 1/i).fill("1500");
   await dialog.getByRole("button", { name: /^Tạo đơn mua$/i }).click();
   await expect(page.getByText(/Đã tạo đơn mua/i)).toBeVisible();
@@ -651,8 +656,7 @@ test("manager opens purchases when purchase order items are missing", async ({
       {
         expectedQty: 12,
         itemId: "item-1",
-        sku: "CUP-500ML-RED",
-        unit: "cái",
+        unit: "thùng",
         unitPrice: 1500,
       },
     ],
