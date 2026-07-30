@@ -56,6 +56,7 @@ export type Shipment = {
   };
   paymentMethod: "COD" | "ONLINE";
   codAmount: number;
+  codCollectionMethod?: "CASH" | "ECOM_QR";
   codCollectedAmount?: number;
   packages: ShipmentPackage[];
   attempts: number;
