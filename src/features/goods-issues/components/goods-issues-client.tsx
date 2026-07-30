@@ -53,6 +53,7 @@ import {
 } from "@/lib/wms-ui-labels";
 import { useSessionUser } from "@/hooks/use-session-user";
 import {
+  claimGoodsIssue,
   confirmGoodsIssueLine,
   getGoodsIssue,
   GOODS_ISSUE_STATUSES,
@@ -95,8 +96,8 @@ function EmptyRow({ colSpan, text }: { colSpan: number; text: string }) {
 export function GoodsIssuesClient() {
   const user = useSessionUser();
   const queryClient = useQueryClient();
-  const canView = hasAnyRole(user?.roles, ["ADMIN", "MANAGER", "PICKER"]);
-  const canPick = hasAnyRole(user?.roles, ["ADMIN", "PICKER"]);
+  const canView = hasAnyRole(user?.roles, ["ADMIN", "MANAGER", "SHIPPER"]);
+  const isShipper = user?.roles.includes("SHIPPER") ?? false;
   const [status, setStatus] = useState<GoodsIssueStatus | "ALL">("ALL");
   const [page, setPage] = useState(1);
   const [selectedIssueId, setSelectedIssueId] = useState("");
@@ -114,6 +115,9 @@ export function GoodsIssuesClient() {
     queryFn: () => getGoodsIssue(selectedIssueId),
   });
   const detail = detailQuery.data ?? selectedIssue;
+  const isOwner =
+    Boolean(user?.id) && detail?.assignedShipperId === user?.id && isShipper;
+  const canPick = isOwner && detail?.status === "PENDING";
   const selectedItem = detail?.items.find(
     (item) => item.itemId === selectedItemId,
   );
@@ -155,6 +159,16 @@ export function GoodsIssuesClient() {
           queryKey: ["warehouse-operation", "rack-cells"],
         }),
       ]);
+    },
+  });
+  const claimMutation = useMutation({
+    mutationFn: () => claimGoodsIssue(selectedIssueId),
+    onError: (error) =>
+      toast.error(getApiErrorMessage(error) ?? "Không thể nhận phiếu xuất."),
+    onSuccess: async (claimedIssue) => {
+      queryClient.setQueryData(keys.detail(claimedIssue.id), claimedIssue);
+      toast.success("Đã nhận phiếu xuất. Bạn có thể bắt đầu lấy hàng.");
+      await queryClient.invalidateQueries({ queryKey: ["goods-issues"] });
     },
   });
   const total = issuesQuery.data?.total ?? 0;
@@ -243,7 +257,7 @@ export function GoodsIssuesClient() {
             </Button>
           </form>
           {issuesQuery.isLoading ? (
-            <TableSkeleton columns={5} />
+            <TableSkeleton columns={6} />
           ) : (
             <Table scrollable>
               <TableHeader>
@@ -251,13 +265,14 @@ export function GoodsIssuesClient() {
                   <TableHead>Mã phiếu xuất</TableHead>
                   <TableHead>Mã đơn hàng</TableHead>
                   <TableHead>Trạng thái</TableHead>
+                  <TableHead>Shipper</TableHead>
                   <TableHead>Số dòng</TableHead>
                   <TableHead className="text-right">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {issues.length === 0 ? (
-                  <EmptyRow colSpan={5} text="Chưa có phiếu xuất." />
+                  <EmptyRow colSpan={6} text="Chưa có phiếu xuất." />
                 ) : (
                   issues.map((issue) => (
                     <TableRow
@@ -278,6 +293,15 @@ export function GoodsIssuesClient() {
                         <StatusBadge tone={statusTone(issue.status)}>
                           {statusLabel(issue.status)}
                         </StatusBadge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {!issue.assignedShipperId
+                            ? "Chưa có người nhận"
+                            : issue.assignedShipperId === user?.id
+                              ? "Của bạn"
+                              : "Đã có Shipper nhận"}
+                        </Badge>
                       </TableCell>
                       <TableCell>{issue.items.length}</TableCell>
                       <TableCell className="text-right">
@@ -318,20 +342,48 @@ export function GoodsIssuesClient() {
           <div className="space-y-4">
             <Card>
               <CardHeader className="border-b bg-muted/20">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <CardTitle className="text-base">
                       Mã đơn hàng: {businessCodeLabel(detail.orderCode)}
                     </CardTitle>
                     <CardDescription className="mt-1">
-                      {canPick
+                      {isOwner
                         ? "Nhấn vào dòng hàng để xem vị trí lấy theo FEFO và đường đi."
-                        : "Vai trò hiện tại chỉ xem thông tin."}
+                        : detail.assignedShipperId
+                          ? "Phiếu đã có Shipper nhận. Vai trò hiện tại chỉ xem thông tin."
+                          : "Shipper cần nhận phiếu trước khi bắt đầu lấy hàng."}
                     </CardDescription>
                   </div>
-                  <StatusBadge tone={statusTone(detail.status)}>
-                    {statusLabel(detail.status)}
-                  </StatusBadge>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">
+                      {!detail.assignedShipperId
+                        ? "Chưa có người nhận"
+                        : isOwner
+                          ? "Của bạn"
+                          : "Đã có Shipper nhận"}
+                    </Badge>
+                    <StatusBadge tone={statusTone(detail.status)}>
+                      {statusLabel(detail.status)}
+                    </StatusBadge>
+                    {isShipper &&
+                    !detail.assignedShipperId &&
+                    detail.status === "PENDING" ? (
+                      <Button
+                        disabled={claimMutation.isPending}
+                        onClick={() => claimMutation.mutate()}
+                        type="button"
+                      >
+                        {claimMutation.isPending ? (
+                          <LoaderCircle
+                            className="animate-spin"
+                            data-icon="inline-start"
+                          />
+                        ) : null}
+                        Nhận phiếu
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-4">
@@ -352,7 +404,7 @@ export function GoodsIssuesClient() {
                         <TableRow
                           key={item.itemId}
                           className={cn(
-                            "cursor-pointer hover:bg-accent/60",
+                            canPick && "cursor-pointer hover:bg-accent/60",
                             selectedItemId === item.itemId &&
                               "border-l-4 border-l-primary bg-primary/10",
                           )}

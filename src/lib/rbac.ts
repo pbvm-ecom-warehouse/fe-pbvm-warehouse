@@ -3,7 +3,6 @@ export const WMS_ROLES = [
   "MANAGER",
   "SHIPPER",
   "RECEIVER",
-  "PICKER",
   "PRINTER",
   "COUNTER",
 ] as const;
@@ -15,7 +14,6 @@ export const ROLE_LABELS: Record<WmsRole, string> = {
   MANAGER: "Manager",
   SHIPPER: "Nhân viên giao hàng",
   RECEIVER: "Receiver",
-  PICKER: "Picker",
   PRINTER: "Printer",
   COUNTER: "Counter",
 };
@@ -23,9 +21,8 @@ export const ROLE_LABELS: Record<WmsRole, string> = {
 export const ROLE_DESCRIPTIONS: Record<WmsRole, string> = {
   ADMIN: "Toàn quyền vận hành WMS",
   MANAGER: "Điều phối, tạo lệnh và duyệt",
-  SHIPPER: "Bàn giao và cập nhật trạng thái giao hàng",
+  SHIPPER: "Nhận phiếu, soạn hàng và giao hàng nội bộ",
   RECEIVER: "Nhận hàng, cất hàng và hoàn hàng",
-  PICKER: "Soạn hàng, xuất kho và lấy đúng vị trí kệ",
   PRINTER: "Vận hành in ly và xác nhận thành phẩm",
   COUNTER: "Kiểm đếm và ghi nhận chênh lệch",
 };
@@ -35,7 +32,6 @@ export const ROLE_PRIORITY: readonly WmsRole[] = [
   "MANAGER",
   "SHIPPER",
   "RECEIVER",
-  "PICKER",
   "PRINTER",
   "COUNTER",
 ];
@@ -47,8 +43,9 @@ const LEGACY_ROLE_MAP: Record<string, readonly WmsRole[]> = {
   admin: ["ADMIN"],
   warehouse_manager: ["MANAGER"],
   manager: ["MANAGER"],
-  operator: ["RECEIVER", "PICKER"],
-  staff: ["RECEIVER", "PICKER"],
+  operator: ["SHIPPER", "RECEIVER"],
+  picker: ["SHIPPER"],
+  staff: ["SHIPPER", "RECEIVER"],
   shipper: ["SHIPPER"],
 };
 
@@ -64,7 +61,7 @@ export const ROUTE_ACCESS_BY_HREF = {
   "/purchase-orders": ["ADMIN", "MANAGER"],
   "/goods-receipt-notes": ["ADMIN", "MANAGER", "RECEIVER"],
   "/putaway-tasks": ["ADMIN", "MANAGER", "RECEIVER"],
-  "/goods-issues": ["ADMIN", "MANAGER", "PICKER"],
+  "/goods-issues": ["ADMIN", "MANAGER", "SHIPPER"],
   "/shipping": ["ADMIN", "MANAGER", "SHIPPER"],
   "/goods-returns": ["ADMIN", "MANAGER", "RECEIVER"],
   "/adjustments": ["ADMIN", "MANAGER", "COUNTER"],
@@ -82,7 +79,7 @@ export const MODULE_PRIMARY_ACTION_ROLES = {
   products: ["ADMIN", "MANAGER"],
   purchases: ["ADMIN", "MANAGER"],
   "putaway-tasks": ["ADMIN", "RECEIVER"],
-  "goods-issues": ["ADMIN", "MANAGER", "PICKER"],
+  "goods-issues": ["ADMIN", "MANAGER", "SHIPPER"],
   shipping: ["ADMIN", "MANAGER", "SHIPPER"],
   "goods-returns": ["ADMIN", "RECEIVER"],
   adjustments: ["ADMIN", "MANAGER", "COUNTER"],

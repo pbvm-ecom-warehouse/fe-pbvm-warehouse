@@ -121,7 +121,7 @@ describe("staff service", () => {
 
   it("updates the single role, lock state and password through /users/{id}", async () => {
     mockedPatch.mockResolvedValueOnce({
-      data: { data: { ...userResponse, role: "PICKER" } },
+      data: { data: { ...userResponse, role: "SHIPPER" } },
     });
     mockedPost
       .mockResolvedValueOnce({
@@ -132,7 +132,7 @@ describe("staff service", () => {
         data: { data: { success: true, mustChangePassword: true } },
       });
 
-    await updateWmsUserRole("user-1", { role: "PICKER" });
+    await updateWmsUserRole("user-1", { role: "SHIPPER" });
     await lockWmsUser("user-1");
     await unlockWmsUser("user-1");
     await resetWmsUserPassword("user-1", {
@@ -140,7 +140,7 @@ describe("staff service", () => {
     });
 
     expect(mockedPatch).toHaveBeenCalledWith("/users/user-1/role", {
-      role: "PICKER",
+      role: "SHIPPER",
     });
     expect(mockedPost).toHaveBeenNthCalledWith(1, "/users/user-1/lock");
     expect(mockedPost).toHaveBeenNthCalledWith(2, "/users/user-1/unlock");

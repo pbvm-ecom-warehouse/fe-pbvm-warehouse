@@ -76,6 +76,7 @@ async function mockOperationsApi(page: Page) {
     },
     shipmentStatus: "PENDING",
     shipmentNumber: "SHP-20260730-0001",
+    packages: [],
     statusHistory: [],
   };
   const goodsReturn = {
@@ -196,7 +197,7 @@ const screens = [
   },
   {
     businessCodes: ["SHP-20260730-0001", "ORD-20260730-0001"],
-    dialogName: "Chi tiết vận đơn",
+    dialogName: "Chi tiết vận đơn và kiện hàng",
     internalIds: ["shipment-internal-1", "order-internal-1"],
     path: "/shipping",
   },

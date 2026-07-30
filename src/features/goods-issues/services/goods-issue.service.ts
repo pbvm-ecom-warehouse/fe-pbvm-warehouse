@@ -19,6 +19,8 @@ export type GoodsIssue = {
   orderId: string;
   goodsIssueNumber?: string | null;
   orderCode?: string | null;
+  assignedShipperId?: string;
+  assignedAt?: string;
   status: GoodsIssueStatus;
   items: GoodsIssueItem[];
   createdAt?: string;
@@ -79,6 +81,13 @@ export async function listGoodsIssues(input: QueryGoodsIssuesInput = {}) {
 export async function getGoodsIssue(goodsIssueId: string) {
   const response = await apiClient.get<ApiEnvelope<GoodsIssue> | GoodsIssue>(
     `/goods-issues/${encodeURIComponent(goodsIssueId)}`,
+  );
+  return unwrapApiData(response.data);
+}
+
+export async function claimGoodsIssue(goodsIssueId: string) {
+  const response = await apiClient.post<ApiEnvelope<GoodsIssue> | GoodsIssue>(
+    `/goods-issues/${encodeURIComponent(goodsIssueId)}/claim`,
   );
   return unwrapApiData(response.data);
 }

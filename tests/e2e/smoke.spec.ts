@@ -5,7 +5,6 @@ type SeedRole =
   | "MANAGER"
   | "SHIPPER"
   | "RECEIVER"
-  | "PICKER"
   | "PRINTER"
   | "COUNTER";
 
@@ -1184,18 +1183,22 @@ test("manager can view print jobs without processing controls", async ({
   ).toHaveCount(0);
 });
 
-test("picker mobile drawer exposes picker routes", async ({ page }) => {
-  await seedWmsSession(page, ["PICKER"], "Picker User");
+test("shipper mobile drawer exposes picking and delivery routes", async ({
+  page,
+}) => {
+  await seedWmsSession(page, ["SHIPPER"], "Shipper User");
   await page.setViewportSize({ width: 390, height: 844 });
 
   await page.goto("/dashboard");
   await expect(
-    page.getByRole("heading", { name: /Khu vực soạn hàng/i }),
+    page.getByRole("heading", { name: /Khu vực xuất kho và giao hàng/i }),
   ).toBeVisible();
   await page.getByRole("button", { name: /Mở menu/i }).click();
   await expect(page.getByRole("link", { name: /Xuất kho/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Giao hàng/i })).toBeVisible();
   await expect(page.getByRole("link", { name: /Chuyển kho/i })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /Nhập hàng/i })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Kiểm kê/i })).toHaveCount(0);
 });
 
 test("manager opens the canonical warehouse map editor", async ({ page }) => {
@@ -1275,10 +1278,11 @@ test("manager opens the canonical warehouse map editor", async ({ page }) => {
   expect(legacyWarehouseCalled).toBe(false);
 });
 
-test("picker follows the suggested cell and confirms whole-package issue", async ({
+test("shipper claims an issue, follows the suggested cell and confirms picking", async ({
   page,
 }) => {
-  await seedWmsSession(page, ["PICKER"], "Picker User");
+  await seedWmsSession(page, ["SHIPPER"], "Shipper User");
+  let claimed = false;
   let confirmBody: Record<string, unknown> | undefined;
   const path = {
     startGateCode: "GATE-01",
@@ -1290,7 +1294,9 @@ test("picker follows the suggested cell and confirms whole-package issue", async
     ],
     distanceM: 9,
   };
-  const goodsIssue = {
+  let goodsIssue = {
+    assignedAt: undefined as string | undefined,
+    assignedShipperId: undefined as string | undefined,
     goodsIssueNumber: "GI-20260730-0001",
     id: "gi-1",
     items: [
@@ -1339,12 +1345,22 @@ test("picker follows the suggested cell and confirms whole-package issue", async
   await page.route("**/api/wms/goods-issues**", async (route) => {
     const url = route.request().url();
     if (route.request().method() === "POST") {
-      confirmBody = route.request().postDataJSON();
+      if (url.endsWith("/claim")) {
+        claimed = true;
+        goodsIssue = {
+          ...goodsIssue,
+          assignedShipperId: "e2e-shipper",
+          assignedAt: "2026-07-30T01:00:00.000Z",
+        };
+      } else {
+        confirmBody = route.request().postDataJSON();
+        goodsIssue = { ...goodsIssue, status: "CONFIRMED" };
+      }
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
           meta: { requestId: "pick-e2e" },
-          data: { ...goodsIssue, status: "CONFIRMED" },
+          data: goodsIssue,
         }),
       });
       return;
@@ -1389,8 +1405,9 @@ test("picker follows the suggested cell and confirms whole-package issue", async
       body: JSON.stringify({
         meta: { requestId: "pick-e2e" },
         data: {
-          id: "layout-1",
+          id: "single-warehouse-layout",
           revision: 1,
+          updatedAt: "2026-07-30T00:00:00.000Z",
           canvas: { widthM: 20, heightM: 12, gridM: 1 },
           rackTemplate: {
             widthM: 4,
@@ -1403,6 +1420,7 @@ test("picker follows the suggested cell and confirms whole-package issue", async
           racks: [
             {
               id: "rack-1",
+              zoneId: "zone-1",
               code: "R01",
               name: "Kệ R01",
               xM: 7,
@@ -1445,9 +1463,20 @@ test("picker follows the suggested cell and confirms whole-package issue", async
 
   await page.goto("/goods-issues");
   await page.getByRole("button", { name: "Xem chi tiết" }).click();
+  await page.getByRole("button", { name: "Nhận phiếu" }).click();
+  await expect(page.getByText(/Đã nhận phiếu xuất/i)).toBeVisible();
   await page.getByRole("row", { name: /CUP-500ML-RED/i }).click();
   await expect(page.getByText("R01-T1-B1").first()).toBeVisible();
   await page.getByRole("button", { name: /R01-T1-B1.*Ưu tiên/i }).click();
+  await expect(
+    page.getByRole("button", { name: "Mở bản đồ kho" }),
+  ).toBeEnabled();
+  await page.getByRole("button", { name: "Mở bản đồ kho" }).click();
+  await page.getByRole("button", { name: "Xem mặt kệ R01" }).click();
+  await page
+    .getByRole("button", { name: /R01-T1-B1/i })
+    .last()
+    .click();
   await page.getByRole("button", { name: "Chọn khoang và quét mã" }).click();
   const scanner = page.getByRole("dialog", { name: "Quét xác nhận vị trí" });
   await scanner.getByLabel("Mã vạch mặt hàng").fill("2000000000015");
@@ -1457,6 +1486,7 @@ test("picker follows the suggested cell and confirms whole-package issue", async
   await expect(
     page.getByText(/Đã xác nhận lấy hàng đúng khoang/i),
   ).toBeVisible();
+  expect(claimed).toBe(true);
   expect(confirmBody).toMatchObject({
     itemBarcode: "2000000000015",
     cellBarcode: "R01-T1-B1",
@@ -1465,65 +1495,85 @@ test("picker follows the suggested cell and confirms whole-package issue", async
     lotId: "lot-1",
   });
 });
-test("shipper assigns a carrier and advances a shipment", async ({ page }) => {
+test("shipper closes picked goods into a WMS package", async ({ page }) => {
   await seedWmsSession(page, ["SHIPPER"], "Shipper User");
-  let shipmentStatus = "PENDING";
-  let carrierId: string | undefined;
-  let trackingNumber: string | undefined;
-  const carrier = {
-    code: "GHN",
-    contactInfo: { phone: "1900636677" },
-    id: "carrier-1",
-    name: "Giao Hàng Nhanh",
-    status: "ACTIVE",
+  let packageBody: Record<string, unknown> | undefined;
+  const goodsIssue = {
+    assignedShipperId: "e2e-shipper",
+    goodsIssueNumber: "GI-20260721-0001",
+    id: "issue-1",
+    items: [
+      {
+        itemId: "item-1",
+        quantity: 24,
+        remainingQty: 0,
+        sku: "CUP-500ML-RED",
+      },
+    ],
+    orderCode: "ORD-001",
+    orderId: "order-internal-1",
+    status: "CONFIRMED",
   };
+  let packages: Array<{
+    allocations: Array<{ itemId: string; quantity: number; sku: string }>;
+    barcode: string;
+    createdAt: string;
+    createdBy: string;
+  }> = [];
   const shipment = () => ({
+    activeTripId: undefined,
+    assignedShipperId: "e2e-shipper",
     attempts: 0,
-    carrierId,
     codAmount: 320000,
     createdAt: "2026-07-21T00:00:00.000Z",
     goodsIssueId: "issue-1",
     id: "shipment-1",
     orderCode: "ORD-001",
     orderId: "order-internal-1",
+    packages,
     paymentMethod: "COD",
     recipient: {
       address: { line: "12 Nguyễn Văn Linh", province: "Hồ Chí Minh" },
       name: "Nguyễn An",
       phone: "0901000000",
     },
-    shipmentStatus,
+    shipmentStatus: packages.length > 0 ? "READY" : "PENDING",
     shipmentNumber: "SHP-20260721-0001",
     statusHistory: [],
-    trackingNumber,
     updatedAt: "2026-07-21T00:00:00.000Z",
   });
 
-  await page.route("**/api/wms/carriers**", async (route) => {
+  await page.route("**/api/wms/goods-issues**", async (route) => {
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify({ data: [carrier] }),
+      body: JSON.stringify({
+        data: goodsIssue,
+        meta: { requestId: "package-goods-issue" },
+      }),
     });
   });
   await page.route("**/api/wms/shipments**", async (route) => {
     const request = route.request();
     const url = request.url();
 
-    if (request.method() === "PATCH") {
-      if (url.endsWith("/assign")) {
-        const payload = request.postDataJSON();
-        carrierId = payload.carrierId;
-        trackingNumber = payload.trackingNumber;
-      } else {
-        const multipartBody = request.postData() ?? "";
-        const statusMatch = multipartBody.match(
-          /name="status"\r?\n\r?\n([^\r\n]+)/,
-        );
-        shipmentStatus = statusMatch?.[1] ?? shipmentStatus;
-      }
+    if (request.method() === "POST" && url.endsWith("/packages")) {
+      packageBody = request.postDataJSON();
+      packages = [
+        {
+          allocations: [
+            { itemId: "item-1", quantity: 24, sku: "CUP-500ML-RED" },
+          ],
+          barcode: "PKG-20260721-0001",
+          createdAt: "2026-07-21T01:00:00.000Z",
+          createdBy: "e2e-shipper",
+        },
+      ];
       await route.fulfill({
         contentType: "application/json",
-        body: JSON.stringify({ data: shipment() }),
+        body: JSON.stringify({
+          data: shipment(),
+          meta: { requestId: "package-create" },
+        }),
       });
       return;
     }
@@ -1532,6 +1582,7 @@ test("shipper assigns a carrier and advances a shipment", async ({ page }) => {
       contentType: "application/json",
       body: JSON.stringify({
         data: url.includes("/shipments/shipment-1") ? shipment() : [shipment()],
+        meta: { requestId: "package-shipment" },
       }),
     });
   });
@@ -1541,71 +1592,98 @@ test("shipper assigns a carrier and advances a shipment", async ({ page }) => {
     page.getByRole("heading", { name: /^Giao hàng$/i }),
   ).toBeVisible();
   await page.getByRole("row", { name: /ORD-001/i }).click();
-  await page.getByRole("button", { name: /^Gán hãng và mã vận đơn$/i }).click();
-  const assignDialog = page.getByRole("dialog", {
-    name: /Gán hãng vận chuyển/i,
+  await page.getByRole("button", { name: /^Đóng kiện$/i }).click();
+  const packageDialog = page.getByRole("dialog", {
+    name: /^Đóng kiện hàng$/i,
   });
-  await assignDialog.getByRole("combobox", { name: "Hãng vận chuyển" }).click();
-  await page.getByRole("option", { name: /Giao Hàng Nhanh.*GHN/i }).click();
-  await assignDialog.getByLabel("Mã vận đơn").fill("GHN-0002");
-  await assignDialog.getByRole("button", { name: /^Lưu gán hãng$/i }).click();
-  await expect(page.getByText(/Đã gán hãng vận chuyển/i)).toBeVisible();
-
-  await page.getByRole("button", { name: /^Cập nhật trạng thái$/i }).click();
-  const statusDialog = page.getByRole("dialog", {
-    name: /Cập nhật trạng thái giao hàng/i,
-  });
-  await statusDialog.getByRole("combobox", { name: "Trạng thái" }).click();
-  await page.getByRole("option", { name: "Đã nhận hàng" }).click();
-  await statusDialog.getByRole("button", { name: /^Lưu trạng thái$/i }).click();
+  await expect(packageDialog.getByLabel("Số lượng CUP-500ML-RED")).toHaveValue(
+    "24",
+  );
+  await packageDialog
+    .getByRole("button", { name: /Tạo kiện và barcode/i })
+    .click();
+  await expect(page.getByText(/Vận đơn sẵn sàng xếp chuyến/i)).toBeVisible();
   await expect(
-    page.getByText(/Đã cập nhật trạng thái giao hàng/i),
+    page.getByRole("img", {
+      name: "Mã vạch nội bộ PKG-20260721-0001",
+    }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Gán hãng|Cập nhật trạng thái/i }),
+  ).toHaveCount(0);
+  expect(packageBody).toEqual({
+    allocations: [{ itemId: "item-1", quantity: 24 }],
+  });
 });
 
-test("manager creates a carrier but cannot change shipment operations", async ({
+test("manager can inspect packages but cannot claim, pick or close them", async ({
   page,
 }) => {
   await seedWmsSession(page, ["MANAGER"], "Manager User");
-  const carrier = {
-    code: "GHN",
-    contactInfo: { phone: "1900636677" },
-    id: "carrier-1",
-    name: "Giao Hàng Nhanh",
-    status: "ACTIVE",
+  const goodsIssue = {
+    assignedShipperId: "shipper-1",
+    goodsIssueNumber: "GI-20260721-0002",
+    id: "issue-2",
+    items: [
+      {
+        itemId: "item-1",
+        quantity: 12,
+        remainingQty: 0,
+        sku: "CUP-500ML-WHT",
+      },
+    ],
+    orderCode: "ORD-002",
+    orderId: "order-2",
+    status: "CONFIRMED",
   };
   await page.route("**/api/wms/shipments**", async (route) => {
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({ data: [] }),
-    });
-  });
-  await page.route("**/api/wms/carriers**", async (route) => {
-    const request = route.request();
-    const created = request.method() === "POST";
+    const isDetail = route.request().url().includes("/shipments/shipment-2");
+    const shipment = {
+      assignedShipperId: "shipper-1",
+      attempts: 0,
+      codAmount: 0,
+      goodsIssueId: "issue-2",
+      id: "shipment-2",
+      orderCode: "ORD-002",
+      orderId: "order-2",
+      packages: [],
+      paymentMethod: "ONLINE",
+      recipient: {
+        address: { line: "1 Lê Lợi" },
+        name: "Khách hàng",
+        phone: "0902000000",
+      },
+      shipmentNumber: "SHP-20260721-0002",
+      shipmentStatus: "PENDING",
+      statusHistory: [],
+    };
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
-        data: created
-          ? { ...carrier, code: "JNT", name: "J&T Express" }
-          : [carrier],
+        data: isDetail ? shipment : [shipment],
+        meta: { requestId: "manager-shipment" },
+      }),
+    });
+  });
+  await page.route("**/api/wms/goods-issues**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: goodsIssue,
+        meta: { requestId: "manager-goods-issue" },
       }),
     });
   });
 
   await page.goto("/shipping");
-  await expect(
-    page.getByRole("button", { name: /^Gán hãng và mã vận đơn$/i }),
-  ).toHaveCount(0);
-  await page.getByRole("tab", { name: /^Hãng vận chuyển$/i }).click();
-  await page.getByRole("button", { name: /^Thêm hãng vận chuyển$/i }).click();
-  const carrierDialog = page.getByRole("dialog", {
-    name: /^Thêm hãng vận chuyển$/i,
-  });
-  await carrierDialog.getByLabel("Tên hãng").fill("J&T Express");
-  await carrierDialog.getByLabel("Mã hãng").fill("JNT");
-  await carrierDialog.getByRole("button", { name: /^Tạo hãng$/i }).click();
-  await expect(page.getByText(/Đã thêm hãng vận chuyển/i)).toBeVisible();
+  await page.getByRole("row", { name: /ORD-002/i }).click();
+  await expect(page.getByText(/Manager và Admin chỉ xem/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Đóng kiện$/i })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole("tab", { name: /Hãng vận chuyển/i })).toHaveCount(
+    0,
+  );
 });
 
 test("admin selects an item type before managing SKU values", async ({

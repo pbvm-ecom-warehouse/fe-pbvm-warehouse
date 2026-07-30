@@ -28,6 +28,7 @@ import {
   normalizePutawayTaskListResponse,
 } from "@/features/warehouse-navigation/services/putaway-task.service";
 import {
+  claimGoodsIssue,
   confirmGoodsIssueLine,
   listGoodsIssuePickSuggestions,
   listGoodsIssues,
@@ -65,6 +66,7 @@ import {
 } from "@/features/adjustments/services/scrap-note.service";
 import {
   assignShipmentCarrier,
+  createShipmentPackage,
   createCarrier,
   getCarrier,
   getShipment,
@@ -557,6 +559,7 @@ describe("Swagger-backed WMS services", () => {
       data: [{ quantity: 10, shelfCode: "A1-S02", shelfId: "shelf-1" }],
     });
     mockedPost.mockResolvedValueOnce({ data: goodsIssue });
+    mockedPost.mockResolvedValueOnce({ data: goodsIssue });
 
     await listGoodsIssues({
       limit: 20,
@@ -567,6 +570,7 @@ describe("Swagger-backed WMS services", () => {
       goodsIssueId: "gi-1",
       itemId: "item-1",
     });
+    await claimGoodsIssue("gi-1");
     await confirmGoodsIssueLine("gi-1", {
       itemBarcode: "CUP-BLANK-500",
       cellBarcode: "A1-S02-B1",
@@ -583,6 +587,7 @@ describe("Swagger-backed WMS services", () => {
     expect(mockedGet).toHaveBeenCalledWith(
       "/goods-issues/gi-1/items/item-1/suggestions",
     );
+    expect(mockedPost).toHaveBeenCalledWith("/goods-issues/gi-1/claim");
     expect(mockedPost).toHaveBeenCalledWith("/goods-issues/gi-1/confirm-line", {
       itemBarcode: "CUP-BLANK-500",
       cellBarcode: "A1-S02-B1",
@@ -851,6 +856,7 @@ describe("Swagger-backed WMS services", () => {
     mockedGet.mockResolvedValueOnce({ data: carrier });
     mockedPost.mockResolvedValueOnce({ data: carrier });
     mockedPatch.mockResolvedValue({ data: shipment });
+    mockedPost.mockResolvedValueOnce({ data: shipment });
 
     expect(normalizeShipmentListResponse([shipment])).toMatchObject({
       data: [shipment],
@@ -881,6 +887,9 @@ describe("Swagger-backed WMS services", () => {
     await assignShipmentCarrier("shipment-1", {
       carrierId: "carrier-1",
       trackingNumber: "GHN-0002",
+    });
+    await createShipmentPackage("shipment-1", {
+      allocations: [{ itemId: "item-1", quantity: 24 }],
     });
     await updateShipmentStatus("shipment-1", {
       images: [new File(["pod"], "pod.png", { type: "image/png" })],
@@ -914,6 +923,9 @@ describe("Swagger-backed WMS services", () => {
     expect(mockedPatch).toHaveBeenCalledWith("/shipments/shipment-1/assign", {
       carrierId: "carrier-1",
       trackingNumber: "GHN-0002",
+    });
+    expect(mockedPost).toHaveBeenCalledWith("/shipments/shipment-1/packages", {
+      allocations: [{ itemId: "item-1", quantity: 24 }],
     });
     const statusBody = mockedPatch.mock.calls.find(
       ([url]) => url === "/shipments/shipment-1/status",

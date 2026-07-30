@@ -5,6 +5,7 @@ import { type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
 
 export const SHIPMENT_STATUSES = [
   "PENDING",
+  "READY",
   "PICKED_UP",
   "IN_TRANSIT",
   "DELIVERED",
@@ -44,6 +45,8 @@ export type Shipment = {
   shipmentNumber?: string | null;
   orderCode?: string | null;
   carrierId?: string;
+  assignedShipperId?: string;
+  activeTripId?: string;
   trackingNumber?: string;
   shipmentStatus: ShipmentStatus;
   recipient: {
@@ -53,6 +56,8 @@ export type Shipment = {
   };
   paymentMethod: "COD" | "ONLINE";
   codAmount: number;
+  codCollectedAmount?: number;
+  packages: ShipmentPackage[];
   attempts: number;
   failReason?: string;
   statusHistory: ShipmentStatusHistoryEntry[];
@@ -60,6 +65,32 @@ export type Shipment = {
   deliveredAt?: string;
   createdAt?: string;
   updatedAt?: string;
+};
+
+type ShipmentPayload = Omit<Shipment, "packages" | "statusHistory"> & {
+  packages?: ShipmentPackage[];
+  statusHistory?: ShipmentStatusHistoryEntry[];
+};
+
+export type ShipmentPackageAllocation = {
+  itemId: string;
+  sku: string;
+  quantity: number;
+};
+
+export type ShipmentPackage = {
+  barcode: string;
+  allocations: ShipmentPackageAllocation[];
+  createdAt: string;
+  createdBy: string;
+  loadedTripId?: string;
+  loadedAt?: string;
+  returnedAt?: string;
+  returnedBy?: string;
+};
+
+export type CreateShipmentPackageInput = {
+  allocations: Array<{ itemId: string; quantity: number }>;
 };
 
 export type QueryShipmentsInput = {
@@ -104,8 +135,22 @@ function optionalText(value: string | undefined) {
   return trimmed ? trimmed : undefined;
 }
 
-export function normalizeShipmentListResponse(payload: ApiListLike<Shipment>) {
-  return normalizeApiList(payload);
+function normalizeShipment(payload: ShipmentPayload): Shipment {
+  return {
+    ...payload,
+    packages: payload.packages ?? [],
+    statusHistory: payload.statusHistory ?? [],
+  };
+}
+
+export function normalizeShipmentListResponse(
+  payload: ApiListLike<ShipmentPayload>,
+) {
+  const result = normalizeApiList(payload);
+  return {
+    ...result,
+    data: result.data.map(normalizeShipment),
+  };
 }
 
 export function normalizeCarrierListResponse(payload: ApiListLike<Carrier>) {
@@ -113,28 +158,41 @@ export function normalizeCarrierListResponse(payload: ApiListLike<Carrier>) {
 }
 
 export async function listShipments(input: QueryShipmentsInput = {}) {
-  const response = await apiClient.get<ApiListLike<Shipment>>("/shipments", {
-    params: {
-      carrierId: optionalText(input.carrierId),
-      limit: input.limit,
-      orderId: optionalText(input.orderId),
-      page: input.page,
-      shipmentStatus:
-        input.shipmentStatus && input.shipmentStatus !== "ALL"
-          ? input.shipmentStatus
-          : undefined,
+  const response = await apiClient.get<ApiListLike<ShipmentPayload>>(
+    "/shipments",
+    {
+      params: {
+        carrierId: optionalText(input.carrierId),
+        limit: input.limit,
+        orderId: optionalText(input.orderId),
+        page: input.page,
+        shipmentStatus:
+          input.shipmentStatus && input.shipmentStatus !== "ALL"
+            ? input.shipmentStatus
+            : undefined,
+      },
     },
-  });
+  );
 
   return normalizeShipmentListResponse(response.data);
 }
 
 export async function getShipment(shipmentId: string) {
-  const response = await apiClient.get<ApiEnvelope<Shipment> | Shipment>(
-    `/shipments/${encodeURIComponent(shipmentId)}`,
-  );
+  const response = await apiClient.get<
+    ApiEnvelope<ShipmentPayload> | ShipmentPayload
+  >(`/shipments/${encodeURIComponent(shipmentId)}`);
 
-  return unwrapApiData(response.data);
+  return normalizeShipment(unwrapApiData(response.data));
+}
+
+export async function createShipmentPackage(
+  shipmentId: string,
+  input: CreateShipmentPackageInput,
+) {
+  const response = await apiClient.post<
+    ApiEnvelope<ShipmentPayload> | ShipmentPayload
+  >(`/shipments/${encodeURIComponent(shipmentId)}/packages`, input);
+  return normalizeShipment(unwrapApiData(response.data));
 }
 
 export async function assignShipmentCarrier(

@@ -72,17 +72,13 @@ const rolePanelCopy: Record<WmsRole, { description: string; title: string }> = {
     description: "Theo dõi mua hàng, nhận hàng, cất hàng và xuất kho.",
   },
   SHIPPER: {
-    title: "Khu vực giao hàng",
+    title: "Khu vực xuất kho và giao hàng",
     description:
-      "Theo dõi vận đơn, bàn giao hàng và cập nhật trạng thái giao nhận.",
+      "Nhận phiếu xuất, lấy hàng theo vị trí, đóng kiện và giao hàng.",
   },
   RECEIVER: {
     title: "Khu vực nhận hàng",
     description: "Tập trung phiếu nhập và cất hàng theo từng dòng GRN.",
-  },
-  PICKER: {
-    title: "Khu vực soạn hàng",
-    description: "Theo dõi phiếu xuất và gợi ý lấy hàng theo vị trí.",
   },
   PRINTER: {
     title: "Khu vực in ly",
@@ -227,7 +223,7 @@ export function DashboardContentClient() {
   const canViewGoodsIssues = hasAnyRole(userRoles, [
     "ADMIN",
     "MANAGER",
-    "PICKER",
+    "SHIPPER",
   ]);
   const canViewPrintJobs = hasAnyRole(userRoles, [
     "ADMIN",
