@@ -85,6 +85,7 @@ import {
   listShipments,
   type Shipment,
 } from "../services/shipping.service";
+import { LastMileDeliverySection } from "./last-mile-delivery-section";
 
 const PAGE_SIZE = 20;
 
@@ -740,6 +741,21 @@ export function DeliveryTripsPanel() {
                   ) : null}
                 </CardContent>
               </Card>
+            ) : null}
+
+            {[
+              "IN_TRANSIT",
+              "PAUSED",
+              "AWAITING_SETTLEMENT",
+              "COMPLETED",
+            ].includes(selectedTrip.status) ? (
+              <LastMileDeliverySection
+                canManage={canManage}
+                isOwnerShipper={isOwnerShipper}
+                shipments={stopShipments}
+                shippers={shippers}
+                trip={selectedTrip}
+              />
             ) : null}
           </div>
         ) : null}
