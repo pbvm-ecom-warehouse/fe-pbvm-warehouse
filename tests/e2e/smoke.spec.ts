@@ -184,7 +184,7 @@ test("manager creates a template-driven warehouse item", async ({ page }) => {
       name: "Nhựa PET",
     },
   } as const;
-  let createBody: Record<string, unknown> | undefined;
+  let createBody = "";
 
   await page.route(
     "**/api/wms/stock/item-types/CUP_BLANK/sku-template**",
@@ -236,18 +236,21 @@ test("manager creates a template-driven warehouse item", async ({ page }) => {
       return;
     }
     if (request.method() === "POST") {
-      createBody = request.postDataJSON();
+      createBody = request.postData() ?? "";
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
           data: {
-            ...createBody,
             attributes: [],
             barcode: "2000000000015",
             createdAt: "2026-07-23T00:00:00.000Z",
             id: "item-new",
             isActive: true,
+            isPerishable: false,
+            name: "Ly nắp tim PET 500ml",
             sku: "CUP-HRT-PET-500-CLR",
+            type: "CUP_BLANK",
+            unit: "thùng",
             updatedAt: "2026-07-23T00:00:00.000Z",
           },
           meta: { requestId: "create" },
@@ -277,8 +280,7 @@ test("manager creates a template-driven warehouse item", async ({ page }) => {
     documentFitsViewport: true,
     mainOverflowY: "auto",
   });
-  const itemPanel = page.getByRole("tabpanel", { name: /^Mặt hàng$/i });
-  await itemPanel.getByRole("button", { name: /^Tạo mặt hàng$/i }).click();
+  await page.getByRole("button", { name: /^Tạo mặt hàng$/i }).click();
   const createDialog = page.getByRole("dialog", { name: /^Tạo mặt hàng$/i });
   await expect(createDialog).toBeVisible();
 
@@ -310,6 +312,12 @@ test("manager creates a template-driven warehouse item", async ({ page }) => {
     await page.getByRole("option", { name: optionName }).click();
   }
 
+  await createDialog.getByLabel("Số cái trong 1 thùng").fill("50");
+  await createDialog.getByLabel(/Ảnh mặt hàng/).setInputFiles({
+    buffer: Buffer.from("item-image"),
+    mimeType: "image/webp",
+    name: "cup.webp",
+  });
   await expect(createDialog.getByText("CUP-HRT-PET-500-CLR")).toBeVisible();
   await expect(createDialog.getByText("Đã xác nhận cấu hình")).toBeVisible();
   await createDialog.getByRole("button", { name: /^Tạo mặt hàng$/i }).click();
@@ -323,23 +331,24 @@ test("manager creates a template-driven warehouse item", async ({ page }) => {
       name: "Mã vạch nội bộ 2000000000015",
     }),
   ).toBeVisible();
-  expect(createBody).toMatchObject({
-    attributeOptionIds: [
-      optionByKey.CUP_STYLE.id,
-      optionByKey.MATERIAL.id,
-      optionByKey.CAPACITY.id,
-      optionByKey.COLOR.id,
-    ],
-    name: "Ly nắp tim PET 500ml",
-    templateId: "CUP_BLANK",
-    type: "CUP_BLANK",
-    unit: "cái",
-  });
-  expect(createBody).not.toHaveProperty("sku");
-  expect(createBody).not.toHaveProperty("barcode");
-  expect(createBody).not.toHaveProperty("attributes");
+  expect(createBody).toContain('name="attributeOptionIds"');
+  expect(createBody).toContain(optionByKey.CUP_STYLE.id);
+  expect(createBody).toContain(optionByKey.MATERIAL.id);
+  expect(createBody).toContain(optionByKey.CAPACITY.id);
+  expect(createBody).toContain(optionByKey.COLOR.id);
+  expect(createBody).toContain('name="name"');
+  expect(createBody).toContain("Ly nắp tim PET 500ml");
+  expect(createBody).toContain('name="templateId"');
+  expect(createBody).toContain("CUP_BLANK");
+  expect(createBody).toContain('name="unit"');
+  expect(createBody).toContain("thùng");
+  expect(createBody).toContain('name="altUnits"');
+  expect(createBody).toContain('filename="cup.webp"');
+  expect(createBody).not.toContain('name="sku"');
+  expect(createBody).not.toContain('name="barcode"');
+  expect(createBody).not.toContain('name="attributes"');
 });
-test("receiver gets inbound navigation and forbidden settings", async ({
+test("receiver gets inbound navigation and cannot access staff", async ({
   page,
 }) => {
   await seedWmsSession(page, ["RECEIVER"], "Receiver User");
@@ -353,10 +362,6 @@ test("receiver gets inbound navigation and forbidden settings", async ({
   await expect(page.getByRole("link", { name: /Hệ thống/i })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /Nhân viên/i })).toHaveCount(0);
 
-  await page.goto("/settings");
-  await expect(
-    page.getByRole("heading", { name: /Không có quyền truy cập/i }),
-  ).toBeVisible();
   await page.goto("/staff");
   await expect(
     page.getByRole("heading", { name: /Không có quyền truy cập/i }),
@@ -663,7 +668,7 @@ test("manager opens purchases when purchase order items are missing", async ({
   });
 });
 
-test("admin sees system health and staff list management", async ({ page }) => {
+test("admin manages the staff list", async ({ page }) => {
   await seedWmsSession(page, ["ADMIN"], "Admin User");
   await page.route("**/api/wms/users**", async (route) => {
     const detail = route.request().url().includes("/users/employee-id-1");
@@ -687,33 +692,6 @@ test("admin sees system health and staff list management", async ({ page }) => {
       }),
     });
   });
-  await page.route("**/api/wms/health", async (route) => {
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: { status: "ok", db: "up", redis: "up" },
-        meta: { requestId: "e2e-health" },
-      }),
-    });
-  });
-  await page.route(/\/api\/wms\/?$/, async (route) => {
-    await route.fulfill({
-      contentType: "text/plain",
-      body: "Hello World!",
-    });
-  });
-
-  await page.goto("/settings");
-
-  await expect(
-    page.getByRole("heading", { name: /^Hệ thống$/i }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Trạng thái hệ thống", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText("Kết nối WMS", { exact: true })).toBeVisible();
-  await expect(page.getByText("Quản lý tài khoản WMS")).toHaveCount(0);
-
   await page.goto("/staff");
 
   await expect(
@@ -757,8 +735,6 @@ test("admin sees system health and staff list management", async ({ page }) => {
     page.getByRole("button", { name: /^Khóa$/i }).first(),
   ).toBeVisible();
 
-  await expect(page.getByText("Phạm vi truy cập")).toBeVisible();
-  await expect(page.getByText("Toàn hệ thống")).toBeVisible();
   await page.getByRole("button", { name: "AU Admin", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: /Hồ sơ/i })).toBeVisible();
   await expect(
@@ -800,34 +776,6 @@ test("manager sees staff but cannot mutate ADMIN accounts", async ({
       }),
     });
   });
-  await page.route("**/api/wms/health", async (route) => {
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: { status: "ok", db: "up", redis: "up" },
-        meta: { requestId: "e2e-health" },
-      }),
-    });
-  });
-  await page.route(/\/api\/wms\/?$/, async (route) => {
-    await route.fulfill({
-      contentType: "text/plain",
-      body: "Hello World!",
-    });
-  });
-
-  await page.goto("/settings");
-
-  await expect(
-    page.getByRole("heading", { name: /^Hệ thống$/i }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Trạng thái hệ thống", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText("Kết nối WMS", { exact: true })).toBeVisible();
-  await expect(page.getByText("Quản lý tài khoản WMS")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: /Nhân viên/i })).toBeVisible();
-
   await page.goto("/staff");
   await expect(page.getByText("Administrator")).toBeVisible();
   await expect(
@@ -1804,14 +1752,18 @@ test("admin selects an item type before managing SKU values", async ({
     });
   });
 
-  await page.goto("/products");
-  await page.getByRole("tab", { name: /^Tạo thuộc tính SKU$/i }).click();
-  const panel = page.getByRole("tabpanel", { name: /^Tạo thuộc tính SKU$/i });
+  await page.goto("/products/attributes");
+  await expect(
+    page.getByRole("heading", { name: /^Thuộc tính SKU$/i }),
+  ).toBeVisible();
+  const panel = page.getByRole("region", {
+    name: "Giá trị thuộc tính SKU",
+  });
   await expect(
     panel.getByRole("heading", { name: /Giá trị thuộc tính SKU/i }),
   ).toBeVisible();
   await panel.getByLabel("Nhóm thuộc tính").click();
-  await page.getByRole("option", { name: "Dung tích" }).click();
+  await page.getByRole("option", { name: "Chất liệu" }).click();
   await panel.getByLabel("Tìm kiếm").fill("PET");
   await expect(
     panel.getByRole("row", { name: /Chất liệu.*Nhựa PET.*PET/i }),
@@ -1819,6 +1771,8 @@ test("admin selects an item type before managing SKU values", async ({
   await expect(panel.getByText("500 ml", { exact: true })).toHaveCount(0);
 
   await panel.getByLabel("Tìm kiếm").fill("");
+  await panel.getByLabel("Nhóm thuộc tính").click();
+  await page.getByRole("option", { name: "Dung tích" }).click();
   await panel.getByRole("combobox", { name: "Trạng thái" }).click();
   await page.getByRole("option", { name: "Ngừng dùng" }).click();
   await expect(
@@ -1830,8 +1784,14 @@ test("admin selects an item type before managing SKU values", async ({
   await page.getByRole("option", { name: "Bao bì" }).click();
   await panel.getByLabel("Nhóm thuộc tính").click();
   await page.getByRole("option", { name: "Nhóm bao bì" }).click();
-  await expect(panel.getByLabel("Tên giá trị")).toBeEnabled();
-  await expect(panel.getByRole("textbox", { name: "Mã SKU" })).toBeEnabled();
+  await panel.getByRole("button", { name: "Tạo giá trị thuộc tính" }).click();
+  const createAttributeDialog = page.getByRole("dialog", {
+    name: "Tạo giá trị thuộc tính SKU",
+  });
+  await expect(createAttributeDialog.getByLabel("Tên giá trị")).toBeEnabled();
+  await expect(
+    createAttributeDialog.getByRole("textbox", { name: "Mã SKU" }),
+  ).toBeEnabled();
 });
 
 test("supplier code suggestion stops after a manual edit", async ({ page }) => {
