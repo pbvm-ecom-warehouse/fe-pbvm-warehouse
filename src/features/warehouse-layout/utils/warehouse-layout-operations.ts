@@ -10,6 +10,7 @@ import type {
   WarehouseLayoutShelf,
   WarehouseLayoutZone,
 } from "@/types/api";
+import { getZonePolicy } from "./zone-policy";
 
 /**
  * Đồng bộ số tầng vật lý với rack template. Tầng mới nhận kích thước usable
@@ -113,6 +114,7 @@ function changedFields(
 }
 
 function zoneData(zone: WarehouseLayoutZone) {
+  const policy = getZonePolicy(zone);
   return {
     code: zone.code,
     name: zone.name,
@@ -121,6 +123,7 @@ function zoneData(zone: WarehouseLayoutZone) {
     widthM: zone.widthM,
     heightM: zone.heightM,
     rotation: zone.rotation,
+    ...policy,
   };
 }
 

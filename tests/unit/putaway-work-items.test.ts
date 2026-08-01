@@ -81,4 +81,42 @@ describe("put-away work item hydration", () => {
       buildPutawayWorkItems([completed], [receipt], { includeCompleted: true }),
     ).toHaveLength(1);
   });
+
+  it("builds a goods-return put-away line without a GRN lookup", () => {
+    const returnTask = {
+      id: "task-return-1",
+      grnId: "return-1",
+      sourceType: "GOODS_RETURN",
+      sourceNumber: "RET-20260730-0001",
+      status: "PENDING",
+      items: [
+        {
+          itemId: "item-return-1",
+          sku: "CUP-RETURN-500",
+          quantity: 2,
+          remainingQty: 2,
+          lotId: null,
+          packageSpec: {
+            unit: "thùng",
+            factor: 1,
+            depthCm: 30,
+            widthCm: 20,
+            heightCm: 10,
+            volumeCm3: 6000,
+          },
+        },
+      ],
+    } as PutawayTask;
+
+    expect(buildPutawayWorkItems([returnTask], [])).toEqual([
+      expect.objectContaining({
+        taskId: "task-return-1",
+        sourceType: "GOODS_RETURN",
+        grnNumber: "RET-20260730-0001",
+        sku: "CUP-RETURN-500",
+        itemName: "CUP-RETURN-500",
+        remainingQty: 2,
+      }),
+    ]);
+  });
 });

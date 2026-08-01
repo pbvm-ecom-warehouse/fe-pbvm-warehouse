@@ -408,6 +408,8 @@ function WarehouseEditor({
         widthM,
         heightM,
         rotation: 0,
+        zonePurpose: "STORAGE",
+        allowedItemTypes: [],
       };
       editor.commit((next) => ({ ...next, zones: [...next.zones, zone] }));
       setSelection({ kind, id });

@@ -19,6 +19,7 @@ export type PutawayWorkItem = {
   key: string;
   taskId: string;
   taskStatus: PutawayTaskStatus;
+  sourceType: "GOODS_RECEIPT" | "GOODS_RETURN";
   grnId: string;
   grnNumber: string;
   itemId: string;
@@ -67,7 +68,11 @@ export function buildPutawayWorkItems(
   const receiptById = new Map(receipts.map((receipt) => [receipt.id, receipt]));
 
   return tasks.flatMap((task) => {
-    const receipt = receiptById.get(task.grnId);
+    const sourceType = task.sourceType ?? "GOODS_RECEIPT";
+    const receipt =
+      sourceType === "GOODS_RECEIPT"
+        ? receiptById.get(task.grnId)
+        : undefined;
     return task.items.flatMap((line) => {
       const remainingQty = line.remainingQty ?? line.quantity ?? 0;
       if (!options.includeCompleted && remainingQty <= 0) return [];
@@ -85,8 +90,13 @@ export function buildPutawayWorkItems(
           key: `${task.id}:${line.itemId}:${lotId ?? lotNumber ?? "none"}`,
           taskId: task.id,
           taskStatus: task.status,
+          sourceType,
           grnId: task.grnId,
-          grnNumber: receipt?.grnNumber ?? task.grnNumber ?? task.grnId,
+          grnNumber:
+            receipt?.grnNumber ??
+            task.sourceNumber ??
+            task.grnNumber ??
+            task.grnId,
           itemId: line.itemId,
           sku: item?.sku || line.sku || "Chưa có SKU",
           itemName: item?.itemName || item?.sku || line.sku || "Mặt hàng",

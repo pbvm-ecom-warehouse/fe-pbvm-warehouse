@@ -182,13 +182,16 @@ describe("WarehouseFloorPlan editor tools", () => {
       />,
     );
 
-    fireEvent.pointerDown(screen.getByLabelText("Khu vực 1, 8 x 5 mét"), {
-      button: 0,
-      clientX: 1,
-      clientY: 1,
-      ctrlKey: true,
-      pointerId: 1,
-    });
+    fireEvent.pointerDown(
+      screen.getByLabelText("Khu vực 1, Lưu trữ, 8 x 5 mét"),
+      {
+        button: 0,
+        clientX: 1,
+        clientY: 1,
+        ctrlKey: true,
+        pointerId: 1,
+      },
+    );
     fireEvent.pointerMove(screen.getByLabelText("Sơ đồ kho"), {
       clientX: 2,
       clientY: 1.5,

@@ -1,12 +1,15 @@
-import {
-  appendEvidenceImages,
-  appendIndexedEvidenceImages,
-} from "@/components/evidence-images/evidence-image-utils";
+import { appendEvidenceImages } from "@/components/evidence-images/evidence-image-utils";
 import { apiClient } from "@/lib/api-client";
 import { normalizeApiList, type ApiListLike } from "@/lib/api-list";
 import { type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
 
-export const SCRAP_NOTE_STATUSES = ["DRAFT", "APPROVED", "REJECTED"] as const;
+export const SCRAP_NOTE_STATUSES = [
+  "DRAFT",
+  "APPROVED",
+  "QUARANTINED",
+  "DISPOSED",
+  "REJECTED",
+] as const;
 
 export type ScrapNoteStatus = (typeof SCRAP_NOTE_STATUSES)[number];
 
@@ -14,6 +17,9 @@ export type ScrapNoteItem = {
   itemId: string;
   sku: string;
   shelfId: string;
+  sourceCellId: string | null;
+  lockedQuantity: number;
+  scrapCellId: string | null;
   lotId?: string | null;
   quantity: number;
   reason: string;
@@ -40,20 +46,6 @@ export type QueryScrapNotesInput = {
   limit?: number;
 };
 
-export type CreateScrapNoteItemInput = {
-  itemId: string;
-  lotId?: string;
-  shelfId: string;
-  quantity: number;
-  reason: string;
-};
-
-export type CreateScrapNoteInput = {
-  note?: string;
-  items: CreateScrapNoteItemInput[];
-  itemImages?: File[][];
-};
-
 export type RejectScrapNoteInput = {
   rejectReason: string;
 };
@@ -61,10 +53,17 @@ export type RejectScrapNoteInput = {
 export type CreateStockCountScrapInput = {
   itemBarcode: string;
   shelfId: string;
+  cellId: string;
   lotId?: string;
   quantity: number;
   reason: string;
   images?: File[];
+};
+
+export type MoveScrapItemInput = {
+  itemBarcode: string;
+  sourceCellBarcode: string;
+  targetCellBarcode: string;
 };
 
 export function normalizeScrapNoteListResponse(
@@ -93,20 +92,6 @@ export async function getScrapNote(scrapNoteId: string) {
   return unwrapApiData(response.data);
 }
 
-export async function createScrapNote(input: CreateScrapNoteInput) {
-  const formData = new FormData();
-  if (input.note) formData.append("note", input.note);
-  formData.append("items", JSON.stringify(input.items));
-  appendIndexedEvidenceImages(formData, input.itemImages);
-
-  const response = await apiClient.post<ApiEnvelope<ScrapNote> | ScrapNote>(
-    "/scrap-notes",
-    formData,
-  );
-
-  return unwrapApiData(response.data);
-}
-
 export async function createStockCountScrap({
   input,
   itemId,
@@ -119,6 +104,7 @@ export async function createStockCountScrap({
   const formData = new FormData();
   formData.append("itemBarcode", input.itemBarcode);
   formData.append("shelfId", input.shelfId);
+  formData.append("cellId", input.cellId);
   if (input.lotId) formData.append("lotId", input.lotId);
   formData.append("quantity", String(input.quantity));
   formData.append("reason", input.reason);
@@ -147,6 +133,27 @@ export async function rejectScrapNote(
   const response = await apiClient.post<ApiEnvelope<ScrapNote> | ScrapNote>(
     `/scrap-notes/${encodeURIComponent(scrapNoteId)}/reject`,
     input,
+  );
+
+  return unwrapApiData(response.data);
+}
+
+export async function moveScrapItemToScrap(
+  scrapNoteId: string,
+  itemId: string,
+  input: MoveScrapItemInput,
+) {
+  const response = await apiClient.post<ApiEnvelope<ScrapNote> | ScrapNote>(
+    `/scrap-notes/${encodeURIComponent(scrapNoteId)}/items/${encodeURIComponent(itemId)}/move-to-scrap`,
+    input,
+  );
+
+  return unwrapApiData(response.data);
+}
+
+export async function disposeScrapNote(scrapNoteId: string) {
+  const response = await apiClient.post<ApiEnvelope<ScrapNote> | ScrapNote>(
+    `/scrap-notes/${encodeURIComponent(scrapNoteId)}/dispose`,
   );
 
   return unwrapApiData(response.data);

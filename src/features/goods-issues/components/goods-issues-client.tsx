@@ -43,8 +43,10 @@ import {
 } from "@/features/admin-shell/components/operations-ui";
 import { EntityDetailDialog } from "@/features/admin-shell/components/entity-detail-dialog";
 import { WarehouseOperationWorkspace } from "@/features/warehouse-navigation/components/warehouse-operation-workspace";
-import { getApiErrorMessage } from "@/lib/api-contract";
+import { listAllWmsUsers } from "@/features/staff/services/staff.service";
+import { getApiErrorCode, getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
+import { getSessionQueryScope } from "@/lib/session-query-scope";
 import { cn } from "@/lib/utils";
 import {
   businessCodeLabel,
@@ -53,7 +55,7 @@ import {
 } from "@/lib/wms-ui-labels";
 import { useSessionUser } from "@/hooks/use-session-user";
 import {
-  claimGoodsIssue,
+  assignGoodsIssue,
   confirmGoodsIssueLine,
   getGoodsIssue,
   GOODS_ISSUE_STATUSES,
@@ -65,12 +67,18 @@ import {
 } from "../services/goods-issue.service";
 
 const PAGE_SIZE = 20;
+const STALE_PICK_SOURCE_CODES = new Set([
+  "GOODS_ISSUE_SOURCE_QUARANTINED",
+  "GOODS_ISSUE_SOURCE_NOT_PICKABLE",
+  "STOCK_INSUFFICIENT",
+]);
 const keys = {
-  list: (page: number, status: string) =>
-    ["goods-issues", "list", page, status] as const,
-  detail: (id: string) => ["goods-issues", "detail", id] as const,
-  suggestions: (id: string, itemId: string) =>
-    ["goods-issues", "suggestions", id, itemId] as const,
+  list: (scope: string, page: number, status: string) =>
+    ["goods-issues", scope, "list", page, status] as const,
+  detail: (scope: string, id: string) =>
+    ["goods-issues", scope, "detail", id] as const,
+  suggestions: (scope: string, id: string, itemId: string) =>
+    ["goods-issues", scope, "suggestions", id, itemId] as const,
 };
 
 function ErrorBanner({ error }: { error: unknown }) {
@@ -96,34 +104,46 @@ function EmptyRow({ colSpan, text }: { colSpan: number; text: string }) {
 export function GoodsIssuesClient() {
   const user = useSessionUser();
   const queryClient = useQueryClient();
+  const sessionScope = getSessionQueryScope(user);
   const canView = hasAnyRole(user?.roles, ["ADMIN", "MANAGER", "SHIPPER"]);
+  const canAssign = hasAnyRole(user?.roles, ["ADMIN", "MANAGER"]);
   const isShipper = user?.roles.includes("SHIPPER") ?? false;
   const [status, setStatus] = useState<GoodsIssueStatus | "ALL">("ALL");
   const [page, setPage] = useState(1);
   const [selectedIssueId, setSelectedIssueId] = useState("");
   const [selectedItemId, setSelectedItemId] = useState("");
+  const [selectedShipperId, setSelectedShipperId] = useState("");
   const issuesQuery = useQuery({
     enabled: canView,
-    queryKey: keys.list(page, status),
+    queryKey: keys.list(sessionScope, page, status),
     queryFn: () => listGoodsIssues({ page, limit: PAGE_SIZE, status }),
   });
   const issues = issuesQuery.data?.data ?? [];
   const selectedIssue = issues.find((issue) => issue.id === selectedIssueId);
   const detailQuery = useQuery({
     enabled: Boolean(selectedIssueId),
-    queryKey: keys.detail(selectedIssueId),
+    queryKey: keys.detail(sessionScope, selectedIssueId),
     queryFn: () => getGoodsIssue(selectedIssueId),
   });
   const detail = detailQuery.data ?? selectedIssue;
+  const shippersQuery = useQuery({
+    enabled: canAssign,
+    queryKey: ["staff", sessionScope, "shipper-options"],
+    queryFn: () => listAllWmsUsers({ role: "SHIPPER", status: "ACTIVE" }),
+  });
+  const shippers = shippersQuery.data?.data ?? [];
+  const assignedShipper = shippers.find(
+    (shipper) => shipper.id === detail?.assignedShipperId,
+  );
   const isOwner =
     Boolean(user?.id) && detail?.assignedShipperId === user?.id && isShipper;
-  const canPick = isOwner && detail?.status === "PENDING";
+  const canPick = isOwner && detail?.status === "PICKING";
   const selectedItem = detail?.items.find(
     (item) => item.itemId === selectedItemId,
   );
   const suggestionsQuery = useQuery({
     enabled: canPick && Boolean(selectedIssueId && selectedItemId),
-    queryKey: keys.suggestions(selectedIssueId, selectedItemId),
+    queryKey: keys.suggestions(sessionScope, selectedIssueId, selectedItemId),
     queryFn: () =>
       listGoodsIssuePickSuggestions({
         goodsIssueId: selectedIssueId,
@@ -149,8 +169,38 @@ export function GoodsIssuesClient() {
         ...(source?.lotId ? { lotId: source.lotId } : {}),
       });
     },
-    onError: (error) =>
-      toast.error(getApiErrorMessage(error) ?? "Không thể xác nhận lấy hàng."),
+    onError: async (error) => {
+      const errorCode = getApiErrorCode(error);
+      if (errorCode && STALE_PICK_SOURCE_CODES.has(errorCode)) {
+        toast.error(
+          errorCode === "GOODS_ISSUE_SOURCE_QUARANTINED"
+            ? "Kiện hàng này đang chờ hủy. Đã tải lại vị trí FEFO khác để Shipper tiếp tục lấy hàng."
+            : "Vị trí lấy hàng không còn khả dụng hoặc không đủ tồn. Đã tải lại gợi ý FEFO.",
+        );
+        await Promise.all([
+          queryClient.invalidateQueries({
+            exact: true,
+            queryKey: keys.suggestions(
+              sessionScope,
+              selectedIssueId,
+              selectedItemId,
+            ),
+          }),
+          queryClient.invalidateQueries({
+            exact: true,
+            queryKey: keys.detail(sessionScope, selectedIssueId),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ["goods-issues", sessionScope, "list"],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ["warehouse-operation", "rack-cells"],
+          }),
+        ]);
+        return;
+      }
+      toast.error(getApiErrorMessage(error) ?? "Không thể xác nhận lấy hàng.");
+    },
     onSuccess: async () => {
       toast.success("Đã xác nhận lấy hàng đúng khoang.");
       await Promise.all([
@@ -161,13 +211,17 @@ export function GoodsIssuesClient() {
       ]);
     },
   });
-  const claimMutation = useMutation({
-    mutationFn: () => claimGoodsIssue(selectedIssueId),
+  const assignMutation = useMutation({
+    mutationFn: () => assignGoodsIssue(selectedIssueId, selectedShipperId),
     onError: (error) =>
-      toast.error(getApiErrorMessage(error) ?? "Không thể nhận phiếu xuất."),
-    onSuccess: async (claimedIssue) => {
-      queryClient.setQueryData(keys.detail(claimedIssue.id), claimedIssue);
-      toast.success("Đã nhận phiếu xuất. Bạn có thể bắt đầu lấy hàng.");
+      toast.error(getApiErrorMessage(error) ?? "Không thể gán phiếu xuất."),
+    onSuccess: async (assignedIssue) => {
+      queryClient.setQueryData(
+        keys.detail(sessionScope, assignedIssue.id),
+        assignedIssue,
+      );
+      setSelectedShipperId("");
+      toast.success("Đã gán phiếu xuất cho Shipper.");
       await queryClient.invalidateQueries({ queryKey: ["goods-issues"] });
     },
   });
@@ -176,10 +230,12 @@ export function GoodsIssuesClient() {
   function selectIssue(issue: GoodsIssue) {
     setSelectedIssueId(issue.id);
     setSelectedItemId("");
+    setSelectedShipperId("");
   }
   function closeIssueDetail() {
     setSelectedIssueId("");
     setSelectedItemId("");
+    setSelectedShipperId("");
   }
   function handleFilter(event: FormEvent) {
     event.preventDefault();
@@ -297,10 +353,18 @@ export function GoodsIssuesClient() {
                       <TableCell>
                         <Badge variant="outline">
                           {!issue.assignedShipperId
-                            ? "Chưa có người nhận"
+                            ? "Chưa gán Shipper"
                             : issue.assignedShipperId === user?.id
                               ? "Của bạn"
-                              : "Đã có Shipper nhận"}
+                              : shippers.find(
+                                  (shipper) =>
+                                    shipper.id === issue.assignedShipperId,
+                                )?.name ||
+                                shippers.find(
+                                  (shipper) =>
+                                    shipper.id === issue.assignedShipperId,
+                                )?.username ||
+                                "Đã gán Shipper"}
                         </Badge>
                       </TableCell>
                       <TableCell>{issue.items.length}</TableCell>
@@ -351,37 +415,102 @@ export function GoodsIssuesClient() {
                       {isOwner
                         ? "Nhấn vào dòng hàng để xem vị trí lấy theo FEFO và đường đi."
                         : detail.assignedShipperId
-                          ? "Phiếu đã có Shipper nhận. Vai trò hiện tại chỉ xem thông tin."
-                          : "Shipper cần nhận phiếu trước khi bắt đầu lấy hàng."}
+                          ? `Phiếu đã được gán cho ${
+                              assignedShipper?.name ||
+                              assignedShipper?.username ||
+                              "Shipper"
+                            }.`
+                          : "Admin/Manager cần gán Shipper trước khi bắt đầu lấy hàng."}
                     </CardDescription>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline">
                       {!detail.assignedShipperId
-                        ? "Chưa có người nhận"
+                        ? "Chưa gán Shipper"
                         : isOwner
                           ? "Của bạn"
-                          : "Đã có Shipper nhận"}
+                          : assignedShipper?.name ||
+                            assignedShipper?.username ||
+                            "Đã gán Shipper"}
                     </Badge>
                     <StatusBadge tone={statusTone(detail.status)}>
                       {statusLabel(detail.status)}
                     </StatusBadge>
-                    {isShipper &&
+                    {canAssign &&
                     !detail.assignedShipperId &&
                     detail.status === "PENDING" ? (
-                      <Button
-                        disabled={claimMutation.isPending}
-                        onClick={() => claimMutation.mutate()}
-                        type="button"
-                      >
-                        {claimMutation.isPending ? (
-                          <LoaderCircle
-                            className="animate-spin"
-                            data-icon="inline-start"
-                          />
-                        ) : null}
-                        Nhận phiếu
-                      </Button>
+                      <div className="min-w-64 space-y-2">
+                        {shippersQuery.isError ? (
+                          <div
+                            className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+                            role="alert"
+                          >
+                            <span>Không tải được danh sách Shipper.</span>
+                            <Button
+                              aria-label="Thử tải lại Shipper"
+                              onClick={() => void shippersQuery.refetch()}
+                              size="sm"
+                              type="button"
+                              variant="outline"
+                            >
+                              Thử lại
+                            </Button>
+                          </div>
+                        ) : (
+                          <>
+                            {shippersQuery.isLoading ? (
+                              <p className="text-xs text-muted-foreground">
+                                Đang tải danh sách Shipper...
+                              </p>
+                            ) : shippers.length === 0 ? (
+                              <p className="text-xs text-amber-700">
+                                Không có Shipper đang hoạt động để gán.
+                              </p>
+                            ) : null}
+                            <div className="flex items-center gap-2">
+                              <Select
+                                disabled={
+                                  shippersQuery.isLoading ||
+                                  shippers.length === 0
+                                }
+                                value={selectedShipperId}
+                                onValueChange={setSelectedShipperId}
+                              >
+                                <SelectTrigger aria-label="Chọn Shipper">
+                                  <SelectValue placeholder="Chọn Shipper" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {shippers.map((shipper) => (
+                                    <SelectItem
+                                      key={shipper.id}
+                                      value={shipper.id}
+                                    >
+                                      {shipper.name || shipper.username}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                disabled={
+                                  !selectedShipperId ||
+                                  assignMutation.isPending ||
+                                  shippers.length === 0
+                                }
+                                onClick={() => assignMutation.mutate()}
+                                type="button"
+                              >
+                                {assignMutation.isPending ? (
+                                  <LoaderCircle
+                                    className="animate-spin"
+                                    data-icon="inline-start"
+                                  />
+                                ) : null}
+                                Gán
+                              </Button>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     ) : null}
                   </div>
                 </div>

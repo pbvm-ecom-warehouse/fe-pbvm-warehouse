@@ -27,6 +27,7 @@ import {
   snapToGrid,
   type LayoutRect,
 } from "../utils/warehouse-layout";
+import { getZonePolicy } from "../utils/zone-policy";
 
 export type LayoutElementKind = "zone" | "rack" | "aisle" | "gate";
 export type WarehouseEditorTool =
@@ -572,10 +573,13 @@ export function WarehouseFloorPlan({
           const rect = zoneRect(zone);
           const selected = isSelected(selection, "zone", zone.id);
           const invalid = invalidSelectionKeys.has(`zone:${zone.id}`);
+          const policy = getZonePolicy(zone);
+          const zonePurposeLabel =
+            policy.zonePurpose === "SCRAP" ? "Khu hủy" : "Lưu trữ";
 
           return (
             <g
-              aria-label={`${zone.name}, ${rect.widthM} x ${rect.heightM} mét`}
+              aria-label={`${zone.name}, ${zonePurposeLabel}, ${rect.widthM} x ${rect.heightM} mét`}
               className={cn(
                 "outline-none",
                 editable && tool === "select" ? "cursor-move" : null,
@@ -620,7 +624,7 @@ export function WarehouseFloorPlan({
                 x={rect.xM + 0.45}
                 y={rect.yM + 1.45}
               >
-                {rect.widthM} × {rect.heightM} m
+                {zonePurposeLabel} · {rect.widthM} × {rect.heightM} m
               </text>
               {editable && selected ? (
                 <LayoutResizeHandle

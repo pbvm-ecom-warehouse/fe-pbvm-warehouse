@@ -11,6 +11,8 @@ export type AuthTokenResponse = {
 export type WmsUserStatus = "ACTIVE" | "LOCKED";
 
 export type ListWmsUsersQuery = {
+  limit?: number;
+  page?: number;
   role?: string;
   search?: string;
   status?: WmsUserStatus;
@@ -103,6 +105,12 @@ export type MoveType =
 
 export type WarehouseLayoutStatus = "DRAFT" | "PUBLISHED";
 export type WarehouseLayoutRotation = 0 | 90;
+export type WarehouseZonePurpose = "STORAGE" | "SCRAP";
+export type WarehouseZoneAllowedItemType =
+  | "MATERIAL"
+  | "CUP_BLANK"
+  | "CUP_PRINTED"
+  | "PACKAGING";
 
 export type WarehouseLayoutCanvas = {
   widthM: number;
@@ -119,6 +127,8 @@ export type WarehouseLayoutZone = {
   widthM: number;
   heightM: number;
   rotation: WarehouseLayoutRotation;
+  zonePurpose?: WarehouseZonePurpose;
+  allowedItemTypes?: WarehouseZoneAllowedItemType[];
 };
 
 export type WarehouseLayoutRack = {
