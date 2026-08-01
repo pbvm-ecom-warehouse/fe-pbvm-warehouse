@@ -69,6 +69,7 @@ const stockCount = {
       itemId: "item-1",
       sku: "CUP-RND-PP-700-WHT",
       shelfId: "SHELF-A-01",
+      cellId: "CELL-A-01-02",
       lotId: null,
       systemQty: 10,
       actualQty: 10,
@@ -152,6 +153,7 @@ describe("stock-count scrap proposal UI", () => {
       expect(serviceMocks.createStockCountScrap).toHaveBeenCalledWith({
         input: {
           images: [],
+          cellId: "CELL-A-01-02",
           itemBarcode: "8938500000123",
           lotId: undefined,
           quantity: 2,
@@ -197,6 +199,103 @@ describe("stock-count scrap proposal UI", () => {
     fireEvent.click(scrapTab);
     expect(
       screen.queryByRole("button", { name: "Tạo phiếu hủy" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the lot identity locked to the selected stock-count line", async () => {
+    const lotCount = {
+      ...stockCount,
+      items: [
+        {
+          ...stockCount.items[0],
+          actualQty: null,
+          delta: null,
+          lotId: "lot-locked-1",
+        },
+      ],
+      status: "IN_PROGRESS" as const,
+    };
+    serviceMocks.listStockCounts.mockResolvedValue({
+      data: [lotCount],
+      limit: 20,
+      page: 1,
+      total: 1,
+    });
+    serviceMocks.getStockCount.mockResolvedValue(lotCount);
+    serviceMocks.countStockCountItem.mockResolvedValue(lotCount);
+
+    renderAdjustments();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Xem chi tiết" }),
+    );
+
+    const detailDialog = await screen.findByRole("dialog", {
+      name: "Chi tiết phiếu kiểm kho",
+    });
+    expect(await within(detailDialog).findByText("lot-locked-1")).toBeVisible();
+    fireEvent.click(
+      await within(detailDialog).findByRole("button", { name: "Nhập đếm" }),
+    );
+
+    const countDialog = screen.getByRole("dialog", { name: "Nhập số đếm" });
+    expect(within(countDialog).getByText("lot-locked-1")).toBeVisible();
+    expect(
+      within(countDialog).queryByRole("textbox", { name: "Mã lô" }),
+    ).not.toBeInTheDocument();
+    fireEvent.change(within(countDialog).getByLabelText("Số thực đếm"), {
+      target: { value: "9" },
+    });
+    fireEvent.click(
+      within(countDialog).getByRole("button", { name: "Lưu số đếm" }),
+    );
+
+    await waitFor(() =>
+      expect(serviceMocks.countStockCountItem).toHaveBeenCalledWith({
+        input: {
+          actualQty: 9,
+          cellId: "CELL-A-01-02",
+          images: [],
+          lotId: "lot-locked-1",
+          reason: undefined,
+          shelfId: "SHELF-A-01",
+        },
+        itemId: "item-1",
+        stockCountId: "sc-1",
+      }),
+    );
+  });
+
+  it("shows migrated CANCELLED counts as closed without actions", async () => {
+    const cancelledCount = {
+      ...stockCount,
+      status: "CANCELLED" as const,
+    };
+    serviceMocks.listStockCounts.mockResolvedValue({
+      data: [cancelledCount],
+      limit: 20,
+      page: 1,
+      total: 1,
+    });
+    serviceMocks.getStockCount.mockResolvedValue(cancelledCount);
+
+    renderAdjustments();
+    expect(await screen.findByText("Đã đóng")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Xem chi tiết" }));
+
+    const detailDialog = await screen.findByRole("dialog", {
+      name: "Chi tiết phiếu kiểm kho",
+    });
+    expect(
+      await within(detailDialog).findByText("Không có thao tác"),
+    ).toBeVisible();
+    expect(
+      within(detailDialog).queryByRole("button", { name: "Nhập đếm" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(detailDialog).queryByRole("button", { name: "Đề xuất hủy" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(detailDialog).queryByRole("button", { name: "Duyệt phiếu" }),
     ).not.toBeInTheDocument();
   });
 });

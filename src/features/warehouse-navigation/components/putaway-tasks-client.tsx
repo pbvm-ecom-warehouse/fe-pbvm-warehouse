@@ -62,7 +62,6 @@ import {
   listRackCells,
 } from "../services/warehouse-operations.service";
 import { buildPutawayWorkItems } from "../utils/putaway-work-items";
-import { InventoryReconciliationPanel } from "./inventory-reconciliation-panel";
 import { WarehouseOperationWorkspace } from "./warehouse-operation-workspace";
 
 const keys = {
@@ -107,7 +106,17 @@ export function PutawayTasksClient() {
   });
   const tasks = useMemo(() => tasksQuery.data?.data ?? [], [tasksQuery.data]);
   const grnIds = useMemo(
-    () => [...new Set(tasks.map((task) => task.grnId).filter(Boolean))],
+    () => [
+      ...new Set(
+        tasks
+          .filter(
+            (task) =>
+              (task.sourceType ?? "GOODS_RECEIPT") === "GOODS_RECEIPT",
+          )
+          .map((task) => task.grnId)
+          .filter(Boolean),
+      ),
+    ],
     [tasks],
   );
   const receiptQueries = useQueries({
@@ -341,9 +350,6 @@ export function PutawayTasksClient() {
       >
         <TabsList>
           <TabsTrigger value="putaway-tasks">Lệnh cất hàng</TabsTrigger>
-          <TabsTrigger value="inventory-reconciliation">
-            Phân khoang tồn cũ
-          </TabsTrigger>
         </TabsList>
         <TabsContent className="space-y-4" value="putaway-tasks">
           {!canConfirm ? (
@@ -379,7 +385,9 @@ export function PutawayTasksClient() {
                 <CardContent className="grid gap-3 pt-4 sm:grid-cols-2 xl:grid-cols-4">
                   <div className="rounded-lg border bg-muted/20 p-3">
                     <div className="text-xs text-muted-foreground">
-                      Phiếu nhập
+                      {selected.sourceType === "GOODS_RETURN"
+                        ? "Phiếu hàng hoàn"
+                        : "Phiếu nhập"}
                     </div>
                     <div className="mt-1 font-mono text-sm font-medium">
                       {selected.grnNumber}
@@ -519,7 +527,7 @@ export function PutawayTasksClient() {
                         <TableHead>SKU</TableHead>
                         <TableHead>Mặt hàng</TableHead>
                         <TableHead>Số lô</TableHead>
-                        <TableHead>Số phiếu nhập</TableHead>
+                        <TableHead>Chứng từ nguồn</TableHead>
                         <TableHead>Trạng thái</TableHead>
                         <TableHead>SL còn lại</TableHead>
                         <TableHead>Ngày sản xuất</TableHead>
@@ -586,9 +594,6 @@ export function PutawayTasksClient() {
               </CardContent>
             </Card>
           )}
-        </TabsContent>
-        <TabsContent value="inventory-reconciliation">
-          <InventoryReconciliationPanel />
         </TabsContent>
       </Tabs>
     </div>

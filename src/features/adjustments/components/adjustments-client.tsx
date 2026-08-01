@@ -66,11 +66,14 @@ import {
   TableSkeleton,
 } from "@/features/admin-shell/components/operations-ui";
 import { EntityDetailDialog } from "@/features/admin-shell/components/entity-detail-dialog";
+import { invalidateScrapMutationQueries } from "@/features/warehouse-navigation/utils/invalidate-warehouse-queries";
 import { getApiErrorCode, getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import {
   businessCodeLabel,
+  stockCountStatusLabel,
+  stockCountStatusTone,
   statusLabel,
   statusTone,
 } from "@/lib/wms-ui-labels";
@@ -79,8 +82,10 @@ import { useSessionUser } from "@/hooks/use-session-user";
 import {
   approveScrapNote,
   createStockCountScrap,
+  disposeScrapNote,
   getScrapNote,
   listScrapNotes,
+  moveScrapItemToScrap,
   rejectScrapNote,
   SCRAP_NOTE_STATUSES,
   type ScrapNote,
@@ -119,14 +124,12 @@ const defaultStockCountForm = {
 
 const defaultCountForm = {
   actualQty: "",
-  lotId: "",
   reason: "",
   shelfId: "",
 };
 
 const defaultScrapForm = {
   itemBarcode: "",
-  lotId: "",
   quantity: "1",
   reason: "",
   shelfId: "",
@@ -341,8 +344,9 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
         stockCountId,
         input: {
           actualQty: parseNonNegativeNumber(countForm.actualQty),
+          cellId: countTarget?.cellId ?? "",
           images: countImages,
-          lotId: optionalText(countForm.lotId),
+          lotId: countTarget?.lotId ?? undefined,
           reason: optionalText(countForm.reason),
           shelfId: requiredText(countForm.shelfId),
         },
@@ -364,9 +368,10 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
       }
       return createStockCountScrap({
         input: {
+          cellId: scrapTarget.cellId ?? "",
           images: scrapImages,
           itemBarcode: requiredText(scrapForm.itemBarcode),
-          lotId: optionalText(scrapForm.lotId),
+          lotId: scrapTarget.lotId ?? undefined,
           quantity: Number(scrapForm.quantity),
           reason: requiredText(scrapForm.reason),
           shelfId: requiredText(scrapForm.shelfId),
@@ -376,11 +381,11 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
       });
     },
     onError: (error) => toast.error(formatError(error)),
-    onSuccess: () => {
+    onSuccess: async () => {
       setScrapTarget(null);
       setScrapForm(defaultScrapForm);
       setScrapImages([]);
-      void queryClient.invalidateQueries({ queryKey: ["scrap-notes"] });
+      await invalidateScrapMutationQueries(queryClient);
       toast.success("Đã gửi đề xuất hủy");
     },
   });
@@ -412,7 +417,6 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
     setCountImages([]);
     setCountForm({
       actualQty: item.actualQty?.toString() ?? "",
-      lotId: item.lotId ?? "",
       reason: item.reason ?? "",
       shelfId: item.shelfId,
     });
@@ -423,7 +427,6 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
     setScrapImages([]);
     setScrapForm({
       itemBarcode: "",
-      lotId: item.lotId ?? "",
       quantity: "1",
       reason: "",
       shelfId: item.shelfId,
@@ -440,6 +443,10 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
     event.preventDefault();
     if (!scrapForm.itemBarcode.trim() || !scrapForm.reason.trim()) {
       toast.error("Cần quét barcode SKU và nhập lý do hủy.");
+      return;
+    }
+    if (!scrapTarget?.cellId) {
+      toast.error("Dòng kiểm thiếu khoang nguồn. Hãy làm mới phiếu kiểm.");
       return;
     }
     const quantity = Number(scrapForm.quantity);
@@ -460,8 +467,8 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
   function handleCount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!activeId || !countTarget || !countForm.shelfId.trim()) {
-      toast.error("Cần chọn dòng kiểm và mã vị trí.");
+    if (!activeId || !countTarget || !countTarget.cellId) {
+      toast.error("Dòng kiểm thiếu khoang lưu hàng. Hãy làm mới phiếu kiểm.");
       return;
     }
 
@@ -517,7 +524,7 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
               <SelectItem value="ALL">Tất cả</SelectItem>
               {STOCK_COUNT_STATUSES.map((status) => (
                 <SelectItem key={status} value={status}>
-                  {statusLabel(status)}
+                  {stockCountStatusLabel(status)}
                 </SelectItem>
               ))}
             </SelectFilter>
@@ -635,11 +642,15 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
             </DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={handleScrapCreate}>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <InfoBox label="SKU" value={scrapTarget?.sku ?? "Chưa có"} />
               <InfoBox
                 label="Vị trí"
                 value={scrapTarget?.shelfId ?? "Chưa có"}
+              />
+              <InfoBox
+                label="Khoang nguồn"
+                value={scrapTarget?.cellId ?? "Chưa có"}
               />
               <InfoBox label="Lô" value={scrapTarget?.lotId ?? "Không có"} />
               <InfoBox
@@ -714,17 +725,23 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
           <DialogHeader>
             <DialogTitle>Nhập số đếm</DialogTitle>
             <DialogDescription>
-              {countTarget?.sku ?? "Dòng kiểm"} · quét hoặc nhập mã vị trí.
+              {countTarget?.sku ?? "Dòng kiểm"} · ghi nhận đúng khoang của dòng
+              kiểm.
             </DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={handleCount}>
             <TextField
               id="stock-count-line-shelf"
-              label="Mã vị trí"
+              disabled
+              label="Vị trí nguồn"
               value={countForm.shelfId}
               onChange={(shelfId) =>
                 setCountForm((current) => ({ ...current, shelfId }))
               }
+            />
+            <InfoBox
+              label="Khoang nguồn"
+              value={countTarget?.cellId ?? "Chưa có"}
             />
             <TextField
               id="stock-count-line-actual"
@@ -735,15 +752,7 @@ function StockCountsSection({ canUseApi }: { canUseApi: boolean }) {
                 setCountForm((current) => ({ ...current, actualQty }))
               }
             />
-            <TextField
-              id="stock-count-line-lot"
-              label="Mã lô"
-              required={false}
-              value={countForm.lotId}
-              onChange={(lotId) =>
-                setCountForm((current) => ({ ...current, lotId }))
-              }
-            />
+            <InfoBox label="Mã lô" value={countTarget?.lotId ?? "Không có"} />
             <TextAreaField
               id="stock-count-line-reason"
               label="Lý do lệch"
@@ -824,8 +833,8 @@ function StockCountTable({
               </TableCell>
               <TableCell>{item.zoneId ?? "Toàn kho"}</TableCell>
               <TableCell>
-                <StatusBadge tone={statusTone(item.status)}>
-                  {statusLabel(item.status)}
+                <StatusBadge tone={stockCountStatusTone(item.status)}>
+                  {stockCountStatusLabel(item.status)}
                 </StatusBadge>
               </TableCell>
               <TableCell>{item.items.length}</TableCell>
@@ -885,7 +894,10 @@ function StockCountDetail({
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
         <div className="grid gap-3 md:grid-cols-4">
-          <InfoBox label="Trạng thái" value={statusLabel(detail.status)} />
+          <InfoBox
+            label="Trạng thái"
+            value={stockCountStatusLabel(detail.status)}
+          />
           <InfoBox label="Khu vực" value={detail.zoneId ?? "Toàn kho"} />
           <InfoBox label="Người tạo" value={detail.createdBy} />
           <InfoBox label="Số dòng" value={detail.items.length.toString()} />
@@ -897,6 +909,8 @@ function StockCountDetail({
               <TableRow>
                 <TableHead>SKU</TableHead>
                 <TableHead>Mã vị trí</TableHead>
+                <TableHead>Khoang</TableHead>
+                <TableHead>Mã lô</TableHead>
                 <TableHead>Tồn hệ thống</TableHead>
                 <TableHead>Thực đếm</TableHead>
                 <TableHead>Chênh lệch</TableHead>
@@ -906,14 +920,18 @@ function StockCountDetail({
             </TableHeader>
             <TableBody>
               {detail.items.length === 0 ? (
-                <EmptyRow colSpan={7} label="Phiếu kiểm chưa có dòng hàng." />
+                <EmptyRow colSpan={9} label="Phiếu kiểm chưa có dòng hàng." />
               ) : (
                 detail.items.map((item) => (
-                  <TableRow key={`${item.itemId}-${item.shelfId}`}>
+                  <TableRow
+                    key={`${item.itemId}-${item.shelfId}-${item.cellId ?? "legacy"}-${item.lotId ?? "no-lot"}`}
+                  >
                     <TableCell className="font-mono font-semibold">
                       {item.sku}
                     </TableCell>
                     <TableCell>{item.shelfId}</TableCell>
+                    <TableCell>{item.cellId ?? "Phiếu cũ"}</TableCell>
+                    <TableCell>{item.lotId ?? "Không có"}</TableCell>
                     <TableCell>{formatQty(item.systemQty)}</TableCell>
                     <TableCell>{formatQty(item.actualQty)}</TableCell>
                     <TableCell>{formatQty(item.delta)}</TableCell>
@@ -925,32 +943,45 @@ function StockCountDetail({
                       />
                     </TableCell>
                     <TableCell>
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          disabled={!canCount || detail.status === "APPROVED"}
-                          onClick={() => onCount(item)}
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                        >
-                          <ClipboardList data-icon="inline-start" />
-                          Nhập đếm
-                        </Button>
-                        <Button
-                          disabled={
-                            !canCreateScrap ||
-                            detail.status === "APPROVED" ||
-                            typeof item.actualQty !== "number"
-                          }
-                          onClick={() => onCreateScrap(item)}
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                        >
-                          <Trash2 data-icon="inline-start" />
-                          Đề xuất hủy
-                        </Button>
-                      </div>
+                      {detail.status === "CANCELLED" ? (
+                        <span className="block text-right text-sm text-muted-foreground">
+                          Không có thao tác
+                        </span>
+                      ) : (
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            disabled={
+                              !canCount ||
+                              !["DRAFT", "IN_PROGRESS"].includes(
+                                detail.status,
+                              ) ||
+                              !item.cellId
+                            }
+                            onClick={() => onCount(item)}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                          >
+                            <ClipboardList data-icon="inline-start" />
+                            Nhập đếm
+                          </Button>
+                          <Button
+                            disabled={
+                              !canCreateScrap ||
+                              detail.status === "APPROVED" ||
+                              !item.cellId ||
+                              typeof item.actualQty !== "number"
+                            }
+                            onClick={() => onCreateScrap(item)}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                          >
+                            <Trash2 data-icon="inline-start" />
+                            Đề xuất hủy
+                          </Button>
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))
@@ -959,35 +990,40 @@ function StockCountDetail({
           </Table>
         </div>
 
-        <form
-          className="grid gap-3 rounded-lg border border-border/70 bg-muted/15 p-3 md:grid-cols-[1fr_auto]"
-          onSubmit={(event) => {
-            event.preventDefault();
-            onApprove();
-          }}
-        >
-          <TextField
-            id="stock-count-approve-reason"
-            label="Lý do duyệt"
-            required={false}
-            value={approveReason}
-            onChange={onApproveReasonChange}
-          />
-          <Button
-            className="self-end"
-            disabled={
-              !canApprove || detail.status === "APPROVED" || approveBusy
-            }
-            type="submit"
+        {detail.status !== "CANCELLED" ? (
+          <form
+            className="grid gap-3 rounded-lg border border-border/70 bg-muted/15 p-3 md:grid-cols-[1fr_auto]"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onApprove();
+            }}
           >
-            {approveBusy ? (
-              <LoaderCircle className="animate-spin" data-icon="inline-start" />
-            ) : (
-              <ShieldCheck data-icon="inline-start" />
-            )}
-            Duyệt phiếu
-          </Button>
-        </form>
+            <TextField
+              id="stock-count-approve-reason"
+              label="Lý do duyệt"
+              required={false}
+              value={approveReason}
+              onChange={onApproveReasonChange}
+            />
+            <Button
+              className="self-end"
+              disabled={
+                !canApprove || detail.status !== "COMPLETED" || approveBusy
+              }
+              type="submit"
+            >
+              {approveBusy ? (
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
+              ) : (
+                <ShieldCheck data-icon="inline-start" />
+              )}
+              Duyệt phiếu
+            </Button>
+          </form>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -997,6 +1033,8 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
   const user = useSessionUser();
   const queryClient = useQueryClient();
   const canApprove = hasAnyRole(user?.roles, ["ADMIN", "MANAGER"]);
+  const canMoveToScrap = hasAnyRole(user?.roles, ["ADMIN", "COUNTER"]);
+  const canDispose = hasAnyRole(user?.roles, ["ADMIN", "MANAGER"]);
   const [statusFilter, setStatusFilter] = useState<ScrapNoteStatus | "ALL">(
     "ALL",
   );
@@ -1056,10 +1094,40 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
         rejectReason: requiredText(rejectReason),
       }),
     onError: (error) => toast.error(formatError(error)),
-    onSuccess: () => {
+    onSuccess: async () => {
       setRejectReason("");
-      void queryClient.invalidateQueries({ queryKey: ["scrap-notes"] });
+      await invalidateScrapMutationQueries(queryClient);
       toast.success("Đã từ chối phiếu hủy");
+    },
+  });
+
+  const moveMutation = useMutation({
+    mutationFn: ({
+      input,
+      itemId,
+      scrapNoteId,
+    }: {
+      input: {
+        itemBarcode: string;
+        sourceCellBarcode: string;
+        targetCellBarcode: string;
+      };
+      itemId: string;
+      scrapNoteId: string;
+    }) => moveScrapItemToScrap(scrapNoteId, itemId, input),
+    onError: (error) => toast.error(formatError(error)),
+    onSuccess: async () => {
+      await invalidateScrapMutationQueries(queryClient);
+      toast.success("Đã chuyển hàng vào khu hủy");
+    },
+  });
+
+  const disposeMutation = useMutation({
+    mutationFn: (scrapNoteId: string) => disposeScrapNote(scrapNoteId),
+    onError: (error) => toast.error(formatError(error)),
+    onSuccess: async () => {
+      await invalidateScrapMutationQueries(queryClient);
+      toast.success("Đã xác nhận tiêu hủy");
     },
   });
 
@@ -1152,13 +1220,21 @@ function ScrapNotesSection({ canUseApi }: { canUseApi: boolean }) {
             approveBusy={approveMutation.isPending}
             approvalSourceReady={sourceApprovalReady}
             canApprove={canApprove}
+            canDispose={canDispose}
+            canMoveToScrap={canMoveToScrap}
             detail={detail}
+            disposeBusy={disposeMutation.isPending}
+            moveBusy={moveMutation.isPending}
             sourceStockCountNumber={
               sourceStockCountQuery.data?.stockCountNumber
             }
             rejectBusy={rejectMutation.isPending}
             rejectReason={rejectReason}
             onApprove={() => approveMutation.mutate(detail.id)}
+            onDispose={() => disposeMutation.mutate(detail.id)}
+            onMove={(itemId, input) =>
+              moveMutation.mutate({ input, itemId, scrapNoteId: detail.id })
+            }
             onReject={() => {
               if (!rejectReason.trim()) {
                 toast.error("Cần nhập lý do từ chối.");
@@ -1243,8 +1319,14 @@ function ScrapNoteDetail({
   approveBusy,
   approvalSourceReady,
   canApprove,
+  canDispose,
+  canMoveToScrap,
   detail,
+  disposeBusy,
+  moveBusy,
   onApprove,
+  onDispose,
+  onMove,
   onReject,
   onRejectReasonChange,
   rejectBusy,
@@ -1254,8 +1336,21 @@ function ScrapNoteDetail({
   approveBusy: boolean;
   approvalSourceReady: boolean;
   canApprove: boolean;
+  canDispose: boolean;
+  canMoveToScrap: boolean;
   detail: ScrapNote;
+  disposeBusy: boolean;
+  moveBusy: boolean;
   onApprove: () => void;
+  onDispose: () => void;
+  onMove: (
+    itemId: string,
+    input: {
+      itemBarcode: string;
+      sourceCellBarcode: string;
+      targetCellBarcode: string;
+    },
+  ) => void;
   onReject: () => void;
   onRejectReasonChange: (value: string) => void;
   rejectBusy: boolean;
@@ -1310,6 +1405,8 @@ function ScrapNoteDetail({
                 <TableHead>SKU</TableHead>
                 <TableHead>Mã mặt hàng</TableHead>
                 <TableHead>Mã vị trí</TableHead>
+                <TableHead>Khoang nguồn</TableHead>
+                <TableHead>Khoang SCRAP</TableHead>
                 <TableHead>Mã lô</TableHead>
                 <TableHead>Số lượng</TableHead>
                 <TableHead>Lý do</TableHead>
@@ -1318,15 +1415,19 @@ function ScrapNoteDetail({
             </TableHeader>
             <TableBody>
               {detail.items.length === 0 ? (
-                <EmptyRow colSpan={7} label="Phiếu hủy chưa có dòng hàng." />
+                <EmptyRow colSpan={9} label="Phiếu hủy chưa có dòng hàng." />
               ) : (
                 detail.items.map((item) => (
-                  <TableRow key={`${item.itemId}-${item.shelfId}`}>
+                  <TableRow
+                    key={`${item.itemId}-${item.shelfId}-${item.sourceCellId ?? "no-source"}-${item.lotId ?? "no-lot"}`}
+                  >
                     <TableCell className="font-mono font-semibold">
                       {item.sku}
                     </TableCell>
                     <TableCell>{item.itemId}</TableCell>
                     <TableCell>{item.shelfId}</TableCell>
+                    <TableCell>{item.sourceCellId ?? "Chưa khóa"}</TableCell>
+                    <TableCell>{item.scrapCellId ?? "Chưa chuyển"}</TableCell>
                     <TableCell>{item.lotId ?? "Không có"}</TableCell>
                     <TableCell>{formatQty(item.quantity)}</TableCell>
                     <TableCell>{item.reason}</TableCell>
@@ -1343,6 +1444,16 @@ function ScrapNoteDetail({
             </TableBody>
           </Table>
         </div>
+
+        <ScrapLifecycleActions
+          canDispose={canDispose}
+          canMoveToScrap={canMoveToScrap}
+          detail={detail}
+          disposeBusy={disposeBusy}
+          moveBusy={moveBusy}
+          onDispose={onDispose}
+          onMove={onMove}
+        />
 
         <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/15 p-3 lg:grid-cols-[1fr_auto_auto]">
           <TextField
@@ -1390,6 +1501,115 @@ function ScrapNoteDetail({
   );
 }
 
+function ScrapLifecycleActions({
+  canDispose,
+  canMoveToScrap,
+  detail,
+  disposeBusy,
+  moveBusy,
+  onDispose,
+  onMove,
+}: {
+  canDispose: boolean;
+  canMoveToScrap: boolean;
+  detail: ScrapNote;
+  disposeBusy: boolean;
+  moveBusy: boolean;
+  onDispose: () => void;
+  onMove: (
+    itemId: string,
+    input: {
+      itemBarcode: string;
+      sourceCellBarcode: string;
+      targetCellBarcode: string;
+    },
+  ) => void;
+}) {
+  const [itemBarcode, setItemBarcode] = useState("");
+  const [sourceCellBarcode, setSourceCellBarcode] = useState("");
+  const [targetCellBarcode, setTargetCellBarcode] = useState("");
+  const pendingItem = detail.items.find((item) => !item.scrapCellId);
+
+  if (detail.status === "APPROVED") {
+    return (
+      <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+        <div>
+          <p className="font-medium">Chuyển vào khu hủy</p>
+          <p className="text-sm text-muted-foreground">
+            Counter quét hàng, khoang nguồn đã khóa và khoang đích thuộc zone
+            SCRAP.
+          </p>
+        </div>
+        {pendingItem ? (
+          <div className="grid gap-3 md:grid-cols-3">
+            <TextField
+              id="scrap-move-item-barcode"
+              label="Barcode hàng"
+              value={itemBarcode}
+              onChange={setItemBarcode}
+            />
+            <TextField
+              id="scrap-move-source-cell"
+              label="Barcode khoang nguồn"
+              value={sourceCellBarcode}
+              onChange={setSourceCellBarcode}
+            />
+            <TextField
+              id="scrap-move-target-cell"
+              label="Barcode khoang SCRAP"
+              value={targetCellBarcode}
+              onChange={setTargetCellBarcode}
+            />
+            <Button
+              disabled={
+                !canMoveToScrap ||
+                moveBusy ||
+                !itemBarcode.trim() ||
+                !sourceCellBarcode.trim() ||
+                !targetCellBarcode.trim()
+              }
+              onClick={() =>
+                onMove(pendingItem.itemId, {
+                  itemBarcode: itemBarcode.trim(),
+                  sourceCellBarcode: sourceCellBarcode.trim(),
+                  targetCellBarcode: targetCellBarcode.trim(),
+                })
+              }
+              type="button"
+            >
+              {moveBusy ? <LoaderCircle className="animate-spin" /> : null}
+              Chuyển vào SCRAP
+            </Button>
+          </div>
+        ) : (
+          <p className="text-sm text-emerald-700">Các dòng đã vào khu hủy.</p>
+        )}
+      </div>
+    );
+  }
+
+  if (detail.status === "QUARANTINED") {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+        <p className="text-sm text-muted-foreground">
+          Hàng đã được cách ly tại khu SCRAP, chờ Manager xác nhận tiêu hủy.
+        </p>
+        <Button
+          disabled={!canDispose || disposeBusy}
+          onClick={onDispose}
+          type="button"
+          variant="destructive"
+        >
+          {disposeBusy ? <LoaderCircle className="animate-spin" /> : <Trash2 />}
+          Xác nhận tiêu hủy
+        </Button>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 function SelectFilter({
   children,
   label,
@@ -1415,6 +1635,7 @@ function SelectFilter({
 }
 
 function TextField({
+  disabled = false,
   id,
   label,
   onChange,
@@ -1422,6 +1643,7 @@ function TextField({
   type = "text",
   value,
 }: {
+  disabled?: boolean;
   id: string;
   label: string;
   onChange: (value: string) => void;
@@ -1433,6 +1655,7 @@ function TextField({
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
       <Input
+        disabled={disabled}
         id={id}
         required={required}
         type={type}

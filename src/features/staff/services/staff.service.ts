@@ -24,6 +24,34 @@ export async function listWmsUsers(query: ListWmsUsersQuery = {}) {
   return normalizeApiList(response.data);
 }
 
+export async function listAllWmsUsers(
+  query: Omit<ListWmsUsersQuery, "limit" | "page"> = {},
+) {
+  const limit = 100;
+  const data: WmsUserResponse[] = [];
+  let page = 1;
+  let total = 0;
+
+  do {
+    const result = await listWmsUsers({ ...query, limit, page });
+    data.push(...result.data);
+    total = result.total;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+
+    if (
+      result.data.length === 0 ||
+      data.length >= total ||
+      page >= totalPages
+    ) {
+      break;
+    }
+
+    page += 1;
+  } while (true);
+
+  return { data, limit, page: 1, total };
+}
+
 export async function getWmsUser(userId: string) {
   const response = await apiClient.get<
     ApiEnvelope<WmsUserResponse> | WmsUserResponse

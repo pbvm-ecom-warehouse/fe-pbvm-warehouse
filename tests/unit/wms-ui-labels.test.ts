@@ -5,6 +5,8 @@ import {
   printJobLineStatusLabel,
   printJobStageLabel,
   printJobStatusLabel,
+  stockCountStatusLabel,
+  stockCountStatusTone,
   statusLabel,
   statusTone,
 } from "@/lib/wms-ui-labels";
@@ -30,6 +32,11 @@ describe("WMS UI labels", () => {
     expect(statusTone("CANCELLED")).toBe("danger");
     expect(statusTone("PENDING")).toBe("info");
     expect(statusTone("PUTAWAY_PENDING")).toBe("info");
+  });
+
+  it("renders migrated legacy stock counts as closed", () => {
+    expect(stockCountStatusLabel("CANCELLED")).toBe("Đã đóng");
+    expect(stockCountStatusTone("CANCELLED")).toBe("neutral");
   });
 
   it("never falls back from a missing business code to an internal id", () => {

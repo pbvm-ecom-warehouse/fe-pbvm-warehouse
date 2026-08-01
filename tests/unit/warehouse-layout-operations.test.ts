@@ -85,6 +85,43 @@ describe("buildWarehouseLayoutOperations", () => {
       clientId: shelfId,
       data: { rackId },
     });
+    expect(operations[0]).toMatchObject({
+      data: { zonePurpose: "STORAGE", allowedItemTypes: [] },
+    });
+  });
+
+  it("sends zone purpose and allowed item types when zone policy changes", () => {
+    const persisted: WarehouseLayout = {
+      ...structuredClone(base),
+      zones: [
+        {
+          id: "z1",
+          code: "STORAGE-01",
+          name: "Khu lưu trữ",
+          xM: 1,
+          yM: 1,
+          widthM: 12,
+          heightM: 8,
+          rotation: 0,
+          zonePurpose: "STORAGE",
+          allowedItemTypes: [],
+        },
+      ],
+    };
+    const draft = structuredClone(persisted);
+    draft.zones[0] = {
+      ...draft.zones[0],
+      allowedItemTypes: ["MATERIAL", "PACKAGING"],
+    };
+
+    expect(buildWarehouseLayoutOperations(persisted, draft)).toEqual([
+      {
+        op: "UPDATE",
+        entity: "ZONE",
+        id: "z1",
+        patch: { allowedItemTypes: ["MATERIAL", "PACKAGING"] },
+      },
+    ]);
   });
 
   it("update canvas/template và chỉ gửi field thay đổi", () => {

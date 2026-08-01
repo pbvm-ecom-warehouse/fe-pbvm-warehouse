@@ -24,6 +24,7 @@ export type GoodsReturnItem = {
   shelfId: string | null;
   lotId: string | null;
   scrapNoteId: string | null;
+  putAwayTaskId: string | null;
   images: string[];
 };
 
@@ -61,7 +62,6 @@ export type CreateGoodsReturnInput = {
 export type InspectGoodsReturnItemInput = {
   itemId: string;
   condition: GoodsReturnItemCondition;
-  shelfId: string;
   lotId?: string;
 };
 

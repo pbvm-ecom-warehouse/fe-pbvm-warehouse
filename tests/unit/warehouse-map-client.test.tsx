@@ -173,6 +173,56 @@ describe("WarehouseMapClient", () => {
     );
   });
 
+  it("configures storage classification and hides it for the scrap zone", async () => {
+    renderWithClient();
+    await screen.findByText("Bản đồ kho 2D");
+
+    fireEvent.click(screen.getByRole("button", { name: "Khu vực" }));
+    fireEvent.click(screen.getByLabelText("Sơ đồ kho"));
+    fireEvent.click(screen.getByLabelText("Chọn zone ZONE-01"));
+
+    expect(screen.getByText("Mục đích khu vực")).toBeInTheDocument();
+    expect(screen.getByLabelText("Nguyên liệu")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Khu hủy" }));
+
+    expect(
+      screen.getByText("Khu hủy không áp dụng phân loại lưu trữ."),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Nguyên liệu")).not.toBeInTheDocument();
+  });
+
+  it("allows only one scrap zone in the editor", async () => {
+    fetchWarehouseLayout.mockResolvedValue({
+      ...structuredClone(baseLayout),
+      zones: [
+        {
+          id: "scrap-1",
+          code: "SCRAP-01",
+          name: "Khu hủy hiện có",
+          xM: 1,
+          yM: 1,
+          widthM: 8,
+          heightM: 6,
+          rotation: 0,
+          zonePurpose: "SCRAP",
+          allowedItemTypes: [],
+        },
+      ],
+    });
+    renderWithClient();
+    await screen.findByText("Bản đồ kho 2D");
+
+    fireEvent.click(screen.getByRole("button", { name: "Khu vực" }));
+    fireEvent.click(screen.getByLabelText("Sơ đồ kho"));
+    fireEvent.click(screen.getByLabelText("Chọn zone ZONE-01"));
+
+    expect(screen.getByRole("button", { name: "Khu hủy" })).toBeDisabled();
+    expect(
+      screen.getByText("Đã có một khu hủy khác trên sơ đồ."),
+    ).toBeInTheDocument();
+  });
+
   it("không tạo rack khi chưa có lối đi kết nối", async () => {
     renderWithClient();
     await screen.findByText("Bản đồ kho 2D");

@@ -4,10 +4,7 @@ import {
   EVIDENCE_IMAGE_MAX_BYTES,
   validateEvidenceImageFiles,
 } from "@/components/evidence-images/evidence-image-utils";
-import {
-  createScrapNote,
-  createStockCountScrap,
-} from "@/features/adjustments/services/scrap-note.service";
+import { createStockCountScrap } from "@/features/adjustments/services/scrap-note.service";
 import { countStockCountItem } from "@/features/adjustments/services/stock-count.service";
 import { inspectGoodsReturn } from "@/features/goods-returns/services/goods-return.service";
 import { uploadGoodsReceiptNoteImage } from "@/features/purchases/services/goods-receipt-note.service";
@@ -74,12 +71,10 @@ describe("evidence image contracts", () => {
         {
           condition: "GOOD",
           itemId: "item-1",
-          shelfId: "shelf-1",
         },
         {
           condition: "DAMAGED",
           itemId: "item-2",
-          shelfId: "shelf-2",
         },
       ],
     });
@@ -87,42 +82,11 @@ describe("evidence image contracts", () => {
     const body = formDataFromLastPost();
     expect(body.get("warehouseId")).toBeNull();
     expect(JSON.parse(String(body.get("items")))).toEqual([
-      { condition: "GOOD", itemId: "item-1", shelfId: "shelf-1" },
-      { condition: "DAMAGED", itemId: "item-2", shelfId: "shelf-2" },
+      { condition: "GOOD", itemId: "item-1" },
+      { condition: "DAMAGED", itemId: "item-2" },
     ]);
     expect(body.getAll("images_0")).toEqual([good]);
     expect(body.getAll("images_1")).toEqual([damagedA, damagedB]);
-  });
-
-  it("serializes scrap note fields and line images", async () => {
-    const first = image("scrap-a.jpg");
-    const second = image("scrap-b.png", "image/png");
-
-    await createScrapNote({
-      itemImages: [[first, second]],
-      items: [
-        {
-          itemId: "item-1",
-          quantity: 2,
-          reason: "Vỡ",
-          shelfId: "shelf-1",
-        },
-      ],
-      note: "Hàng vỡ",
-    });
-
-    const body = formDataFromLastPost();
-    expect(body.get("warehouseId")).toBeNull();
-    expect(body.get("note")).toBe("Hàng vỡ");
-    expect(JSON.parse(String(body.get("items")))).toEqual([
-      {
-        itemId: "item-1",
-        quantity: 2,
-        reason: "Vỡ",
-        shelfId: "shelf-1",
-      },
-    ]);
-    expect(body.getAll("images_0")).toEqual([first, second]);
   });
 
   it("sends stock count fields and repeated images field", async () => {
@@ -132,6 +96,7 @@ describe("evidence image contracts", () => {
     await countStockCountItem({
       input: {
         actualQty: 8,
+        cellId: "cell-1",
         images: [first, second],
         lotId: "lot-1",
         reason: "Thiếu hàng",
@@ -143,6 +108,7 @@ describe("evidence image contracts", () => {
 
     const body = formDataFromLastPost();
     expect(body.get("shelfId")).toBe("shelf-1");
+    expect(body.get("cellId")).toBe("cell-1");
     expect(body.get("lotId")).toBe("lot-1");
     expect(body.get("reason")).toBe("Thiếu hàng");
     expect(body.get("actualQty")).toBe("8");
@@ -156,6 +122,7 @@ describe("evidence image contracts", () => {
     await createStockCountScrap({
       input: {
         images: [first, second],
+        cellId: "cell-1",
         itemBarcode: "8938500000123",
         lotId: "lot-1",
         quantity: 2,
@@ -169,6 +136,7 @@ describe("evidence image contracts", () => {
     const body = formDataFromLastPost();
     expect(body.get("itemBarcode")).toBe("8938500000123");
     expect(body.get("shelfId")).toBe("shelf-1");
+    expect(body.get("cellId")).toBe("cell-1");
     expect(body.get("lotId")).toBe("lot-1");
     expect(body.get("quantity")).toBe("2");
     expect(body.get("reason")).toBe("Hai thùng bị vỡ");

@@ -8,6 +8,7 @@ export const STOCK_COUNT_STATUSES = [
   "IN_PROGRESS",
   "COMPLETED",
   "APPROVED",
+  "CANCELLED",
 ] as const;
 
 export type StockCountStatus = (typeof STOCK_COUNT_STATUSES)[number];
@@ -16,6 +17,7 @@ export type StockCountItem = {
   itemId: string;
   sku: string;
   shelfId: string;
+  cellId: string | null;
   lotId?: string | null;
   systemQty: number;
   actualQty?: number | null;
@@ -52,6 +54,7 @@ export type CreateStockCountInput = {
 
 export type CountStockCountItemInput = {
   shelfId: string;
+  cellId: string;
   lotId?: string;
   actualQty: number;
   reason?: string;
@@ -112,6 +115,7 @@ export async function countStockCountItem({
 }) {
   const formData = new FormData();
   formData.append("shelfId", input.shelfId);
+  formData.append("cellId", input.cellId);
   if (input.lotId) formData.append("lotId", input.lotId);
   if (input.reason) formData.append("reason", input.reason);
   formData.append("actualQty", String(input.actualQty));

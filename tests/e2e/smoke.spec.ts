@@ -383,6 +383,7 @@ test("counter proposes scrap only from a counted stock-count line", async ({
         itemId: "item-1",
         sku: "CUP-RND-PP-700-WHT",
         shelfId: "shelf-1",
+        cellId: "cell-1",
         lotId: null,
         systemQty: 10,
         actualQty: 10,
@@ -1230,11 +1231,87 @@ test("manager opens the canonical warehouse map editor", async ({ page }) => {
   expect(legacyWarehouseCalled).toBe(false);
 });
 
-test("shipper claims an issue, follows the suggested cell and confirms picking", async ({
+test("manager assigns a pending goods issue to an active shipper", async ({
+  page,
+}) => {
+  await seedWmsSession(page, ["MANAGER"], "Manager User");
+  let assignBody: Record<string, unknown> | undefined;
+  let goodsIssue = {
+    assignedAt: undefined as string | undefined,
+    assignedShipperId: undefined as string | undefined,
+    goodsIssueNumber: "GI-20260730-0001",
+    id: "gi-1",
+    items: [
+      {
+        itemId: "item-1",
+        quantity: 24,
+        remainingQty: 24,
+        sku: "CUP-500ML-RED",
+      },
+    ],
+    orderCode: "ORD-20260730-0001",
+    orderId: "order-internal-1",
+    status: "PENDING",
+  };
+
+  await page.route("**/api/wms/users**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: [
+          {
+            id: "shipper-1",
+            mustChangePassword: false,
+            name: "Shipper An",
+            role: "SHIPPER",
+            status: "ACTIVE",
+            username: "shipper.an",
+          },
+        ],
+        meta: { requestId: "shipper-options" },
+      }),
+    });
+  });
+  await page.route("**/api/wms/goods-issues**", async (route) => {
+    const url = route.request().url();
+    if (
+      route.request().method() === "POST" &&
+      url.endsWith("/goods-issues/gi-1/assign")
+    ) {
+      assignBody = route.request().postDataJSON();
+      goodsIssue = {
+        ...goodsIssue,
+        assignedAt: "2026-07-30T01:00:00.000Z",
+        assignedShipperId: "shipper-1",
+        status: "PICKING",
+      };
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: url.includes("/goods-issues/gi-1")
+          ? goodsIssue
+          : [goodsIssue],
+        meta: { requestId: "assign-goods-issue" },
+      }),
+    });
+  });
+
+  await page.goto("/goods-issues");
+  await page.getByRole("button", { name: "Xem chi tiết" }).click();
+  await page.getByLabel("Chọn Shipper").click();
+  await page.getByRole("option", { name: "Shipper An" }).click();
+  await page.getByRole("button", { name: "Gán", exact: true }).click();
+
+  await expect(page.getByText("Đã gán phiếu xuất cho Shipper.")).toBeVisible();
+  await expect(page.getByText("Shipper An").first()).toBeVisible();
+  expect(assignBody).toEqual({ shipperId: "shipper-1" });
+});
+
+test("shipper follows an assigned issue, suggested cell and confirms picking", async ({
   page,
 }) => {
   await seedWmsSession(page, ["SHIPPER"], "Shipper User");
-  let claimed = false;
   let confirmBody: Record<string, unknown> | undefined;
   const path = {
     startGateCode: "GATE-01",
@@ -1247,8 +1324,8 @@ test("shipper claims an issue, follows the suggested cell and confirms picking",
     distanceM: 9,
   };
   let goodsIssue = {
-    assignedAt: undefined as string | undefined,
-    assignedShipperId: undefined as string | undefined,
+    assignedAt: "2026-07-30T01:00:00.000Z",
+    assignedShipperId: "e2e-shipper",
     goodsIssueNumber: "GI-20260730-0001",
     id: "gi-1",
     items: [
@@ -1263,7 +1340,7 @@ test("shipper claims an issue, follows the suggested cell and confirms picking",
     ],
     orderCode: "ORD-1",
     orderId: "order-internal-1",
-    status: "PENDING",
+    status: "PICKING",
   };
   const cell = {
     id: "cell-1",
@@ -1297,17 +1374,8 @@ test("shipper claims an issue, follows the suggested cell and confirms picking",
   await page.route("**/api/wms/goods-issues**", async (route) => {
     const url = route.request().url();
     if (route.request().method() === "POST") {
-      if (url.endsWith("/claim")) {
-        claimed = true;
-        goodsIssue = {
-          ...goodsIssue,
-          assignedShipperId: "e2e-shipper",
-          assignedAt: "2026-07-30T01:00:00.000Z",
-        };
-      } else {
-        confirmBody = route.request().postDataJSON();
-        goodsIssue = { ...goodsIssue, status: "CONFIRMED" };
-      }
+      confirmBody = route.request().postDataJSON();
+      goodsIssue = { ...goodsIssue, status: "CONFIRMED" };
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -1415,8 +1483,9 @@ test("shipper claims an issue, follows the suggested cell and confirms picking",
 
   await page.goto("/goods-issues");
   await page.getByRole("button", { name: "Xem chi tiết" }).click();
-  await page.getByRole("button", { name: "Nhận phiếu" }).click();
-  await expect(page.getByText(/Đã nhận phiếu xuất/i)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Nhận phiếu" }),
+  ).toHaveCount(0);
   await page.getByRole("row", { name: /CUP-500ML-RED/i }).click();
   await expect(page.getByText("R01-T1-B1").first()).toBeVisible();
   await page.getByRole("button", { name: /R01-T1-B1.*Ưu tiên/i }).click();
@@ -1438,7 +1507,6 @@ test("shipper claims an issue, follows the suggested cell and confirms picking",
   await expect(
     page.getByText(/Đã xác nhận lấy hàng đúng khoang/i),
   ).toBeVisible();
-  expect(claimed).toBe(true);
   expect(confirmBody).toMatchObject({
     itemBarcode: "2000000000015",
     cellBarcode: "R01-T1-B1",

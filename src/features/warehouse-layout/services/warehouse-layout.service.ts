@@ -11,6 +11,7 @@ import type {
   WarehouseLayoutZone,
   WarehouseRackTemplate,
 } from "@/types/api";
+import { normalizeZonePolicy } from "../utils/zone-policy";
 
 export type WarehouseLayoutEntity =
   | "CANVAS"
@@ -204,7 +205,7 @@ export function mapWarehouseLayoutResponse(data: unknown): WarehouseLayout {
     status: "PUBLISHED",
     canvas: data.canvas,
     rackTemplate: data.rackTemplate,
-    zones: data.zones,
+    zones: data.zones.map(normalizeZonePolicy),
     racks: data.racks.map((rack) =>
       toLayoutRack(rack, data.rackTemplate, shelves),
     ),

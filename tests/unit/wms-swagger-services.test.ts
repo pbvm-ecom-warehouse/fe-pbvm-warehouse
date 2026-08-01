@@ -28,7 +28,7 @@ import {
   normalizePutawayTaskListResponse,
 } from "@/features/warehouse-navigation/services/putaway-task.service";
 import {
-  claimGoodsIssue,
+  assignGoodsIssue,
   confirmGoodsIssueLine,
   listGoodsIssuePickSuggestions,
   listGoodsIssues,
@@ -58,9 +58,10 @@ import {
 } from "@/features/adjustments/services/stock-count.service";
 import {
   approveScrapNote,
-  createScrapNote,
   createStockCountScrap,
+  disposeScrapNote,
   listScrapNotes,
+  moveScrapItemToScrap,
   normalizeScrapNoteListResponse,
   rejectScrapNote,
 } from "@/features/adjustments/services/scrap-note.service";
@@ -163,6 +164,7 @@ const goodsReturn = {
       images: [],
       itemId: "item-1",
       lotId: null,
+      putAwayTaskId: null,
       quantity: 2,
       scrapNoteId: null,
       shelfId: null,
@@ -206,6 +208,7 @@ const stockCount = {
       actualQty: null,
       images: [],
       itemId: "item-1",
+      cellId: "cell-1",
       shelfId: "shelf-1",
       sku: "CUP-BLANK-500",
       systemQty: 12,
@@ -224,10 +227,13 @@ const scrapNote = {
     {
       images: [],
       itemId: "item-1",
+      lockedQuantity: 12,
       quantity: 2,
       reason: "Vỡ khi kiểm hàng",
+      scrapCellId: null,
       shelfId: "shelf-1",
       sku: "CUP-BLANK-500",
+      sourceCellId: "cell-1",
     },
   ],
   status: "DRAFT" as const,
@@ -570,7 +576,7 @@ describe("Swagger-backed WMS services", () => {
       goodsIssueId: "gi-1",
       itemId: "item-1",
     });
-    await claimGoodsIssue("gi-1");
+    await assignGoodsIssue("gi-1", "shipper-1");
     await confirmGoodsIssueLine("gi-1", {
       itemBarcode: "CUP-BLANK-500",
       cellBarcode: "A1-S02-B1",
@@ -587,7 +593,9 @@ describe("Swagger-backed WMS services", () => {
     expect(mockedGet).toHaveBeenCalledWith(
       "/goods-issues/gi-1/items/item-1/suggestions",
     );
-    expect(mockedPost).toHaveBeenCalledWith("/goods-issues/gi-1/claim");
+    expect(mockedPost).toHaveBeenCalledWith("/goods-issues/gi-1/assign", {
+      shipperId: "shipper-1",
+    });
     expect(mockedPost).toHaveBeenCalledWith("/goods-issues/gi-1/confirm-line", {
       itemBarcode: "CUP-BLANK-500",
       cellBarcode: "A1-S02-B1",
@@ -615,7 +623,6 @@ describe("Swagger-backed WMS services", () => {
         {
           condition: "GOOD",
           itemId: "item-1",
-          shelfId: "shelf-1",
         },
       ],
     });
@@ -643,7 +650,6 @@ describe("Swagger-backed WMS services", () => {
       {
         condition: "GOOD",
         itemId: "item-1",
-        shelfId: "shelf-1",
       },
     ]);
     expect(mockedPost).toHaveBeenCalledWith(
@@ -738,6 +744,7 @@ describe("Swagger-backed WMS services", () => {
     await countStockCountItem({
       input: {
         actualQty: 10,
+        cellId: "cell-1",
         reason: "Lệch do vỡ",
         shelfId: "shelf-1",
       },
@@ -747,6 +754,7 @@ describe("Swagger-backed WMS services", () => {
     await createStockCountScrap({
       input: {
         images: [],
+        cellId: "cell-1",
         itemBarcode: "8938500000123",
         quantity: 2,
         reason: "Hai thùng bị vỡ",
@@ -773,6 +781,7 @@ describe("Swagger-backed WMS services", () => {
     )?.[1] as FormData;
     expect(Object.fromEntries(countBody.entries())).toEqual({
       actualQty: "10",
+      cellId: "cell-1",
       reason: "Lệch do vỡ",
       shelfId: "shelf-1",
     });
@@ -784,6 +793,7 @@ describe("Swagger-backed WMS services", () => {
       ([url]) => url === "/stock-counts/sc-1/items/item-1/scrap",
     )?.[1] as FormData;
     expect(Object.fromEntries(scrapFromCountBody.entries())).toEqual({
+      cellId: "cell-1",
       itemBarcode: "8938500000123",
       quantity: "2",
       reason: "Hai thùng bị vỡ",
@@ -803,18 +813,13 @@ describe("Swagger-backed WMS services", () => {
       page: 1,
       status: "DRAFT",
     });
-    await createScrapNote({
-      items: [
-        {
-          itemId: "item-1",
-          quantity: 2,
-          reason: "Vỡ khi kiểm hàng",
-          shelfId: "shelf-1",
-        },
-      ],
-      note: "Hàng vỡ",
-    });
     await approveScrapNote("scrap-1");
+    await moveScrapItemToScrap("scrap-1", "item-1", {
+      itemBarcode: "8938500000123",
+      sourceCellBarcode: "R01-T1-B1",
+      targetCellBarcode: "SCRAP-T1-B1",
+    });
+    await disposeScrapNote("scrap-1");
     await rejectScrapNote("scrap-1", {
       rejectReason: "Cần kiểm lại số lượng",
     });
@@ -826,24 +831,16 @@ describe("Swagger-backed WMS services", () => {
         status: "DRAFT",
       },
     });
-    const scrapBody = mockedPost.mock.calls.find(
-      ([url]) => url === "/scrap-notes",
-    )?.[1] as FormData;
-    expect(scrapBody.get("warehouseId")).toBeNull();
-    expect(scrapBody.get("note")).toBe("Hàng vỡ");
-    expect(JSON.parse(String(scrapBody.get("items")))).toEqual([
-      {
-        itemId: "item-1",
-        quantity: 2,
-        reason: "Vỡ khi kiểm hàng",
-        shelfId: "shelf-1",
-      },
-    ]);
-    expect(mockedPost).toHaveBeenCalledWith(
-      "/scrap-notes",
-      expect.any(FormData),
-    );
     expect(mockedPost).toHaveBeenCalledWith("/scrap-notes/scrap-1/approve");
+    expect(mockedPost).toHaveBeenCalledWith(
+      "/scrap-notes/scrap-1/items/item-1/move-to-scrap",
+      {
+        itemBarcode: "8938500000123",
+        sourceCellBarcode: "R01-T1-B1",
+        targetCellBarcode: "SCRAP-T1-B1",
+      },
+    );
+    expect(mockedPost).toHaveBeenCalledWith("/scrap-notes/scrap-1/dispose");
     expect(mockedPost).toHaveBeenCalledWith("/scrap-notes/scrap-1/reject", {
       rejectReason: "Cần kiểm lại số lượng",
     });

@@ -64,6 +64,7 @@ import {
   listWarehouseItems,
   type WarehouseItem,
 } from "@/features/products/services/warehouse-items.service";
+import { invalidateGoodsReturnConfirmQueries } from "@/features/warehouse-navigation/utils/invalidate-warehouse-queries";
 import { useSessionUser } from "@/hooks/use-session-user";
 import { getApiErrorMessage } from "@/lib/api-contract";
 import { hasAnyRole } from "@/lib/rbac";
@@ -112,7 +113,6 @@ const defaultCreateForm = {
 type InspectLineForm = {
   condition: GoodsReturnItemCondition;
   lotId: string;
-  shelfId: string;
 };
 
 function formatError(error: unknown) {
@@ -142,7 +142,6 @@ function toInspectForm(items: GoodsReturnItem[]) {
     acc[item.itemId] = {
       condition: item.condition ?? "GOOD",
       lotId: item.lotId ?? "",
-      shelfId: item.shelfId ?? "",
     };
     return acc;
   }, {});
@@ -255,8 +254,8 @@ export function GoodsReturnsClient() {
   const confirmMutation = useMutation({
     mutationFn: () => confirmGoodsReturn(activeReturnId),
     onError: (error) => toast.error(formatError(error)),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["goods-returns"] });
+    onSuccess: async () => {
+      await invalidateGoodsReturnConfirmQueries(queryClient);
       toast.success("Đã xác nhận nhập lại hàng hoàn");
     },
   });
@@ -293,15 +292,6 @@ export function GoodsReturnsClient() {
       return;
     }
 
-    const missingShelf = detail.items.some(
-      (item) => !inspectLines[item.itemId]?.shelfId.trim(),
-    );
-
-    if (missingShelf) {
-      toast.error("Mỗi dòng cần có vị trí nhập lại.");
-      return;
-    }
-
     inspectMutation.mutate();
   }
 
@@ -321,7 +311,6 @@ export function GoodsReturnsClient() {
     const defaults: InspectLineForm = {
       condition: "GOOD",
       lotId: "",
-      shelfId: "",
     };
 
     setInspectLines((current) => ({
@@ -504,7 +493,6 @@ export function GoodsReturnsClient() {
                           inspectLines[item.itemId] ?? {
                             condition: item.condition ?? "GOOD",
                             lotId: item.lotId ?? "",
-                            shelfId: item.shelfId ?? "",
                           }
                         }
                         onChange={(patch) =>
@@ -677,7 +665,6 @@ function toInspectInput(
     condition: form?.condition ?? item.condition ?? "GOOD",
     itemId: item.itemId,
     lotId: optionalText(form?.lotId ?? ""),
-    shelfId: form?.shelfId.trim() ?? "",
   };
 }
 
@@ -771,14 +758,15 @@ function GoodsReturnDetail({ detail }: { detail: GoodsReturn }) {
               <TableHead>SKU</TableHead>
               <TableHead>Số lượng</TableHead>
               <TableHead>Phân loại</TableHead>
-              <TableHead>Vị trí</TableHead>
-              <TableHead>Ghi nhận hủy</TableHead>
+              <TableHead>Điểm tiếp nhận</TableHead>
+              <TableHead>Phiếu chuyển khu hủy</TableHead>
+              <TableHead>Phiếu cất/gợi ý</TableHead>
               <TableHead>Ảnh minh chứng</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {detail.items.length === 0 ? (
-              <EmptyRow colSpan={6} label="Phiếu chưa có dòng hàng." />
+              <EmptyRow colSpan={7} label="Phiếu chưa có dòng hàng." />
             ) : (
               detail.items.map((item) => (
                 <TableRow key={item.itemId}>
@@ -791,8 +779,9 @@ function GoodsReturnDetail({ detail }: { detail: GoodsReturn }) {
                       ? statusLabel(item.condition)
                       : "Chưa phân loại"}
                   </TableCell>
-                  <TableCell>{item.shelfId ?? "Chưa chọn"}</TableCell>
+                  <TableCell>{item.shelfId ?? "Chưa phân loại"}</TableCell>
                   <TableCell>{item.scrapNoteId ?? "Không có"}</TableCell>
+                  <TableCell>{item.putAwayTaskId ?? "Không có"}</TableCell>
                   <TableCell className="min-w-48">
                     <EvidenceImageGallery
                       emptyLabel="Không có ảnh"
@@ -855,13 +844,11 @@ function InspectLineEditor({
             </SelectContent>
           </Select>
         </div>
-        <TextField
-          id={`goods-return-shelf-${item.itemId}`}
-          disabled={disabled}
-          label="Vị trí nhập lại"
-          value={value.shelfId}
-          onChange={(shelfId) => onChange({ shelfId })}
-        />
+        <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800">
+          {value.condition === "GOOD"
+            ? "Hàng tốt sẽ vào staging; sau xác nhận hệ thống tạo phiếu cất và gợi ý vị trí."
+            : "Hàng hỏng sẽ vào quarantine; sau xác nhận hệ thống tạo phiếu chuyển khu hủy."}
+        </div>
       </div>
       <TextField
         id={`goods-return-lot-${item.itemId}`}

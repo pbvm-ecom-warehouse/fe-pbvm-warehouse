@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { WarehouseLayout } from "@/types/api";
 import type { LayoutSelection } from "./warehouse-floor-plan";
+import { getZonePolicy, zoneItemTypes } from "../utils/zone-policy";
 
 type LayoutValidationIssue = {
   entity: string;
@@ -176,6 +177,18 @@ export function WarehouseLayoutInspector({
       : [];
   const isStagingRack =
     rackShelves.length > 0 && rackShelves.every((shelf) => shelf.isStaging);
+  const selectedZone =
+    selection?.kind === "zone"
+      ? layout.zones.find((zone) => zone.id === selection.id)
+      : undefined;
+  const zonePolicy = selectedZone ? getZonePolicy(selectedZone) : null;
+  const hasAnotherScrapZone = selectedZone
+    ? layout.zones.some(
+        (zone) =>
+          zone.id !== selectedZone.id &&
+          getZonePolicy(zone).zonePurpose === "SCRAP",
+      )
+    : false;
 
   return (
     <aside className="w-[320px] shrink-0 overflow-y-auto border-l border-slate-200 bg-white">
@@ -302,6 +315,103 @@ export function WarehouseLayoutInspector({
             </div>
           ) : null}
 
+          {selection.kind === "zone" && zonePolicy ? (
+            <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div>
+                <Label className="text-xs text-slate-700">
+                  Mục đích khu vực
+                </Label>
+                <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                  Chỉ có một khu hủy để cách ly hàng chờ tiêu hủy.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  disabled={!canEdit}
+                  onClick={() =>
+                    onPatch({
+                      zonePurpose: "STORAGE",
+                      allowedItemTypes: zonePolicy.allowedItemTypes,
+                    })
+                  }
+                  size="sm"
+                  variant={
+                    zonePolicy.zonePurpose === "STORAGE" ? "default" : "outline"
+                  }
+                >
+                  Lưu trữ
+                </Button>
+                <Button
+                  disabled={
+                    !canEdit ||
+                    (hasAnotherScrapZone && zonePolicy.zonePurpose !== "SCRAP")
+                  }
+                  onClick={() =>
+                    onPatch({ zonePurpose: "SCRAP", allowedItemTypes: [] })
+                  }
+                  size="sm"
+                  variant={
+                    zonePolicy.zonePurpose === "SCRAP"
+                      ? "destructive"
+                      : "outline"
+                  }
+                >
+                  Khu hủy
+                </Button>
+              </div>
+              {hasAnotherScrapZone && zonePolicy.zonePurpose !== "SCRAP" ? (
+                <p className="text-[11px] leading-4 text-amber-700">
+                  Đã có một khu hủy khác trên sơ đồ.
+                </p>
+              ) : null}
+              {zonePolicy.zonePurpose === "SCRAP" ? (
+                <p className="text-xs leading-5 text-slate-600">
+                  Khu hủy không áp dụng phân loại lưu trữ.
+                </p>
+              ) : (
+                <fieldset className="grid gap-2">
+                  <legend className="text-xs font-medium text-slate-700">
+                    Phân loại lưu trữ
+                  </legend>
+                  <p className="text-[11px] leading-4 text-slate-500">
+                    Không chọn loại nào nghĩa là khu lưu trữ chung.
+                  </p>
+                  {zoneItemTypes.map((itemType) => {
+                    const checked = zonePolicy.allowedItemTypes.includes(
+                      itemType.value,
+                    );
+                    return (
+                      <label
+                        className="flex items-center gap-2 text-sm text-slate-700"
+                        key={itemType.value}
+                      >
+                        <input
+                          aria-label={itemType.label}
+                          checked={checked}
+                          disabled={!canEdit}
+                          onChange={() =>
+                            onPatch({
+                              allowedItemTypes: checked
+                                ? zonePolicy.allowedItemTypes.filter(
+                                    (value) => value !== itemType.value,
+                                  )
+                                : [
+                                    ...zonePolicy.allowedItemTypes,
+                                    itemType.value,
+                                  ],
+                            })
+                          }
+                          type="checkbox"
+                        />
+                        {itemType.label}
+                      </label>
+                    );
+                  })}
+                </fieldset>
+              )}
+            </div>
+          ) : null}
+
           {selection.kind === "aisle" && "heightM" in item ? (
             <div className="grid grid-cols-2 gap-3">
               <NumberField
@@ -315,9 +425,7 @@ export function WarehouseLayoutInspector({
                       : { heightM: lengthM },
                   )
                 }
-                value={
-                  item.widthM >= item.heightM ? item.widthM : item.heightM
-                }
+                value={item.widthM >= item.heightM ? item.widthM : item.heightM}
               />
               <NumberField
                 disabled={!canEdit}
@@ -330,9 +438,7 @@ export function WarehouseLayoutInspector({
                       : { widthM },
                   )
                 }
-                value={
-                  item.widthM >= item.heightM ? item.heightM : item.widthM
-                }
+                value={item.widthM >= item.heightM ? item.heightM : item.widthM}
               />
             </div>
           ) : null}
@@ -525,9 +631,7 @@ export function WarehouseLayoutInspector({
             <span className="font-semibold">Mỗi khoang:</span>{" "}
             {formatCentimeters((template.widthM * 100) / template.bayCount)} ×{" "}
             {formatCentimeters(template.depthM * 100)} ×{" "}
-            {formatCentimeters(
-              (template.heightM * 100) / template.levelCount,
-            )}{" "}
+            {formatCentimeters((template.heightM * 100) / template.levelCount)}{" "}
             cm. Sức chứa còn lại được tính từ thể tích hữu dụng trừ thể tích
             hàng đang có.
           </div>

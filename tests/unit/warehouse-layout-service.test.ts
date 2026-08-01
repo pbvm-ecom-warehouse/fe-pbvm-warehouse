@@ -78,6 +78,15 @@ describe("fetchWarehouseLayout", () => {
     expect(layout.status).toBe("PUBLISHED");
   });
 
+  it("normalizes zone policy defaults from legacy snapshots", () => {
+    const layout = mapWarehouseLayoutResponse(apiLayout);
+
+    expect(layout.zones[0]).toMatchObject({
+      zonePurpose: "STORAGE",
+      allowedItemTypes: [],
+    });
+  });
+
   it("chặn snapshot legacy thiếu contract editor trước khi tạo draft", () => {
     const legacyLayout = {
       zones: [],
@@ -138,7 +147,6 @@ describe("saveWarehouseLayout", () => {
     expect(result.layout.revision).toBe(8);
   });
 });
-
 
 describe("resetWarehouseLayout", () => {
   it("POST reset endpoint và trả layout canonical mới", async () => {

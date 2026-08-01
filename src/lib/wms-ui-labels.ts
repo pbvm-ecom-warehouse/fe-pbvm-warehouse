@@ -5,6 +5,7 @@ const statusLabels: Record<string, string> = {
   CANCELLED: "Đã hủy",
   COMPLETED: "Hoàn tất",
   CONFIRMED: "Đã xác nhận",
+  DISPOSED: "Đã tiêu hủy",
   PENDING_APPROVAL: "Chờ duyệt",
   CONSUMED: "Đã lấy ly",
   DRAFT: "Nháp",
@@ -15,6 +16,8 @@ const statusLabels: Record<string, string> = {
   INSPECTED: "Đã phân loại",
   PARTIALLY_RECEIVED: "Nhận một phần",
   PENDING: "Chờ xử lý",
+  PICKING: "Đang lấy hàng",
+  QUARANTINED: "Đã chuyển khu hủy",
   REJECTED: "Từ chối",
   RESTOCKED: "Đã nhập lại",
   SENT: "Đã gửi",
@@ -47,6 +50,10 @@ export function statusLabel(status: string) {
   return statusLabels[status] ?? status;
 }
 
+export function stockCountStatusLabel(status: string) {
+  return status === "CANCELLED" ? "Đã đóng" : statusLabel(status);
+}
+
 export function printJobStatusLabel(status: string) {
   return printJobStatusLabels[status] ?? statusLabel(status);
 }
@@ -73,7 +80,11 @@ export function statusTone(status: string) {
     return "success" as const;
   }
 
-  if (["CANCELLED", "BLACKLIST", "REJECTED", "DAMAGED"].includes(status)) {
+  if (
+    ["CANCELLED", "BLACKLIST", "REJECTED", "DAMAGED", "DISPOSED"].includes(
+      status,
+    )
+  ) {
     return "danger" as const;
   }
 
@@ -81,6 +92,8 @@ export function statusTone(status: string) {
     [
       "DRAFT",
       "PENDING",
+      "PICKING",
+      "QUARANTINED",
       "PUTAWAY_PENDING",
       "IN_PROGRESS",
       "INSPECTED",
@@ -92,4 +105,8 @@ export function statusTone(status: string) {
   }
 
   return "neutral" as const;
+}
+
+export function stockCountStatusTone(status: string) {
+  return status === "CANCELLED" ? ("neutral" as const) : statusTone(status);
 }

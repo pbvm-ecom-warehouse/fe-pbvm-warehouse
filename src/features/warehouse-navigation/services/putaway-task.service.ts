@@ -5,6 +5,7 @@ import { type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
 export const PUTAWAY_TASK_STATUSES = ["PENDING", "COMPLETED"] as const;
 
 export type PutawayTaskStatus = (typeof PUTAWAY_TASK_STATUSES)[number];
+export type PutawayTaskSourceType = "GOODS_RECEIPT" | "GOODS_RETURN";
 
 export type PutawayTaskItem = {
   itemId: string;
@@ -26,8 +27,11 @@ export type PutawayTaskItem = {
 
 export type PutawayTask = {
   id: string;
+  /** ID chứng từ nguồn; tên grnId được BE giữ để tương thích dữ liệu cũ. */
   grnId: string;
   grnNumber?: string;
+  sourceType?: PutawayTaskSourceType;
+  sourceNumber?: string;
   status: PutawayTaskStatus;
   items: PutawayTaskItem[];
   createdAt?: string;

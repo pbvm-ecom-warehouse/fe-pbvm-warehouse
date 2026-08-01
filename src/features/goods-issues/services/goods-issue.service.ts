@@ -3,7 +3,11 @@ import { normalizeApiList, type ApiListLike } from "@/lib/api-list";
 import { type ApiEnvelope, unwrapApiData } from "@/lib/api-contract";
 import type { NavigationPath } from "@/features/warehouse-navigation/services/putaway-navigation.service";
 
-export const GOODS_ISSUE_STATUSES = ["PENDING", "CONFIRMED"] as const;
+export const GOODS_ISSUE_STATUSES = [
+  "PENDING",
+  "PICKING",
+  "CONFIRMED",
+] as const;
 export type GoodsIssueStatus = (typeof GOODS_ISSUE_STATUSES)[number];
 
 export type GoodsIssueItem = {
@@ -85,9 +89,13 @@ export async function getGoodsIssue(goodsIssueId: string) {
   return unwrapApiData(response.data);
 }
 
-export async function claimGoodsIssue(goodsIssueId: string) {
+export async function assignGoodsIssue(
+  goodsIssueId: string,
+  shipperId: string,
+) {
   const response = await apiClient.post<ApiEnvelope<GoodsIssue> | GoodsIssue>(
-    `/goods-issues/${encodeURIComponent(goodsIssueId)}/claim`,
+    `/goods-issues/${encodeURIComponent(goodsIssueId)}/assign`,
+    { shipperId },
   );
   return unwrapApiData(response.data);
 }
